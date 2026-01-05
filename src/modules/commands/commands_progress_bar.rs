@@ -1,11 +1,9 @@
 use indicatif::{ProgressBar, ProgressStyle};
-use std::{time::Duration};
+use std::time::Duration;
 
 /** Spinner while executing */
-pub fn create_progress_bar(name: &str) -> ProgressBar {
+pub fn create_progress_bar() -> ProgressBar {
     let pb = ProgressBar::new_spinner();
-
-    pb.set_message(format!("Running: {}", &name));
 
     pb.enable_steady_tick(Duration::from_millis(100));
 
@@ -16,4 +14,8 @@ pub fn create_progress_bar(name: &str) -> ProgressBar {
     pb.set_style(style);
 
     return pb;
+}
+
+pub fn set_runnning_message(pb: &ProgressBar, message: &str) {
+    pb.set_message(format!("Running: {}", message));
 }

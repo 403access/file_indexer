@@ -2,7 +2,7 @@ use inquire::Select;
 use std::io;
 
 use crate::modules::commands::{
-    commands_progress_bar::create_progress_bar,
+    commands_progress_bar::{create_progress_bar, set_runnning_message},
     commands_setup::{build_commands, validate_commands},
 };
 
@@ -20,7 +20,9 @@ pub fn commands_loop() -> io::Result<()> {
             .prompt()
             .unwrap();
 
-        let pb = create_progress_bar(&ans);
+        let pb = create_progress_bar();
+        set_runnning_message(&pb, &ans);
+
         match commands.iter().find(|c| c.name == ans) {
             Some(cmd) => match (cmd.action)(&pb) {
                 // Exit command returns true
