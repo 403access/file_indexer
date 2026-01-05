@@ -1,6 +1,6 @@
 use rusqlite::{named_params, Connection, Transaction};
 
-use crate::file_entry::_types::FileEntry;
+use crate::modules::file_entry::_types::FileEntry;
 
 pub fn get_connection(db_path: &str) -> rusqlite::Result<Connection> {
     Connection::open(db_path)
@@ -118,5 +118,16 @@ pub fn create_duplicates_table(tx: &Transaction) -> rusqlite::Result<()> {
         ",
         [],
     )?;
+    Ok(())
+}
+
+pub fn remove_duplicates_table(tx: &Transaction) -> rusqlite::Result<()> {
+    tx.execute("DROP TABLE IF EXISTS duplicate_hashes", [])?;
+    Ok(())
+}
+
+pub fn reset_duplicates_table(tx: &Transaction) -> rusqlite::Result<()> {
+    remove_duplicates_table(tx)?;
+    create_duplicates_table(tx)?;
     Ok(())
 }

@@ -1,6 +1,6 @@
 use crate::{
-    commands::command_search_file::{OrderKind, PatternKind, TargetKind},
-    file_entry::{_types::FileEntry, convert::convert_from_rows},
+    modules::commands::command_search_file::{OrderKind, PatternKind, TargetKind},
+    modules::file_entry::{_types::FileEntry, convert::convert_from_rows},
 };
 
 pub fn search_file(

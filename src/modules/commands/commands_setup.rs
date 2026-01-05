@@ -1,12 +1,12 @@
 use indicatif::ProgressBar;
 use std::io;
 
-use crate::commands::command_exit::command_exit;
-use crate::commands::command_index_duplicates::command_index_duplicates;
-use crate::commands::command_index_files::command_index_files;
-use crate::commands::command_init_db::command_init_db;
-use crate::commands::command_list_duplicates::command_list_duplicates;
-use crate::commands::command_search_file::command_search_file;
+use crate::modules::commands::command_exit::command_exit;
+use crate::modules::commands::command_index_duplicates::command_index_duplicates;
+use crate::modules::commands::command_index_files::command_index_files;
+use crate::modules::commands::command_init_db::command_init_db;
+use crate::modules::commands::command_list_duplicates::command_list_duplicates;
+use crate::modules::commands::command_search_file::command_search_file;
 
 pub struct Command<'a> {
     pub name: &'a str,

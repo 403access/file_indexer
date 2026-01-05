@@ -1,9 +1,9 @@
 use std::io;
 
 use crate::{
-    commands::command_search_file::{OrderKind, PatternKind, TargetKind},
-    file_entry::_types::FileEntry,
-    sql::{database::get_connection, search::search_file},
+    modules::commands::command_search_file::{OrderKind, PatternKind, TargetKind},
+    modules::file_entry::_types::FileEntry,
+    modules::sql::{database::get_connection, search::search_file},
 };
 
 pub fn search_file_by_name(

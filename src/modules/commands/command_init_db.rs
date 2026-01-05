@@ -2,7 +2,7 @@ use std::io;
 
 use indicatif::ProgressBar;
 
-use crate::sql::database::{get_connection, init_db};
+use crate::modules::sql::database::{get_connection, init_db};
 
 pub fn command_init_db(pb: &ProgressBar) -> io::Result<bool> {
     let mut conn = get_connection("file_index.db").map_err(|e| {

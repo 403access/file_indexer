@@ -8,8 +8,8 @@ use file_entry::sort::SortOrder;
 
 use index_files::_command::check_input;
 
-use crate::file_entry;
-use crate::index_files;
+use crate::modules::file_entry;
+use crate::modules::index_files;
 
 /**
  * Tries to get directory entries from the specified path.

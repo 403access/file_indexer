@@ -3,9 +3,9 @@ use std::io;
 use indicatif::ProgressBar;
 
 use crate::{
-    file_entry::_types::FileEntry,
-    search_files::try_get_dir_entries::try_get_dir_entries,
-    sql::database::{get_connection, insert_file, insert_file_name},
+    modules::file_entry::_types::FileEntry,
+    modules::search_files::try_get_dir_entries::try_get_dir_entries,
+    modules::sql::database::{get_connection, insert_file, insert_file_name},
 };
 
 const STARTING_PATH: &str =
@@ -14,30 +14,7 @@ const STARTING_PATH: &str =
 pub fn command_index_files(pb: &ProgressBar) -> io::Result<bool> {
     println!("Starting directory listing...");
 
-    // let transaction = conn.transaction().map_err(|e| {
-    //     eprintln!("Failed to start transaction: {}", e);
-    //     io::Error::new(io::ErrorKind::Other, e.to_string())
-    // })?;
-
     let mut names: Vec<(String, i64)> = vec![];
-
-    // get_entries(&transaction, &mut names, PATH.to_string());
-
-    // let directories = get_entries(&transaction, &mut names, PATH.to_string());
-    // if directories.is_err() {
-    //     eprintln!("Failed to get entries: {}", directories.unwrap_err());
-    //     return Err(io::Error::new(
-    //         io::ErrorKind::Other,
-    //         directories.unwrap_err().to_string(),
-    //     ));
-    // }
-    // // foreach directory in directories {
-    // for directory in directories.unwrap() {
-    //     println!("Directory: {}", directory.name);
-    //     // create new path for the directory
-    //     let directory_path = format!("{}/{}", PATH, directory.name);
-    //     // recursively get entries in the directory
-    //     let sub_directories = get_entries(&transaction, &mut names, directory_path);
 
     let mut conn = get_connection("file_index.db").map_err(|e| {
         eprintln!("Failed to connect to database: {}", e);
@@ -147,15 +124,6 @@ fn get_and_insert_entries(
     }
 
     println!("Inserted {} entries into the database.", inserted_files);
-
-    // for directory in directories {
-    //     println!("Get entries for directory: {}", directory.name);
-
-    //     // create new path for the directory
-    //     let directory_path = format!("{}/{}/", path, directory.name);
-    //     // recursively get entries in the directory
-    //     get_entries(&transaction, names, directory_path);
-    // }
 
     return Ok(directories);
 }

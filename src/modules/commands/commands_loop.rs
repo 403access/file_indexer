@@ -1,7 +1,7 @@
 use inquire::Select;
 use std::io;
 
-use crate::commands::{
+use crate::modules::commands::{
     commands_progress_bar::create_progress_bar,
     commands_setup::{build_commands, validate_commands},
 };

@@ -1,4 +1,4 @@
-use crate::file_entry::_types::FileEntry;
+use crate::modules::file_entry::_types::FileEntry;
 
 pub enum SortOrder {
     Default,

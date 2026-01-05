@@ -2,7 +2,9 @@ use std::io;
 
 use indicatif::ProgressBar;
 
-use crate::{file_entry::_types::FileEntry, services::search_service::search_file_by_name};
+use crate::{
+    modules::file_entry::_types::FileEntry, modules::services::search_service::search_file_by_name,
+};
 
 use inquire::{Confirm, Select, Text};
 

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use std::io::Seek;
 
-use crate::file_entry::_types::FileEntry;
+use crate::modules::file_entry::_types::FileEntry;
 
 pub struct FileFlags {
     pub is_directory: bool,
