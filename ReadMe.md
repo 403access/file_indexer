@@ -34,6 +34,12 @@ cargo build --release
 ./target/release/file_indexer
 ```
 
+## 🧪 Tests
+
+```bash
+cargo test
+```
+
 ## High level tasks
 - Traverse given directory
 - Store all files and directories in database
