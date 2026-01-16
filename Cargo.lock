@@ -254,6 +254,7 @@ dependencies = [
  "indicatif",
  "inquire",
  "rusqlite",
+ "rustato",
  "sha2",
  "walkdir",
 ]
@@ -495,6 +496,48 @@ dependencies = [
  "hashlink",
  "libsqlite3-sys",
  "smallvec",
+]
+
+[[package]]
+name = "rustato"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3196fe9b9695ab7a71b008dfe82813b52763e12e35899662daa4fc8e3562b271"
+dependencies = [
+ "once_cell",
+ "rustato-core",
+ "rustato-macros",
+ "rustato-proc-macros",
+]
+
+[[package]]
+name = "rustato-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180239d5051333b1c769bd48897607f551161f37949d14e75d11e8334b8afa68"
+dependencies = [
+ "once_cell",
+]
+
+[[package]]
+name = "rustato-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23eb570797f67d5ee60430a4a636fba1567ae8d288b3a55e42234b33523e4437"
+dependencies = [
+ "rustato-core",
+]
+
+[[package]]
+name = "rustato-proc-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51c705db2c1ff71d438801e6f3e7da540f042250d7f64a3fe52dfed935d37cc2"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rustato-core",
+ "syn",
 ]
 
 [[package]]

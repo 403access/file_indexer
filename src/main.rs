@@ -1,3 +1,5 @@
+use rustato::*;
+
 use std::{env, io};
 
 use file_indexer::modules::{
@@ -9,6 +11,14 @@ fn main() -> io::Result<()> {
 
     let path = check_arguments(&args).unwrap();
     println!("Starting in directory: {}", path);
+
+    create_state!(
+        struct AppState {
+            cwd: String,
+        }
+    );
+    let mut app_state = get_state!(AppState).write();
+    app_state.cwd = path;
 
     commands_loop()
 }
