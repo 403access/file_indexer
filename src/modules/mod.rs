@@ -1,3 +1,4 @@
+pub mod arguments;
 pub mod commands;
 pub mod file_entry;
 pub mod index_files;

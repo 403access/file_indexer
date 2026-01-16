@@ -3,13 +3,13 @@ use std::io;
 use indicatif::ProgressBar;
 
 use crate::{
-    modules::file_entry::_types::FileEntry,
-    modules::search_files::try_get_dir_entries::try_get_dir_entries,
-    modules::sql::database::{get_connection, insert_file, insert_file_name},
+    config::files_config::STARTING_PATH,
+    modules::{
+        file_entry::_types::FileEntry,
+        search_files::try_get_dir_entries::try_get_dir_entries,
+        sql::database::{get_connection, insert_file, insert_file_name},
+    },
 };
-
-const STARTING_PATH: &str =
-    "/Users/olivermolnar/Desktop/Projects/file_indexer/tests/data/sample-directory/";
 
 pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
     println!("Starting directory listing...");
