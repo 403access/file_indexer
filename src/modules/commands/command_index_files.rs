@@ -11,7 +11,7 @@ use crate::{
 const STARTING_PATH: &str =
     "/Users/olivermolnar/Desktop/Projects/file_indexer/tests/data/sample-directory/";
 
-pub fn command_index_files(pb: &ProgressBar) -> io::Result<bool> {
+pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
     println!("Starting directory listing...");
 
     let mut names: Vec<(String, i64)> = vec![];

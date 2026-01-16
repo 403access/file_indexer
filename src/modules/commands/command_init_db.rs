@@ -4,7 +4,7 @@ use indicatif::ProgressBar;
 
 use crate::modules::sql::database::{get_connection, init_db};
 
-pub fn command_init_db(pb: &ProgressBar) -> io::Result<bool> {
+pub fn command_init_db(_pb: &ProgressBar) -> io::Result<bool> {
     let mut conn = get_connection("file_index.db").map_err(|e| {
         eprintln!("Failed to connect to database: {}", e);
         io::Error::new(io::ErrorKind::Other, e.to_string())
