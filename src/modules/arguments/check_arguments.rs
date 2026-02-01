@@ -8,6 +8,7 @@ pub fn check_arguments(args: &Vec<String>) -> Result<String, String> {
     for arg in args {
         println!("- {}", arg);
     }
+    println!();
 
     if args.len() == 0 {
         println!("⚠️ No arguments provided.");
@@ -17,16 +18,18 @@ pub fn check_arguments(args: &Vec<String>) -> Result<String, String> {
     }
 
     if args.len() == 1 {
-        println!("⚠️ Not enough arguments provided.");
-        println!("\tThe first argument is the path that was used to call the program. It's called the current working directory; short: CWD.");
+        println!("⚠️  Not enough arguments provided.");
+        println!("\tThe first argument is the path that was used to call the program. It's called the 'current working directory'; short: CWD.");
 
-        println!("\t-By default, the CWD is used as path.");
+        println!("\t- By default, the CWD is used as path.");
         let cwd = current_dir().map_err(|e| format!("Failed to get current directory: {e}"))?;
 
         let path = cwd.to_string_lossy().to_string();
-        println!("\t-CWD: {}", path);
+        println!("\t- CWD: {}", path);
 
-        println!("\t-Pass a specific path as an argument to index that directory.");
+        println!("\t- Pass a specific path as an argument to index that directory.");
+
+        println!();
 
         return Ok(path);
     }
