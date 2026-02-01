@@ -2,6 +2,7 @@ use std::{env, io};
 
 use file_indexer::modules::{
     arguments::check_arguments::check_arguments, commands::commands_loop::commands_loop,
+    environment::check_vars::check_vars,
 };
 use file_indexer::states::app_state;
 
@@ -13,6 +14,8 @@ fn main() -> io::Result<()> {
 
     // Initialize application state
     app_state::init(path);
+
+    check_vars().unwrap();
 
     commands_loop()
 }

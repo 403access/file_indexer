@@ -25,6 +25,14 @@ A minimal and fast local file indexer written in Rust.
 | modified | UNIX timestamp (float) |
 | hash     | BLAKE3 content hash    |
 
+## 🏗️ Setup
+
+### Environment Variables file
+
+- Copy and paste `.example.env`
+- Rename the newly created file to `.env`
+- Make sure the variables are set properly.
+
 ## 📦 Build & Run
 
 ```bash
