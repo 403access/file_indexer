@@ -40,7 +40,7 @@ cargo build --release
 cargo test
 ```
 
-## High level tasks
+## 📋 High level tasks
 - Traverse given directory
 - Store all files and directories in database
     - file name is a separate table "file_names"
