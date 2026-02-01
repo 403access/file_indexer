@@ -61,6 +61,8 @@ cargo test
       - size: file size in bytes
       - modified: timestamp or default null? Not sure about that
       - hash: whatever makes sense
+- better logging
+  - https://docs.rs/env_logger/latest/env_logger/
 
 ## 🧰 Tools
 
