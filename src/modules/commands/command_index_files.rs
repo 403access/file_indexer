@@ -3,12 +3,12 @@ use std::io;
 use indicatif::ProgressBar;
 
 use crate::{
-    config::files_config::STARTING_PATH,
     modules::{
         file_entry::_types::FileEntry,
         search_files::try_get_dir_entries::try_get_dir_entries,
         sql::database::{get_connection, insert_file, insert_file_name},
     },
+    states::app_state,
 };
 
 pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
@@ -22,7 +22,8 @@ pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
     })?;
     println!("Database connection established.");
 
-    let mut paths: Vec<String> = vec![STARTING_PATH.to_string()];
+    let cwd = app_state::get_cwd();
+    let mut paths: Vec<String> = vec![cwd.to_string()];
     println!("Starting to process directories...");
     loop {
         println!("Paths to iterate through:");
