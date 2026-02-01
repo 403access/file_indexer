@@ -37,9 +37,9 @@ pub fn check_arguments(args: &Vec<String>) -> Result<String, String> {
     if args.len() == 2 {
         let arg = &args[1];
 
-        if arg == "--help" {
-            println!("Usage: file_indexer [--help]");
-            println!("\t--help: Show this help message.");
+        if arg == "help" {
+            println!("Usage: file_indexer [help]");
+            println!("\thelp: Show this help message.");
             println!("\tArguments:");
             println!("\t\t[optional] path: The directory path to index. If not provided, the current working directory is used.");
 
