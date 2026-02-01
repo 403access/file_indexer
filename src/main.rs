@@ -15,7 +15,7 @@ fn main() -> io::Result<()> {
     // Initialize application state
     app_state::init(path);
 
-    check_vars().unwrap();
+    check_vars();
 
     commands_loop()
 }
