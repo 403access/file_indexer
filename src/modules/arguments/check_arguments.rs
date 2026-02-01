@@ -35,7 +35,7 @@ pub fn check_arguments(args: &Vec<String>) -> Result<String, String> {
     }
 
     if args.len() == 2 {
-        let arg = &args[0];
+        let arg = &args[1];
 
         if arg == "--help" {
             println!("Usage: file_indexer [--help]");
