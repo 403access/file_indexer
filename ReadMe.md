@@ -53,4 +53,13 @@ cargo test
       - size: file size in bytes
       - modified: timestamp or default null? Not sure about that
       - hash: whatever makes sense
-      - 
+
+## 🧰 Tools
+
+### AI
+
+[Gemini](https://github.com/google-gemini/gemini-cli)
+
+```
+npx @google/gemini-cli
+```
