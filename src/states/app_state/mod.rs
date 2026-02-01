@@ -4,11 +4,15 @@ use std::cell::RefCell;
 #[derive(Clone, Debug)]
 pub struct AppState {
     pub cwd: String,
+    pub db: String,
 }
 
 impl Default for AppState {
     fn default() -> Self {
-        Self { cwd: String::new() }
+        Self {
+            cwd: String::new(),
+            db: String::new(),
+        }
     }
 }
 
@@ -18,9 +22,9 @@ thread_local! {
 }
 
 /// Initialize the app state with the given working directory
-pub fn init(cwd: String) {
+pub fn init(cwd: String, db: String) {
     APP_STATE.with(|state| {
-        *state.borrow_mut() = AppState { cwd };
+        *state.borrow_mut() = AppState { cwd, db };
     });
 }
 
@@ -33,5 +37,17 @@ pub fn get_cwd() -> String {
 pub fn set_cwd(cwd: String) {
     APP_STATE.with(|state| {
         state.borrow_mut().cwd = cwd;
+    });
+}
+
+/// Get the database connection string
+pub fn get_db() -> String {
+    APP_STATE.with(|state| state.borrow().db.clone())
+}
+
+/// Set the database connection string
+pub fn set_db(db: String) {
+    APP_STATE.with(|state| {
+        state.borrow_mut().db = db;
     });
 }

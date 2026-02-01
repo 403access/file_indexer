@@ -9,13 +9,15 @@ use file_indexer::states::app_state;
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let path = check_arguments(&args).unwrap();
-    println!("Starting in directory: {}", path);
+    check_arguments(&args).unwrap();
+
+    // Load environment variables
+    check_vars();
+    let path = file_indexer::modules::environment::env_vars::get_cwd();
+    let database_url = file_indexer::modules::environment::env_vars::get_database_url();
 
     // Initialize application state
-    app_state::init(path);
-
-    check_vars();
+    app_state::init(path, database_url);
 
     commands_loop()
 }
