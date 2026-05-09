@@ -1,16 +1,15 @@
-use std::fs;
-
-use crate::modules::commands::{
-    command_init_db::command_init_db, commands_progress_bar::create_progress_bar,
-};
+pub mod arrange;
 
 #[test]
-pub fn create_database() {
-    let pb = create_progress_bar();
+pub fn actual_test() {
+    if arrange::database_exists() {
+        panic!("Test database already exists. Deleting it before running the test.");
+    }
 
-    let result = command_init_db(&pb);
-    assert!(result.is_ok());
+    arrange::create_database();
 
-    // Check file existence
-    assert!(fs::metadata("file_index.db").is_err());
+    let temp_folder_path = arrange::create_test_data();
+    arrange::delete_test_data(&temp_folder_path);
+
+    arrange::delete_database();
 }

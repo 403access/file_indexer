@@ -1,11 +1,13 @@
-use std::io;
+use std::io::{self, Error};
+use std::path::{Path, PathBuf};
 
+use clap::builder::Str;
 use indicatif::ProgressBar;
 
 use crate::modules::sql::database::{get_connection, init_db};
 
-pub fn command_init_db(_pb: &ProgressBar) -> io::Result<bool> {
-    let mut conn = get_connection("file_index.db").map_err(|e| {
+pub fn _init_db(database_file_path: &PathBuf) -> io::Result<(Str, Error)> {
+    let mut conn = get_connection(database_file_path.to_str().unwrap()).map_err(|e| {
         eprintln!("Failed to connect to database: {}", e);
         io::Error::new(io::ErrorKind::Other, e.to_string())
     })?;
@@ -46,5 +48,18 @@ pub fn command_init_db(_pb: &ProgressBar) -> io::Result<bool> {
     })?;
     println!("Transaction committed successfully.");
 
-    Ok(false)
+    // Ok(false)
+    return Err(io::Error::new(
+        io::ErrorKind::Other,
+        "Unknown state of initialization hit.",
+    ));
+}
+
+pub fn command_init_db(_pb: &ProgressBar) -> io::Result<bool> {
+    let database_file_path_buf = Path::new("file_index.db").to_path_buf();
+    let result = _init_db(&database_file_path_buf);
+    if result.is_err() {
+        return Ok(false);
+    }
+    return Ok(true);
 }
