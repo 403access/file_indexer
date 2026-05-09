@@ -1,6 +1,69 @@
+Goal:
+- Delete duplicate files
+
+Tasks
+- Index all files
+  - File Path
+  - Directory Path
+  - Name
+  - File Size
+  - File Creation Date (-Time)
+  - File Modification Date (-Time)
+  - Custom Hash
+  - Child count (if a folder)
+  - Database related
+    - parent directory index number (separate table)
+- Find duplicate files
+- Show duplicate files
+  - Sort by highest amount of occurrences
+  - Filter files by
+    - name
+    - extension
+    - file size
+  - Show similar file and folder structures:
+    
+    ~WHAT~
+    Sometimes the same files and folders are copied to multiple locations.
+    Some of those copied items can then be modified by changing their content.
+
+    ~HOW~
+    There are essentially two scenarios.
+
+    Scenario 1:
+    This might be the faster scenario since we start by looking at folders first.
+    ...
+
+    Scenario 2:
+    For each file
+
+    ~Notes~
+    The same way we have a table for files with their hashes that are used as foreign keys
+    within other tables referencing those files, we need to have a table folders
+
+    ~Features~
+    - Diffing View
+    Show a tabled tree view (in html) similar to:
+
+
+    Name                    Version a             Version b
+                            Path                  Path
+
+    |-sample-directory      /sample-directory
+    |  |-file-a             ✅ /file-a                 🚫 -
+    |  |-folder-c           ✅ /folder-c               ⚠️ /renamed-folder-c
+    |  |  |-file-c-1
+    |  |  |-folder-d
+    |  |  |  |-folder-b
+    |  |  |  |  |-file-b-1
+    |  |  |  |-folder-a
+    |  |  |  |  |-file-a-2
+    |  |  |  |  |-file-a-1
+
+- Delete duplicate files
+
 My Goal:
 - find all duplicate files and delete them
-- make sure to organize the files and try to keep the already organized one
+- make sure to organize the files and try to keep the already organized ones
 
 # 🦀 Rust File Indexer
 
@@ -73,3 +136,6 @@ cargo test
 ```
 npx @google/gemini-cli
 ```
+
+
+find ./data | sed -e "s/[^-][^\/]*\//  |/g" -e "s/|\([^ ]\)/|-\1/"
