@@ -12,11 +12,7 @@ impl Default for EnvironmentVariables {
     fn default() -> Self {
         Self {
             database_url: String::from("file_index.db"), // Default to file_index.db
-            cwd: env::current_dir()
-                .unwrap()
-                .to_str()
-                .unwrap()
-                .to_string(),
+            cwd: env::current_dir().unwrap().to_str().unwrap().to_string(),
         }
     }
 }
@@ -49,4 +45,3 @@ pub fn get_database_url() -> String {
 pub fn get_cwd() -> String {
     ENV_VARS.with(|vars| vars.borrow().cwd.clone())
 }
-
