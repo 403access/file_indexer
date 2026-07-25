@@ -305,10 +305,7 @@
             display: flex; align-items: center; gap: 0.35rem;
             white-space: nowrap;
         }
-        .merge-tree .tree-line.removed {
-            opacity: 0.4; text-decoration: line-through;
-        }
-        .merge-tree .tree-prefix { color: #ccc; user-select: none; }
+        .merge-tree .tree-prefix { color: #999; user-select: none; }
         .merge-tree .tree-icon { flex-shrink: 0; }
         .merge-tree .tree-name { }
         .merge-tree .tree-size { color: #999; font-size: 0.75rem; margin-left: 0.5rem; }
@@ -676,21 +673,21 @@
             });
 
             let html = '<div class="merge-tree">';
-            html += renderTreeNode(tree, '', true);
+            html += renderTreeNode(tree, 0, true);
             html += '</div>';
             body.innerHTML = html;
             body.className = 'merge-body';
         }
 
-        function renderTreeNode(node, prefix, isLast) {
+        function renderTreeNode(node, depth, isLast) {
             let html = '';
             const connector = isLast ? '\u2514\u2500 ' : '\u251C\u2500 ';
             const icon = node.isDir ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
             const size = node.size ? `<span class="tree-size">${formatSize(node.size)}</span>` : '';
             const dot = node.hash ? `<span class="tree-hash-dot" style="background:${hashColor(node.hash)}"></span>` : '';
 
-            html += `<div class="tree-line">`;
-            html += `<span class="tree-prefix">${prefix}${connector}</span>`;
+            html += `<div class="tree-line" style="padding-left:${depth * 1.2}rem">`;
+            html += `<span class="tree-prefix">${connector}</span>`;
             html += `${dot}<span class="tree-icon">${icon}</span>`;
             html += `<span class="tree-name">${node.name}</span>`;
             html += `${size}`;
@@ -699,8 +696,7 @@
             if (node.isDir && node.children) {
                 const entries = Object.values(node.children);
                 entries.forEach((child, i) => {
-                    const childPrefix = prefix + (isLast ? '    ' : '│   ');
-                    html += renderTreeNode(child, childPrefix, i === entries.length - 1);
+                    html += renderTreeNode(child, depth + 1, i === entries.length - 1);
                 });
             }
             return html;
