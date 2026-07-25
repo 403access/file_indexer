@@ -103,6 +103,7 @@
                 <button class="fv-close" onclick="window.FileViewer.close()">&times;</button>
                 <span class="fv-filename" id="fv-filename"></span>
                 <button class="fv-path-toggle" id="fv-path-toggle" onclick="window.FileViewer.togglePathMode()" title="Toggle absolute/relative path"></button>
+                <button class="fv-sep-toggle" id="fv-sep-toggle" onclick="window.FileViewer.toggleSepMode()" title="Toggle tree separator style"></button>
                 <div class="fv-type-selector" id="fv-type-selector"></div>
             </div>
             <dl class="fv-meta" id="fv-meta"></dl>
@@ -116,16 +117,23 @@
         document.body.appendChild(sidebar);
     }
 
+    const SEPARATORS = {
+        dot: { connector: '\u00B7 ', branch: '  ' },
+        slash: { connector: '/ ', branch: '| ' },
+        arrow: { connector: '\u2192 ', branch: '\u2502 ' }
+    };
+
     function buildPathTree(displayPath) {
         const parts = displayPath.replace(/\/+/g, '/').split('/').filter(Boolean);
+        const sep = SEPARATORS[window.FileViewer._sepMode] || SEPARATORS.dot;
         if (parts.length === 0) return '<div class="fv-tree-line current">/</div>';
         let lines = [];
         for (let i = 0; i < parts.length; i++) {
             const isLast = i === parts.length - 1;
-            const indent = '  '.repeat(i);
-            const connector = isLast ? '\u2514\u2500 ' : '\u251C\u2500 ';
+            const prefix = sep.branch.repeat(i);
+            const connector = isLast ? sep.connector : sep.branch + sep.connector.slice(0, -1);
             const icon = isLast ? '\uD83D\uDCC4' : '\uD83D\uDCC1';
-            lines.push(`<div class="fv-tree-line${isLast ? ' current' : ''}"><span class="fv-tree-prefix">${indent}${connector}</span>${icon} ${parts[i]}</div>`);
+            lines.push(`<div class="fv-tree-line${isLast ? ' current' : ''}"><span class="fv-tree-prefix">${prefix}${connector}</span>${icon} ${parts[i]}</div>`);
         }
         return lines.join('');
     }
@@ -150,6 +158,7 @@
             tree.innerHTML = buildPathTree(displayPath);
         }
         updatePathToggleLabel();
+        updateSepToggleLabel();
     }
 
     function updatePathToggleLabel() {
@@ -157,7 +166,15 @@
         if (!btn) return;
         const mode = window.FileViewer._pathMode;
         btn.textContent = mode === 'relative' ? 'Rel' : 'Abs';
-        btn.title = mode === 'relative' ? 'Showing relative path — click for absolute' : 'Showing absolute path — click for relative';
+        btn.title = mode === 'relative' ? 'Showing relative path \u2014 click for absolute' : 'Showing absolute path \u2014 click for relative';
+    }
+
+    function updateSepToggleLabel() {
+        const btn = document.getElementById('fv-sep-toggle');
+        if (!btn) return;
+        const mode = window.FileViewer._sepMode;
+        const labels = { dot: '\u00B7', slash: '/', arrow: '\u2192' };
+        btn.textContent = labels[mode] || labels.dot;
     }
 
     function renderTypeSelector(currentType) {
@@ -277,6 +294,14 @@
         if (data) renderMeta(data);
     }
 
+    const SEP_ORDER = ['dot', 'slash', 'arrow'];
+    function toggleSepMode() {
+        const idx = SEP_ORDER.indexOf(window.FileViewer._sepMode);
+        window.FileViewer._sepMode = SEP_ORDER[(idx + 1) % SEP_ORDER.length];
+        const data = window.FileViewer._currentFileData;
+        if (data) renderMeta(data);
+    }
+
     function setViewType(type) {
         const path = window.FileViewer._currentPath;
         const name = window.FileViewer._currentFileName;
@@ -292,10 +317,12 @@
         close,
         setViewType,
         togglePathMode,
+        toggleSepMode,
         _currentType: null,
         _currentPath: null,
         _currentFileName: null,
         _currentFileData: null,
-        _pathMode: 'absolute'
+        _pathMode: 'absolute',
+        _sepMode: 'dot'
     };
 })();

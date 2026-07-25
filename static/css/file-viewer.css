@@ -71,6 +71,20 @@
 .fv-path-toggle:hover {
     background: #e2e8f0;
 }
+.fv-sep-toggle {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f0f4f8;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #555;
+    line-height: 1;
+}
+.fv-sep-toggle:hover {
+    background: #e2e8f0;
+}
 .fv-type-btn {
     padding: 0.25rem 0.5rem;
     border: 1px solid #ddd;
