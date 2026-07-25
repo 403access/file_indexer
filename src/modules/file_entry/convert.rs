@@ -5,6 +5,7 @@ use std::path::Path;
 use std::io::Seek;
 
 use crate::modules::file_entry::_types::FileEntry;
+use crate::modules::logging;
 
 pub struct FileFlags {
     pub is_directory: bool,
@@ -35,7 +36,7 @@ pub fn convert_from_dir(entry: fs::DirEntry) -> Result<FileEntry, std::io::Error
         // Some(String::new())
         // None
         Some(compute_sha256_fast(&path).map_err(|e| {
-            eprintln!("Error computing hash for file {}: {}", path.display(), e);
+            logging::error(&format!("Error computing hash for file {}: {}", path.display(), e));
             e
         })?)
     } else {
@@ -46,7 +47,7 @@ pub fn convert_from_dir(entry: fs::DirEntry) -> Result<FileEntry, std::io::Error
     let file_type = match entry.file_type() {
         Ok(ft) => ft,
         Err(e) => {
-            eprintln!("Error getting file type: {}", e);
+            logging::error(&format!("Error getting file type: {}", e));
             return Err(e);
         }
     };
@@ -56,7 +57,7 @@ pub fn convert_from_dir(entry: fs::DirEntry) -> Result<FileEntry, std::io::Error
     let metadata = match entry.metadata() {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("Error getting metadata for entry: {}", e);
+            logging::error(&format!("Error getting metadata for entry: {}", e));
             return Err(e);
         }
     };

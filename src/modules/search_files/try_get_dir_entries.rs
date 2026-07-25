@@ -10,12 +10,8 @@ use index_files::_command::check_input;
 
 use crate::modules::file_entry;
 use crate::modules::index_files;
+use crate::modules::logging;
 
-/**
- * Tries to get directory entries from the specified path.
- * Optionally sorts the entries based on the provided sort order.
- * Converts each directory entry to a `FileEntry` type.
- */
 pub fn try_get_dir_entries(
     path: &str,
     sort_order: Option<SortOrder>,
@@ -25,7 +21,7 @@ pub fn try_get_dir_entries(
     }
 
     let entries = fs::read_dir(path).map_err(|e| {
-        eprintln!("Error reading directory: {}", e);
+        logging::error(&format!("Error reading directory: {}", e));
         io::Error::new(io::ErrorKind::Other, "Failed to read directory")
     })?;
 
@@ -38,7 +34,7 @@ pub fn try_get_dir_entries(
                 match file_entry {
                     Ok(entry) => dir_entries.push(entry),
                     Err(e) => {
-                        eprintln!("Error converting entry: {}", e);
+                        logging::error(&format!("Error converting entry: {}", e));
                         return Err(io::Error::new(
                             io::ErrorKind::Other,
                             "Failed to convert directory entry",
@@ -47,7 +43,7 @@ pub fn try_get_dir_entries(
                 }
             }
             Err(e) => {
-                eprintln!("Error reading directory entry: {}", e);
+                logging::error(&format!("Error reading directory entry: {}", e));
                 return Err(io::Error::new(
                     io::ErrorKind::Other,
                     "Failed to read directory entry",

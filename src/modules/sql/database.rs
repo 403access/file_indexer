@@ -1,6 +1,7 @@
 use rusqlite::{named_params, Connection, Transaction};
 
 use crate::modules::file_entry::_types::FileEntry;
+use crate::modules::logging;
 
 pub fn get_connection(db_path: &str) -> rusqlite::Result<Connection> {
     let conn = Connection::open(db_path)?;
@@ -18,10 +19,10 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
     );
 
     if file_names_table_result.is_err() {
-        eprintln!(
+        logging::error(&format!(
             "Failed to create 'file_names' table: {:?}",
             file_names_table_result
-        );
+        ));
         return Err(file_names_table_result.unwrap_err());
     }
 
@@ -43,7 +44,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
     );
 
     if files_table_result.is_err() {
-        eprintln!("Failed to create 'files' table: {:?}", files_table_result);
+        logging::error(&format!("Failed to create 'files' table: {:?}", files_table_result));
         return Err(files_table_result.unwrap_err());
     }
 
@@ -52,7 +53,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         [],
     );
     if hash_index_result.is_err() {
-        eprintln!("Failed to create hash index: {:?}", hash_index_result);
+        logging::error(&format!("Failed to create hash index: {:?}", hash_index_result));
         return Err(hash_index_result.unwrap_err());
     }
 
@@ -61,7 +62,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         [],
     );
     if path_index_result.is_err() {
-        eprintln!("Failed to create path index: {:?}", path_index_result);
+        logging::error(&format!("Failed to create path index: {:?}", path_index_result));
         return Err(path_index_result.unwrap_err());
     }
 
@@ -74,7 +75,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         [],
     );
     if skipped_table_result.is_err() {
-        eprintln!("Failed to create 'skipped_paths' table: {:?}", skipped_table_result);
+        logging::error(&format!("Failed to create 'skipped_paths' table: {:?}", skipped_table_result));
         return Err(skipped_table_result.unwrap_err());
     }
 
@@ -88,7 +89,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         [],
     );
     if logs_table_result.is_err() {
-        eprintln!("Failed to create 'logs' table: {:?}", logs_table_result);
+        logging::error(&format!("Failed to create 'logs' table: {:?}", logs_table_result));
         return Err(logs_table_result.unwrap_err());
     }
 

@@ -3,6 +3,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
+use crate::modules::logging;
 use crate::states::app_state::AppState;
 
 #[derive(Deserialize)]
@@ -63,7 +64,7 @@ pub async fn merge_handler(
         if full_path != dest_file {
             match tokio::fs::copy(&full_path, &dest_file).await {
                 Ok(_) => copied += 1,
-                Err(e) => eprintln!("Failed to copy {}: {}", full_path, e),
+                Err(e) => logging::error(&format!("Failed to copy {}: {}", full_path, e)),
             }
         } else {
             copied += 1;
@@ -91,7 +92,7 @@ pub async fn merge_handler(
 
         match tokio::fs::remove_file(&full_path).await {
             Ok(_) => removed += 1,
-            Err(e) => eprintln!("Failed to remove {}: {}", full_path, e),
+            Err(e) => logging::error(&format!("Failed to remove {}: {}", full_path, e)),
         }
     }
 

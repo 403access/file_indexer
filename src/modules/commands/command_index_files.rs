@@ -5,6 +5,7 @@ use indicatif::ProgressBar;
 use crate::{
     modules::{
         file_entry::_types::FileEntry,
+        logging,
         search_files::try_get_dir_entries::try_get_dir_entries,
         sql::database::{get_connection, init_db, insert_file, insert_file_name, insert_skipped_path},
     },
@@ -17,21 +18,21 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
     let mut names: Vec<(String, i64)> = vec![];
 
     let mut conn = get_connection(db_path).map_err(|e| {
-        eprintln!("Failed to connect to database: {}", e);
+        logging::error(&format!("Failed to connect to database: {}", e));
         io::Error::new(io::ErrorKind::Other, e.to_string())
     })?;
 
     {
         let tx = conn.transaction().map_err(|e| {
-            eprintln!("Failed to start transaction: {}", e);
+            logging::error(&format!("Failed to start transaction: {}", e));
             io::Error::new(io::ErrorKind::Other, e.to_string())
         })?;
         init_db(&tx).map_err(|e| {
-            eprintln!("Failed to initialize database: {}", e);
+            logging::error(&format!("Failed to initialize database: {}", e));
             io::Error::new(io::ErrorKind::Other, e.to_string())
         })?;
         tx.commit().map_err(|e| {
-            eprintln!("Failed to commit transaction: {}", e);
+            logging::error(&format!("Failed to commit transaction: {}", e));
             io::Error::new(io::ErrorKind::Other, e.to_string())
         })?;
     }
@@ -47,7 +48,7 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
         let transaction = match conn.transaction() {
             Ok(tx) => tx,
             Err(e) => {
-                eprintln!("Failed to start transaction: {}", e);
+                logging::error(&format!("Failed to start transaction: {}", e));
                 return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
             }
         };
@@ -63,14 +64,14 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
                     );
                 }
                 Err(e) => {
-                    eprintln!("Skipping unreadable directory '{}': {}", path, e);
+                    logging::warn(&format!("Skipping unreadable directory '{}': {}", path, e));
                     let _ = insert_skipped_path(&transaction, path, &e.to_string());
                 }
             }
         }
 
         transaction.commit().map_err(|e| {
-            eprintln!("Failed to commit transaction: {}", e);
+            logging::error(&format!("Failed to commit transaction: {}", e));
             io::Error::new(io::ErrorKind::Other, e.to_string())
         })?;
 
@@ -85,14 +86,14 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
 }
 
 pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
-    println!("Starting directory listing...");
+    logging::info("Starting directory listing...");
 
     let cwd = app_state::get_cwd();
     let db_path = "file_index.db";
 
     index_directory(db_path, &cwd)?;
 
-    println!("Indexing complete.");
+    logging::info("Indexing complete.");
     Ok(false)
 }
 
@@ -104,7 +105,7 @@ fn get_and_insert_entries(
     let entries = match try_get_dir_entries(&path, None) {
         Ok(entries) => entries,
         Err(e) => {
-            eprintln!("Failed to retrieve directory entries: {}", e);
+            logging::error(&format!("Failed to retrieve directory entries: {}", e));
             return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
         }
     };
@@ -118,7 +119,7 @@ fn get_and_insert_entries(
                 names.push((entry.name.clone(), 0));
             }
             Err(e) => {
-                eprintln!("Failed to insert {}: {}", entry.name, e);
+                logging::error(&format!("Failed to insert {}: {}", entry.name, e));
                 return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
             }
         }
@@ -148,7 +149,7 @@ fn get_file_id(
     let inserted_id = match insert_file_name(&transaction, &file_name) {
         Ok(id) => id,
         Err(e) => {
-            eprintln!("Failed to insert file name '{}': {}", &file_name, e);
+            logging::error(&format!("Failed to insert file name '{}': {}", &file_name, e));
             return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
         }
     };
