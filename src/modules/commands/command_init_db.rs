@@ -48,11 +48,7 @@ pub fn _init_db(database_file_path: &PathBuf) -> io::Result<(Str, Error)> {
     })?;
     println!("Transaction committed successfully.");
 
-    // Ok(false)
-    return Err(io::Error::new(
-        io::ErrorKind::Other,
-        "Unknown state of initialization hit.",
-    ));
+    Ok((Str::default(), Error::new(io::ErrorKind::Other, "Unknown state of initialization hit.")))
 }
 
 pub fn command_init_db(_pb: &ProgressBar) -> io::Result<bool> {

@@ -10,7 +10,6 @@ pub fn actual_test() {
     let _database_file_path = temp_folder_path.join("file_index.db");
     let database_file_path = arrange::create_database(&_database_file_path);
 
-    arrange::delete_test_data(&temp_folder_path);
-
     arrange::delete_database(&database_file_path);
+    arrange::delete_test_data(&temp_folder_path);
 }

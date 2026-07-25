@@ -1,5 +1,5 @@
 use std::env::temp_dir;
-use std::fs::{self, create_dir_all, remove_dir, File};
+use std::fs::{self, create_dir_all, remove_dir_all, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -111,5 +111,5 @@ pub fn create_test_data() -> PathBuf {
 }
 
 pub fn delete_test_data(temp_folder_path_buf: &PathBuf) {
-    remove_dir(temp_folder_path_buf).unwrap();
+    remove_dir_all(temp_folder_path_buf).unwrap();
 }
