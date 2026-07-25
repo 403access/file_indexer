@@ -248,3 +248,30 @@ tr:hover {
     padding: 3rem;
     color: #999;
 }
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
+
+.status-dot.idle {
+    background: #27ae60;
+}
+
+.status-dot.indexing {
+    background: #f39c12;
+    animation: pulse 1s infinite;
+}
+
+.status-dot.error {
+    background: #e74c3c;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
