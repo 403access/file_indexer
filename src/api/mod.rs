@@ -1,36 +1,14 @@
-use axum::{http::StatusCode, Json};
-use serde::{Deserialize, Serialize};
+use axum::routing::get;
+use axum::Router;
 
-// basic handler that responds with a static string
-pub async fn root() -> &'static str {
-    "Hello, World!"
-}
+use crate::states::app_state::AppState;
 
-pub async fn create_user(
-    // this argument tells axum to parse the request body
-    // as JSON into a `CreateUser` type
-    Json(payload): Json<CreateUser>,
-) -> (StatusCode, Json<User>) {
-    // insert your application logic here
-    let user = User {
-        id: 1337,
-        username: payload.username,
-    };
+use self::search::search_handler;
 
-    // this will be converted into a JSON response
-    // with a status code of `201 Created`
-    (StatusCode::CREATED, Json(user))
-}
+pub mod search;
 
-// the input to our `create_user` handler
-#[derive(Deserialize)]
-pub struct CreateUser {
-    username: String,
-}
-
-// the output to our `create_user` handler
-#[derive(Serialize)]
-pub struct User {
-    id: u64,
-    username: String,
+pub fn create_router(state: AppState) -> Router {
+    Router::new()
+        .route("/api/search", get(search_handler))
+        .with_state(state)
 }
