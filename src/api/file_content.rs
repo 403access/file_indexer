@@ -34,7 +34,14 @@ fn content_type_for_ext(ext: &str) -> &'static str {
 }
 
 fn ext_from_path(path: &str) -> &str {
-    path.rsplit('.').next().unwrap_or("")
+    let name = std::path::Path::new(path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("");
+    match name.rsplit('.').next() {
+        Some(ext) if ext != name && !ext.is_empty() => ext,
+        _ => "",
+    }
 }
 
 pub async fn file_content_handler(
