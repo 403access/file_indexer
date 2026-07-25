@@ -63,8 +63,7 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
                     );
                 }
                 Err(e) => {
-                    eprintln!("Failed to get entries for path '{}': {}", path, e);
-                    return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
+                    eprintln!("Skipping unreadable directory '{}': {}", path, e);
                 }
             }
         }
