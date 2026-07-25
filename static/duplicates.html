@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duplicates - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Search</a>
+            <a href="/duplicates.html" class="active">Duplicates</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="results-info" id="results-info" style="display:none;">
+            <span id="result-count"></span>
+        </section>
+
+        <section class="groups" id="groups"></section>
+
+        <section class="pagination" id="pagination" style="display:none;">
+            <button id="prev-page" disabled>Previous</button>
+            <span id="page-info"></span>
+            <button id="next-page" disabled>Next</button>
+        </section>
+    </main>
+
+    <script>
+        const perPage = 20;
+        let currentPage = 1;
+
+        async function loadDuplicates(page = 1) {
+            const res = await fetch(`/api/duplicates?page=${page}&per_page=${perPage}`);
+            if (!res.ok) return;
+            const data = await res.json();
+            currentPage = data.page;
+            render(data);
+        }
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+        }
+
+        function formatDate(ts) {
+            if (!ts) return '-';
+            return new Date(ts * 1000).toLocaleDateString();
+        }
+
+        function truncatePath(p) {
+            if (!p) return '';
+            const parts = p.split('/');
+            if (parts.length <= 3) return p;
+            return '.../' + parts.slice(-2).join('/');
+        }
+
+        function render(data) {
+            const container = document.getElementById('groups');
+            const info = document.getElementById('results-info');
+            const count = document.getElementById('result-count');
+            const pagination = document.getElementById('pagination');
+
+            if (data.groups.length === 0) {
+                container.innerHTML = '<div class="empty">No duplicates found</div>';
+                info.style.display = 'none';
+                pagination.style.display = 'none';
+                return;
+            }
+
+            info.style.display = 'block';
+            count.textContent = `${data.total_groups} duplicate group${data.total_groups !== 1 ? 's' : ''}`;
+            pagination.style.display = 'flex';
+
+            container.innerHTML = data.groups.map((group, i) => `
+                <div class="duplicate-group">
+                    <div class="group-header" onclick="toggle(${i})">
+                        <span class="group-icon" id="icon-${i}">&#9654;</span>
+                        <span class="group-info">
+                            <strong>${group.files.length} copies</strong>
+                            <span class="hash">${group.hash.substring(0, 12)}...</span>
+                            <span class="wasted">${formatSize(group.wasted_bytes)} wasted</span>
+                        </span>
+                        <span class="group-size">${formatSize(group.files[0].size)} each</span>
+                    </div>
+                    <div class="group-files" id="files-${i}" style="display:none;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Path</th>
+                                    <th>Size</th>
+                                    <th>Modified</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${group.files.map(f => `
+                                    <tr>
+                                        <td class="name">${f.name}</td>
+                                        <td class="path" title="${f.path || ''}">${truncatePath(f.path)}</td>
+                                        <td class="size">${formatSize(f.size)}</td>
+                                        <td class="modified">${formatDate(f.modified)}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `).join('');
+
+            const totalPages = Math.ceil(data.total_groups / perPage);
+            document.getElementById('page-info').textContent = `Page ${data.page} of ${totalPages}`;
+            document.getElementById('prev-page').disabled = data.page <= 1;
+            document.getElementById('next-page').disabled = data.page >= totalPages;
+        }
+
+        function toggle(i) {
+            const files = document.getElementById(`files-${i}`);
+            const icon = document.getElementById(`icon-${i}`);
+            if (files.style.display === 'none') {
+                files.style.display = 'block';
+                icon.innerHTML = '&#9660;';
+            } else {
+                files.style.display = 'none';
+                icon.innerHTML = '&#9654;';
+            }
+        }
+
+        document.getElementById('prev-page').addEventListener('click', () => {
+            if (currentPage > 1) loadDuplicates(currentPage - 1);
+        });
+
+        document.getElementById('next-page').addEventListener('click', () => {
+            loadDuplicates(currentPage + 1);
+        });
+
+        loadDuplicates();
+    </script>
+</body>
+</html>
