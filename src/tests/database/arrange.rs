@@ -32,22 +32,10 @@ pub fn delete_database(database_file_path_buf: &PathBuf) {
 ///
 pub fn create_temp_folder() -> PathBuf {
     let temp_dir_path = temp_dir();
-    println!("Temp dir path: {}", temp_dir_path.display());
-
     let id = Uuid::new_v4();
-    println!("Generated UUID: {}", id);
-
     let path = temp_dir_path.join(id.to_string());
-    println!("Individual dir path: {}", path.display());
-
-    // DirBuilder::new()
-    //     .recursive(true)
-    //     .create(path.clone())
-    //     .unwrap();
     create_dir_all(&path).unwrap();
-
     assert!(fs::metadata(&path).unwrap().is_dir());
-
     return path;
 }
 
@@ -59,55 +47,115 @@ pub fn create_file(dir_path_buf: &PathBuf, name: &str) {
     let mut file = File::create(dir_path.join(name)).unwrap();
     let name_bytes = name.as_bytes();
     let written_size = file.write(name_bytes).unwrap();
-
     assert!(name_bytes.len() == written_size)
 }
 
+/// Creates the full sample directory tree matching src/tests/data/sample-directory/.
+///
+/// ```text
+/// <temp>/
+/// ├── file-a
+/// ├── file-b
+/// ├── folder-a/
+/// │   ├── file-a-1
+/// │   └── file-a-2
+/// ├── folder-b/
+/// │   └── file-b-1
+/// ├── folder-c/
+/// │   ├── file-a-1
+/// │   ├── file-c-1
+/// │   ├── file-c-2
+/// │   ├── file-c-3
+/// │   └── folder-d/
+/// │       ├── folder-a/
+/// │       │   ├── file-a-1
+/// │       │   └── file-a-2
+/// │       └── folder-b/
+/// │           └── file-b-1
+/// ├── folder-e/
+/// │   ├── folder-a/
+/// │   │   ├── file-a-1
+/// │   │   └── file-a-2
+/// │   ├── folder-b/
+/// │   │   └── file-b-1
+/// │   └── folder-c/
+/// │       ├── file-c-1
+/// │       └── file-c-2
+/// └── folder-f/
+///     ├── file-a
+///     ├── file-b
+///     └── file-f
+/// ```
 pub fn create_test_data() -> PathBuf {
-    // |-test_data
-    let temp_folder_path = create_temp_folder();
-    // |  |-file-a
-    create_file(&temp_folder_path, "file-a");
-    // |  |-folder-c
-    let folder_c_path = temp_folder_path.join("folder-c");
-    create_dir_all(&folder_c_path).unwrap();
-    // |  |  |-file-c-1
-    create_file(&folder_c_path, "file-c-1");
-    // |  |  |-folder-d
-    let folder_c_folder_d_path = folder_c_path.join("folder-d");
-    create_dir_all(&folder_c_folder_d_path).unwrap();
-    // |  |  |  |-folder-b
-    let folder_c_folder_d_folder_b_path = folder_c_folder_d_path.join("folder-b");
-    create_dir_all(&folder_c_folder_d_folder_b_path).unwrap();
-    // |  |  |  |  |-file-b-1
-    create_file(&folder_c_folder_d_folder_b_path, "file-b-1");
-    // |  |  |  |-folder-a
-    // |  |  |  |  |-file-a-2
-    // |  |  |  |  |-file-a-1
-    // |  |  |-file-c-2
-    // |  |  |-file-a-1
-    // |  |  |-file-c-3
-    // |  |-folder-b
-    // |  |  |-file-b-1
-    // |  |-folder-e
-    // |  |  |-folder-c
-    // |  |  |  |-file-c-1
-    // |  |  |  |-file-c-2
-    // |  |  |-folder-b
-    // |  |  |  |-file-b-1
-    // |  |  |-folder-a
-    // |  |  |  |-file-a-2
-    // |  |  |  |-file-a-1
-    // |  |-file-b
-    // |  |-folder-f
-    // |  |  |-file-f
-    // |  |  |-file-a
-    // |  |  |-file-b
-    // |  |-folder-a
-    // |  |  |-file-a-2
-    // |  |  |-file-a-1
+    let root = create_temp_folder();
 
-    return temp_folder_path;
+    // Root files
+    create_file(&root, "file-a");
+    create_file(&root, "file-b");
+
+    // folder-a/
+    let folder_a = root.join("folder-a");
+    create_dir_all(&folder_a).unwrap();
+    create_file(&folder_a, "file-a-1");
+    create_file(&folder_a, "file-a-2");
+
+    // folder-b/
+    let folder_b = root.join("folder-b");
+    create_dir_all(&folder_b).unwrap();
+    create_file(&folder_b, "file-b-1");
+
+    // folder-c/
+    let folder_c = root.join("folder-c");
+    create_dir_all(&folder_c).unwrap();
+    create_file(&folder_c, "file-a-1");
+    create_file(&folder_c, "file-c-1");
+    create_file(&folder_c, "file-c-2");
+    create_file(&folder_c, "file-c-3");
+
+    // folder-c/folder-d/
+    let folder_c_d = folder_c.join("folder-d");
+    create_dir_all(&folder_c_d).unwrap();
+
+    // folder-c/folder-d/folder-a/
+    let folder_c_d_a = folder_c_d.join("folder-a");
+    create_dir_all(&folder_c_d_a).unwrap();
+    create_file(&folder_c_d_a, "file-a-1");
+    create_file(&folder_c_d_a, "file-a-2");
+
+    // folder-c/folder-d/folder-b/
+    let folder_c_d_b = folder_c_d.join("folder-b");
+    create_dir_all(&folder_c_d_b).unwrap();
+    create_file(&folder_c_d_b, "file-b-1");
+
+    // folder-e/
+    let folder_e = root.join("folder-e");
+    create_dir_all(&folder_e).unwrap();
+
+    // folder-e/folder-a/
+    let folder_e_a = folder_e.join("folder-a");
+    create_dir_all(&folder_e_a).unwrap();
+    create_file(&folder_e_a, "file-a-1");
+    create_file(&folder_e_a, "file-a-2");
+
+    // folder-e/folder-b/
+    let folder_e_b = folder_e.join("folder-b");
+    create_dir_all(&folder_e_b).unwrap();
+    create_file(&folder_e_b, "file-b-1");
+
+    // folder-e/folder-c/
+    let folder_e_c = folder_e.join("folder-c");
+    create_dir_all(&folder_e_c).unwrap();
+    create_file(&folder_e_c, "file-c-1");
+    create_file(&folder_e_c, "file-c-2");
+
+    // folder-f/
+    let folder_f = root.join("folder-f");
+    create_dir_all(&folder_f).unwrap();
+    create_file(&folder_f, "file-a");
+    create_file(&folder_f, "file-b");
+    create_file(&folder_f, "file-f");
+
+    return root;
 }
 
 pub fn delete_test_data(temp_folder_path_buf: &PathBuf) {
