@@ -285,6 +285,36 @@
         .merge-apply { background: #27ae60; }
         .merge-apply:hover { background: #219a52; }
         .merge-apply:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .merge-view-toggle {
+            display: flex; gap: 0.25rem;
+        }
+        .merge-view-btn {
+            padding: 0.25rem 0.6rem; border: 1px solid #ddd;
+            border-radius: 4px; background: white; font-size: 0.75rem;
+            cursor: pointer; color: #666;
+        }
+        .merge-view-btn.active {
+            background: #3498db; color: white; border-color: #3498db;
+        }
+        .merge-view-btn:hover:not(.active) { background: #f0f0f0; }
+        .merge-tree {
+            font-family: monospace; font-size: 0.8rem; line-height: 1.6;
+            padding: 1rem 1.5rem;
+        }
+        .merge-tree .tree-line {
+            display: flex; align-items: center; gap: 0.35rem;
+            white-space: nowrap;
+        }
+        .merge-tree .tree-line.removed {
+            opacity: 0.4; text-decoration: line-through;
+        }
+        .merge-tree .tree-prefix { color: #ccc; user-select: none; }
+        .merge-tree .tree-icon { flex-shrink: 0; }
+        .merge-tree .tree-name { }
+        .merge-tree .tree-size { color: #999; font-size: 0.75rem; margin-left: 0.5rem; }
+        .merge-tree .tree-hash-dot {
+            width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -314,6 +344,10 @@
         <div class="merge-panel">
             <div class="merge-header">
                 <h2>Merge Duplicate Folders</h2>
+                <div class="merge-view-toggle">
+                    <button class="merge-view-btn active" id="view-list-btn" onclick="setMergeView('list')">List</button>
+                    <button class="merge-view-btn" id="view-tree-btn" onclick="setMergeView('tree')">Tree</button>
+                </div>
                 <button class="merge-close" onclick="closeMerge()">&times;</button>
             </div>
             <div class="merge-dest">
@@ -500,6 +534,14 @@
 
         let mergeGroup = null;
         let mergeSelections = {};
+        let mergeViewMode = 'list';
+
+        function setMergeView(mode) {
+            mergeViewMode = mode;
+            document.getElementById('view-list-btn').classList.toggle('active', mode === 'list');
+            document.getElementById('view-tree-btn').classList.toggle('active', mode === 'tree');
+            renderMergeBody();
+        }
 
         function openMergeFolders(groupIdx) {
             const group = groupsData.groups[groupIdx];
@@ -542,6 +584,15 @@
 
         function renderMergeBody() {
             const body = document.getElementById('merge-body');
+            if (mergeViewMode === 'tree') {
+                renderMergeTree(body);
+            } else {
+                renderMergeList(body);
+            }
+            updateMergeStats();
+        }
+
+        function renderMergeList(body) {
             const byHash = {};
             mergeGroup.folders.forEach(folder => {
                 folder.files.forEach(file => {
@@ -554,7 +605,6 @@
                 });
             });
 
-            // Sort: shared files first, then unique
             const entries = Object.entries(byHash).sort((a, b) => {
                 const aShared = a[1].length > 1 ? 0 : 1;
                 const bShared = b[1].length > 1 ? 0 : 1;
@@ -584,7 +634,76 @@
                 html += '</div>';
             });
             body.innerHTML = html;
-            updateMergeStats();
+            body.className = 'merge-body';
+        }
+
+        function renderMergeTree(body) {
+            const dest = document.getElementById('merge-dest-path').value.trim() || 'merged';
+            const destName = dest.split('/').filter(Boolean).pop() || 'merged';
+
+            // Build tree structure from kept files
+            const tree = { name: destName, children: {}, isDir: true };
+            const allFiles = [];
+
+            mergeGroup.folders.forEach(folder => {
+                folder.files.forEach(file => {
+                    const key = folder.path + '/' + file.name;
+                    const isKeep = mergeSelections[key];
+                    allFiles.push({ ...file, folderPath: folder.path, key, isKeep });
+                });
+            });
+
+            // Sort: kept first, then by name
+            allFiles.sort((a, b) => {
+                if (a.isKeep !== b.isKeep) return a.isKeep ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+
+            allFiles.forEach(f => {
+                if (!f.isKeep) return;
+                const relPath = f.folderPath.replace(/\/+/g, '/');
+                const parts = relPath.split('/').filter(Boolean);
+                let node = tree;
+                parts.forEach(part => {
+                    if (!node.children[part]) {
+                        node.children[part] = { name: part, children: {}, isDir: true };
+                    }
+                    node = node.children[part];
+                });
+                if (!node.children[f.name]) {
+                    node.children[f.name] = { name: f.name, isDir: false, size: f.size, hash: f.hash };
+                }
+            });
+
+            let html = '<div class="merge-tree">';
+            html += renderTreeNode(tree, '', true);
+            html += '</div>';
+            body.innerHTML = html;
+            body.className = 'merge-body';
+        }
+
+        function renderTreeNode(node, prefix, isLast) {
+            let html = '';
+            const connector = isLast ? '\u2514\u2500 ' : '\u251C\u2500 ';
+            const icon = node.isDir ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
+            const size = node.size ? `<span class="tree-size">${formatSize(node.size)}</span>` : '';
+            const dot = node.hash ? `<span class="tree-hash-dot" style="background:${hashColor(node.hash)}"></span>` : '';
+
+            html += `<div class="tree-line">`;
+            html += `<span class="tree-prefix">${prefix}${connector}</span>`;
+            html += `${dot}<span class="tree-icon">${icon}</span>`;
+            html += `<span class="tree-name">${node.name}</span>`;
+            html += `${size}`;
+            html += `</div>`;
+
+            if (node.isDir && node.children) {
+                const entries = Object.values(node.children);
+                entries.forEach((child, i) => {
+                    const childPrefix = prefix + (isLast ? '    ' : '│   ');
+                    html += renderTreeNode(child, childPrefix, i === entries.length - 1);
+                });
+            }
+            return html;
         }
 
         function toggleMergeFile(key, checked) {
@@ -610,6 +729,9 @@
             setTimeout(() => { overlay.style.display = 'none'; }, 200);
             mergeGroup = null;
             mergeSelections = {};
+            mergeViewMode = 'list';
+            document.getElementById('view-list-btn').classList.add('active');
+            document.getElementById('view-tree-btn').classList.remove('active');
         }
 
         async function applyMerge() {
