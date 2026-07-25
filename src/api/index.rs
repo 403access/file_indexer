@@ -3,6 +3,7 @@ use axum::Json;
 use serde::Serialize;
 
 use crate::modules::commands::command_index_files::index_directory;
+use crate::modules::progress;
 use crate::modules::sql::database::get_connection;
 use crate::states::app_state::AppState;
 
@@ -55,14 +56,16 @@ pub fn ensure_indexed(db_path: &str, cwd: &str) {
 pub async fn ensure_indexed_async(db_path: String, cwd: String) {
     if count_entries(&db_path) == 0 {
         println!("Database empty, indexing {} in background...", cwd);
+        progress::start(0);
         tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd) {
             Ok(()) => {
                 let count = count_entries(&db_path);
                 println!("Indexed {} entries.", count);
             }
-            Err(e) => eprintln!("Auto-index failed: {}", e),
-        })
-        .await
-        .ok();
+            Err(e) => {
+                progress::finish();
+                eprintln!("Auto-index failed: {}", e);
+            }
+        });
     }
 }
