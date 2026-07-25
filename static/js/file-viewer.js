@@ -60,8 +60,10 @@
                 <div class="fv-type-selector" id="fv-type-selector"></div>
             </div>
             <dl class="fv-meta" id="fv-meta"></dl>
-            <div class="fv-tree" id="fv-tree"></div>
-            <div class="fv-content" id="fv-content"></div>
+            <div class="fv-body">
+                <div class="fv-tree" id="fv-tree"></div>
+                <div class="fv-content" id="fv-content"></div>
+            </div>
         `;
 
         document.body.appendChild(overlay);
@@ -88,6 +90,7 @@
             <dt>Size</dt><dd>${formatSize(file.size)}</dd>
             <dt>Modified</dt><dd>${formatDate(file.modified)}</dd>
             ${file.hash ? `<dt>Hash</dt><dd>${escapeHtml(file.hash.substring(0, 16))}...</dd>` : ''}
+            <dt>Path</dt><dd style="font-size:0.75rem;color:#666">${escapeHtml(file.path || '')}</dd>
         `;
         const tree = document.getElementById('fv-tree');
         if (tree && file.path) {
