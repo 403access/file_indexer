@@ -7,6 +7,13 @@
         binary: { label: 'Binary', extensions: [] }
     };
 
+    const TEXT_SEP = { dot: '\u00B7', slash: '/', arrow: '\u2192' };
+    const TREE_SEP = {
+        tree: { connector: '\u2514\u2500 ', branch: '\u251C\u2500 ' },
+        slash: { connector: '/ ', branch: '| ' },
+        arrow: { connector: '\u2192 ', branch: '\u2502 ' }
+    };
+
     let _cwd = null;
     let _cwdPromise = null;
 
@@ -32,18 +39,17 @@
         return absPath;
     }
 
-    function toAbsolutePath(relPath, cwd) {
-        if (!cwd) return relPath;
-        if (relPath.startsWith('/')) return relPath;
-        return cwd + '/' + relPath;
-    }
-
     function resolveDisplayPath(absPath) {
         if (!_cwdPromise) fetchCwd();
         if (window.FileViewer._pathMode === 'relative' && _cwd) {
             return toRelativePath(absPath, _cwd);
         }
         return absPath;
+    }
+
+    function applyTextSep(path) {
+        const sep = TEXT_SEP[window.FileViewer._textSep] || TEXT_SEP.dot;
+        return path.replace(/\//g, sep);
     }
 
     function detectType(filename) {
@@ -103,7 +109,8 @@
                 <button class="fv-close" onclick="window.FileViewer.close()">&times;</button>
                 <span class="fv-filename" id="fv-filename"></span>
                 <button class="fv-path-toggle" id="fv-path-toggle" onclick="window.FileViewer.togglePathMode()" title="Toggle absolute/relative path"></button>
-                <button class="fv-sep-toggle" id="fv-sep-toggle" onclick="window.FileViewer.toggleSepMode()" title="Toggle tree separator style"></button>
+                <button class="fv-textsep-toggle" id="fv-textsep-toggle" onclick="window.FileViewer.toggleTextSep()" title="Toggle path separator in text"></button>
+                <button class="fv-tree-toggle" id="fv-tree-toggle" onclick="window.FileViewer.toggleTreeSep()" title="Toggle tree separator style"></button>
                 <div class="fv-type-selector" id="fv-type-selector"></div>
             </div>
             <dl class="fv-meta" id="fv-meta"></dl>
@@ -117,23 +124,16 @@
         document.body.appendChild(sidebar);
     }
 
-    const SEPARATORS = {
-        dot: { connector: '\u00B7 ', branch: '  ' },
-        slash: { connector: '/ ', branch: '| ' },
-        arrow: { connector: '\u2192 ', branch: '\u2502 ' }
-    };
-
     function buildPathTree(displayPath) {
         const parts = displayPath.replace(/\/+/g, '/').split('/').filter(Boolean);
-        const sep = SEPARATORS[window.FileViewer._sepMode] || SEPARATORS.dot;
+        const sep = TREE_SEP[window.FileViewer._treeSep] || TREE_SEP.tree;
         if (parts.length === 0) return '<div class="fv-tree-line current">/</div>';
         let lines = [];
         for (let i = 0; i < parts.length; i++) {
             const isLast = i === parts.length - 1;
-            const prefix = sep.branch.repeat(i);
-            const connector = isLast ? sep.connector : sep.branch + sep.connector.slice(0, -1);
+            const connector = isLast ? sep.connector : sep.branch;
             const icon = isLast ? '\uD83D\uDCC4' : '\uD83D\uDCC1';
-            lines.push(`<div class="fv-tree-line${isLast ? ' current' : ''}"><span class="fv-tree-prefix">${prefix}${connector}</span>${icon} ${parts[i]}</div>`);
+            lines.push(`<div class="fv-tree-line${isLast ? ' current' : ''}"><span class="fv-tree-prefix">${connector}</span>${icon} ${parts[i]}</div>`);
         }
         return lines.join('');
     }
@@ -142,12 +142,14 @@
         const meta = document.getElementById('fv-meta');
         const displayPath = resolveDisplayPath(file.path);
         const displayParent = file.parent ? resolveDisplayPath(file.parent) : '';
+        const textPath = applyTextSep(displayPath);
+        const textParent = applyTextSep(displayParent);
         meta.innerHTML = `
             <dt>Name</dt><dd>${escapeHtml(file.name)}</dd>
             <dt>Type</dt><dd>${file.ext ? escapeHtml(file.ext.toUpperCase()) : '(none)'} <span style="color:#999;font-size:0.7rem">${escapeHtml(file.mime)}</span></dd>
             <dt>Size</dt><dd>${formatSize(file.size)}</dd>
-            <dt>Path</dt><dd class="fv-meta-path" style="font-size:0.75rem;word-break:break-all">${escapeHtml(displayPath)}</dd>
-            <dt>Directory</dt><dd class="fv-meta-parent" style="font-size:0.75rem">${escapeHtml(displayParent)}</dd>
+            <dt>Path</dt><dd class="fv-meta-path" style="font-size:0.75rem;word-break:break-all">${escapeHtml(textPath)}</dd>
+            <dt>Directory</dt><dd class="fv-meta-parent" style="font-size:0.75rem">${escapeHtml(textParent)}</dd>
             <dt>Modified</dt><dd>${formatDate(file.modified)}</dd>
             <dt>Created</dt><dd>${formatDate(file.created)}</dd>
             <dt>Permissions</dt><dd>${escapeHtml(file.permissions)}</dd>
@@ -157,24 +159,25 @@
         if (tree && file.path) {
             tree.innerHTML = buildPathTree(displayPath);
         }
-        updatePathToggleLabel();
-        updateSepToggleLabel();
+        updateToggleLabels();
     }
 
-    function updatePathToggleLabel() {
-        const btn = document.getElementById('fv-path-toggle');
-        if (!btn) return;
-        const mode = window.FileViewer._pathMode;
-        btn.textContent = mode === 'relative' ? 'Rel' : 'Abs';
-        btn.title = mode === 'relative' ? 'Showing relative path \u2014 click for absolute' : 'Showing absolute path \u2014 click for relative';
-    }
-
-    function updateSepToggleLabel() {
-        const btn = document.getElementById('fv-sep-toggle');
-        if (!btn) return;
-        const mode = window.FileViewer._sepMode;
-        const labels = { dot: '\u00B7', slash: '/', arrow: '\u2192' };
-        btn.textContent = labels[mode] || labels.dot;
+    function updateToggleLabels() {
+        const pathBtn = document.getElementById('fv-path-toggle');
+        if (pathBtn) {
+            const m = window.FileViewer._pathMode;
+            pathBtn.textContent = m === 'relative' ? 'Rel' : 'Abs';
+            pathBtn.title = m === 'relative' ? 'Relative path \u2014 click for absolute' : 'Absolute path \u2014 click for relative';
+        }
+        const textSepBtn = document.getElementById('fv-textsep-toggle');
+        if (textSepBtn) {
+            textSepBtn.textContent = TEXT_SEP[window.FileViewer._textSep] || TEXT_SEP.dot;
+        }
+        const treeBtn = document.getElementById('fv-tree-toggle');
+        if (treeBtn) {
+            const labels = { tree: '\u251C', slash: '/', arrow: '\u2192' };
+            treeBtn.textContent = labels[window.FileViewer._treeSep] || labels.tree;
+        }
     }
 
     function renderTypeSelector(currentType) {
@@ -288,18 +291,28 @@
         }
     }
 
-    function togglePathMode() {
-        window.FileViewer._pathMode = window.FileViewer._pathMode === 'relative' ? 'absolute' : 'relative';
+    function reRender() {
         const data = window.FileViewer._currentFileData;
         if (data) renderMeta(data);
     }
 
-    const SEP_ORDER = ['dot', 'slash', 'arrow'];
-    function toggleSepMode() {
-        const idx = SEP_ORDER.indexOf(window.FileViewer._sepMode);
-        window.FileViewer._sepMode = SEP_ORDER[(idx + 1) % SEP_ORDER.length];
-        const data = window.FileViewer._currentFileData;
-        if (data) renderMeta(data);
+    function togglePathMode() {
+        window.FileViewer._pathMode = window.FileViewer._pathMode === 'relative' ? 'absolute' : 'relative';
+        reRender();
+    }
+
+    const TEXT_SEP_ORDER = ['dot', 'slash', 'arrow'];
+    function toggleTextSep() {
+        const idx = TEXT_SEP_ORDER.indexOf(window.FileViewer._textSep);
+        window.FileViewer._textSep = TEXT_SEP_ORDER[(idx + 1) % TEXT_SEP_ORDER.length];
+        reRender();
+    }
+
+    const TREE_SEP_ORDER = ['tree', 'slash', 'arrow'];
+    function toggleTreeSep() {
+        const idx = TREE_SEP_ORDER.indexOf(window.FileViewer._treeSep);
+        window.FileViewer._treeSep = TREE_SEP_ORDER[(idx + 1) % TREE_SEP_ORDER.length];
+        reRender();
     }
 
     function setViewType(type) {
@@ -317,12 +330,14 @@
         close,
         setViewType,
         togglePathMode,
-        toggleSepMode,
+        toggleTextSep,
+        toggleTreeSep,
         _currentType: null,
         _currentPath: null,
         _currentFileName: null,
         _currentFileData: null,
         _pathMode: 'absolute',
-        _sepMode: 'dot'
+        _textSep: 'dot',
+        _treeSep: 'tree'
     };
 })();
