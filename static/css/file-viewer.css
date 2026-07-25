@@ -57,6 +57,20 @@
     display: flex;
     gap: 0.25rem;
 }
+.fv-path-toggle {
+    padding: 0.25rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f0f4f8;
+    font-size: 0.7rem;
+    font-weight: 600;
+    cursor: pointer;
+    color: #555;
+    letter-spacing: 0.02em;
+}
+.fv-path-toggle:hover {
+    background: #e2e8f0;
+}
 .fv-type-btn {
     padding: 0.25rem 0.5rem;
     border: 1px solid #ddd;

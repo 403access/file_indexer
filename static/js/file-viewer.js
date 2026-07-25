@@ -7,6 +7,45 @@
         binary: { label: 'Binary', extensions: [] }
     };
 
+    let _cwd = null;
+    let _cwdPromise = null;
+
+    function fetchCwd() {
+        if (_cwdPromise) return _cwdPromise;
+        _cwdPromise = fetch('/api/config').then(r => r.json()).then(d => {
+            _cwd = d.cwd.replace(/\/+$/, '');
+            return _cwd;
+        }).catch(() => {
+            _cwd = '';
+            return '';
+        });
+        return _cwdPromise;
+    }
+
+    function toRelativePath(absPath, cwd) {
+        if (!cwd) return absPath;
+        const normalCwd = cwd.replace(/\/+$/, '');
+        if (absPath.startsWith(normalCwd + '/')) {
+            return absPath.slice(normalCwd.length + 1);
+        }
+        if (absPath === normalCwd) return '.';
+        return absPath;
+    }
+
+    function toAbsolutePath(relPath, cwd) {
+        if (!cwd) return relPath;
+        if (relPath.startsWith('/')) return relPath;
+        return cwd + '/' + relPath;
+    }
+
+    function resolveDisplayPath(absPath) {
+        if (!_cwdPromise) fetchCwd();
+        if (window.FileViewer._pathMode === 'relative' && _cwd) {
+            return toRelativePath(absPath, _cwd);
+        }
+        return absPath;
+    }
+
     function detectType(filename) {
         const ext = filename.split('.').pop().toLowerCase();
         for (const [type, config] of Object.entries(VIEWER_TYPES)) {
@@ -63,6 +102,7 @@
             <div class="fv-header">
                 <button class="fv-close" onclick="window.FileViewer.close()">&times;</button>
                 <span class="fv-filename" id="fv-filename"></span>
+                <button class="fv-path-toggle" id="fv-path-toggle" onclick="window.FileViewer.togglePathMode()" title="Toggle absolute/relative path"></button>
                 <div class="fv-type-selector" id="fv-type-selector"></div>
             </div>
             <dl class="fv-meta" id="fv-meta"></dl>
@@ -76,8 +116,9 @@
         document.body.appendChild(sidebar);
     }
 
-    function buildPathTree(filePath) {
-        const parts = filePath.replace(/\/+/g, '/').split('/').filter(Boolean);
+    function buildPathTree(displayPath) {
+        const parts = displayPath.replace(/\/+/g, '/').split('/').filter(Boolean);
+        if (parts.length === 0) return '<div class="fv-tree-line current">/</div>';
         let lines = [];
         for (let i = 0; i < parts.length; i++) {
             const isLast = i === parts.length - 1;
@@ -91,11 +132,14 @@
 
     function renderMeta(file) {
         const meta = document.getElementById('fv-meta');
+        const displayPath = resolveDisplayPath(file.path);
+        const displayParent = file.parent ? resolveDisplayPath(file.parent) : '';
         meta.innerHTML = `
             <dt>Name</dt><dd>${escapeHtml(file.name)}</dd>
             <dt>Type</dt><dd>${file.ext ? escapeHtml(file.ext.toUpperCase()) : '(none)'} <span style="color:#999;font-size:0.7rem">${escapeHtml(file.mime)}</span></dd>
             <dt>Size</dt><dd>${formatSize(file.size)}</dd>
-            <dt>Directory</dt><dd style="font-size:0.75rem">${escapeHtml(file.parent)}</dd>
+            <dt>Path</dt><dd class="fv-meta-path" style="font-size:0.75rem;word-break:break-all">${escapeHtml(displayPath)}</dd>
+            <dt>Directory</dt><dd class="fv-meta-parent" style="font-size:0.75rem">${escapeHtml(displayParent)}</dd>
             <dt>Modified</dt><dd>${formatDate(file.modified)}</dd>
             <dt>Created</dt><dd>${formatDate(file.created)}</dd>
             <dt>Permissions</dt><dd>${escapeHtml(file.permissions)}</dd>
@@ -103,8 +147,17 @@
         `;
         const tree = document.getElementById('fv-tree');
         if (tree && file.path) {
-            tree.innerHTML = buildPathTree(file.path);
+            tree.innerHTML = buildPathTree(displayPath);
         }
+        updatePathToggleLabel();
+    }
+
+    function updatePathToggleLabel() {
+        const btn = document.getElementById('fv-path-toggle');
+        if (!btn) return;
+        const mode = window.FileViewer._pathMode;
+        btn.textContent = mode === 'relative' ? 'Rel' : 'Abs';
+        btn.title = mode === 'relative' ? 'Showing relative path — click for absolute' : 'Showing absolute path — click for relative';
     }
 
     function renderTypeSelector(currentType) {
@@ -139,6 +192,7 @@
     async function openFile(filePath, fileName) {
         loadStylesheet();
         createSidebarHTML();
+        await fetchCwd();
 
         const overlay = document.getElementById('file-viewer-overlay');
         const sidebar = document.getElementById('file-viewer-sidebar');
@@ -174,8 +228,7 @@
             window.FileViewer._currentType = detectedType;
             window.FileViewer._currentPath = filePath;
             window.FileViewer._currentFileName = fileName;
-
-            renderMeta({
+            window.FileViewer._currentFileData = {
                 name: fileName,
                 size: fileSize,
                 modified: modifiedTs || null,
@@ -188,8 +241,9 @@
                 created: createdTs || null,
                 parent: parent,
                 type: detectedType
-            });
+            };
 
+            renderMeta(window.FileViewer._currentFileData);
             renderTypeSelector(detectedType);
 
             if (detectedType === 'image' && !isText) {
@@ -217,6 +271,12 @@
         }
     }
 
+    function togglePathMode() {
+        window.FileViewer._pathMode = window.FileViewer._pathMode === 'relative' ? 'absolute' : 'relative';
+        const data = window.FileViewer._currentFileData;
+        if (data) renderMeta(data);
+    }
+
     function setViewType(type) {
         const path = window.FileViewer._currentPath;
         const name = window.FileViewer._currentFileName;
@@ -231,8 +291,11 @@
         open: openFile,
         close,
         setViewType,
+        togglePathMode,
         _currentType: null,
         _currentPath: null,
-        _currentFileName: null
+        _currentFileName: null,
+        _currentFileData: null,
+        _pathMode: 'absolute'
     };
 })();
