@@ -3,7 +3,9 @@ use rusqlite::{named_params, Connection, Transaction};
 use crate::modules::file_entry::_types::FileEntry;
 
 pub fn get_connection(db_path: &str) -> rusqlite::Result<Connection> {
-    Connection::open(db_path)
+    let conn = Connection::open(db_path)?;
+    conn.execute_batch("PRAGMA journal_mode=WAL;")?;
+    Ok(conn)
 }
 
 pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
