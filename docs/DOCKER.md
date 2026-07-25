@@ -45,6 +45,21 @@ This compiles SQLite from C source via the `cc` crate, embedding it directly int
 | Portability | Breaks on musl/Alpine | Works everywhere |
 | SQLite version | OS-provided | Pinned (3.45.x, well-audited) |
 
+## CI/CD
+
+Use `--exit-code-from test` to propagate the container's exit code to the pipeline. When a test fails, the command exits non-zero, failing the CI step.
+
+```bash
+docker compose up --build --exit-code-from test
+```
+
+Example GitHub Actions usage:
+
+```yaml
+- name: Run tests
+  run: docker compose up --build --exit-code-from test
+```
+
 ## Files
 
 | File | Purpose |
