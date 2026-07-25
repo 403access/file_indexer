@@ -42,9 +42,17 @@
             flex: 1;
             min-width: 250px;
             border-right: 1px solid #eee;
+            display: flex;
+            flex-direction: column;
         }
         .folder-col:last-child {
             border-right: none;
+        }
+        .folder-col-files {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
         }
         .folder-col-header {
             padding: 0.6rem 1rem;
@@ -258,6 +266,7 @@
                                         <span class="full-path" title="${folder.path}">${truncatePath(folder.path)}</span>
                                     </div>
                                     <div class="mini-tree">${buildMiniTree(folder.path, commonRoot)}</div>
+                                    <div class="folder-col-files">
                                     ${folder.files.map(file => `
                                         <div class="folder-file shared">
                                             <span class="hash-dot" style="background:${hashColor(file.hash)}"></span>
@@ -266,6 +275,7 @@
                                             <span class="file-size">${formatSize(file.size)}</span>
                                         </div>
                                     `).join('')}
+                                    </div>
                                 </div>
                             `).join('')}
                         </div>
