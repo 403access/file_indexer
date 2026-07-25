@@ -166,18 +166,22 @@
         const pathBtn = document.getElementById('fv-path-toggle');
         if (pathBtn) {
             const m = window.FileViewer._pathMode;
-            pathBtn.textContent = m === 'relative' ? 'Rel' : 'Abs';
-            pathBtn.title = m === 'relative' ? 'Relative path \u2014 click for absolute' : 'Absolute path \u2014 click for relative';
+            pathBtn.textContent = m === 'absolute' ? 'Rel' : 'Abs';
+            pathBtn.title = m === 'absolute' ? 'Absolute path \u2014 click for relative' : 'Relative path \u2014 click for absolute';
         }
         const textSepBtn = document.getElementById('fv-textsep-toggle');
         if (textSepBtn) {
             const btnLabels = { dot: '\u00B7', slash: '/', arrow: '\u2192' };
-            textSepBtn.textContent = btnLabels[window.FileViewer._textSep] || btnLabels.dot;
+            const idx = TEXT_SEP_ORDER.indexOf(window.FileViewer._textSep);
+            const next = TEXT_SEP_ORDER[(idx + 1) % TEXT_SEP_ORDER.length];
+            textSepBtn.textContent = btnLabels[next];
         }
         const treeBtn = document.getElementById('fv-tree-toggle');
         if (treeBtn) {
             const labels = { tree: '\u251C', slash: '/', arrow: '\u2192' };
-            treeBtn.textContent = labels[window.FileViewer._treeSep] || labels.tree;
+            const idx = TREE_SEP_ORDER.indexOf(window.FileViewer._treeSep);
+            const next = TREE_SEP_ORDER[(idx + 1) % TREE_SEP_ORDER.length];
+            treeBtn.textContent = labels[next];
         }
     }
 
