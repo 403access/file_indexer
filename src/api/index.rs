@@ -60,6 +60,7 @@ pub async fn ensure_indexed_async(db_path: String, cwd: String) {
         tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd) {
             Ok(()) => {
                 let count = count_entries(&db_path);
+                progress::finish();
                 println!("Indexed {} entries.", count);
             }
             Err(e) => {
