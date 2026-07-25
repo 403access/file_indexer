@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duplicate Folders - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .group-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
+        }
+        .group-header {
+            padding: 0.75rem 1rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .group-header .badge {
+            background: #e74c3c;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.2rem 0.6rem;
+            border-radius: 10px;
+        }
+        .group-header .label {
+            color: #666;
+            font-size: 0.85rem;
+        }
+        .folders-row {
+            display: flex;
+            gap: 0;
+            overflow-x: auto;
+        }
+        .folder-col {
+            flex: 1;
+            min-width: 250px;
+            border-right: 1px solid #eee;
+        }
+        .folder-col:last-child {
+            border-right: none;
+        }
+        .folder-col-header {
+            padding: 0.6rem 1rem;
+            background: #f0f4f8;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #2c3e50;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .folder-col-header .full-path {
+            display: block;
+            font-weight: 400;
+            font-size: 0.75rem;
+            color: #999;
+            font-family: monospace;
+            margin-top: 0.15rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .folder-file {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 1rem;
+            border-bottom: 1px solid #f5f5f5;
+            font-size: 0.85rem;
+        }
+        .folder-file:hover {
+            background: #fafafa;
+        }
+        .folder-file.shared {
+            background: #fff8e1;
+        }
+        .folder-file .file-icon {
+            font-size: 0.9rem;
+            width: 1.2rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .folder-file .file-name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .folder-file .file-size {
+            color: #999;
+            font-family: monospace;
+            font-size: 0.8rem;
+            flex-shrink: 0;
+        }
+        .hash-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .empty-msg {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+        .summary {
+            color: #666;
+            font-size: 0.85rem;
+            padding: 0.5rem 0;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Search</a>
+            <a href="/duplicates.html">Duplicates</a>
+            <a href="/duplicate-folders.html" class="active">Folders</a>
+            <a href="/explorer.html">Explorer</a>
+        </nav>
+    </header>
+
+    <main>
+        <div class="summary" id="summary"></div>
+        <div id="groups"></div>
+    </main>
+
+    <script>
+        const HASH_COLORS = [
+            '#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6',
+            '#1abc9c', '#e67e22', '#34495e', '#16a085', '#c0392b',
+            '#2980b9', '#8e44ad', '#27ae60', '#d35400', '#7f8c8d'
+        ];
+        let hashColorMap = {};
+        let colorIdx = 0;
+
+        function hashColor(hash) {
+            if (!hashColorMap[hash]) {
+                hashColorMap[hash] = HASH_COLORS[colorIdx % HASH_COLORS.length];
+                colorIdx++;
+            }
+            return hashColorMap[hash];
+        }
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+        }
+
+        function truncatePath(p) {
+            if (!p) return '';
+            const parts = p.split('/');
+            if (parts.length <= 3) return p;
+            return '.../' + parts.slice(-3).join('/');
+        }
+
+        async function loadGroups() {
+            const res = await fetch('/api/duplicate-folders');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            const container = document.getElementById('groups');
+            const summary = document.getElementById('summary');
+
+            if (data.groups.length === 0) {
+                container.innerHTML = '<div class="empty-msg">No duplicate folders found</div>';
+                summary.textContent = '';
+                return;
+            }
+
+            let totalFolders = 0;
+            data.groups.forEach(g => totalFolders += g.folders.length);
+            summary.textContent = `${data.groups.length} group${data.groups.length !== 1 ? 's' : ''} \u2022 ${totalFolders} folders compared`;
+
+            container.innerHTML = data.groups.map((group, gi) => {
+                // Collect all hashes across all folders in this group
+                const allHashes = new Set();
+                group.folders.forEach(f => f.files.forEach(file => allHashes.add(file.hash)));
+
+                return `
+                    <div class="group-card">
+                        <div class="group-header">
+                            <span class="badge">${group.shared_count} shared</span>
+                            <span class="label">${group.folders.length} folders with duplicate content</span>
+                        </div>
+                        <div class="folders-row">
+                            ${group.folders.map(folder => `
+                                <div class="folder-col">
+                                    <div class="folder-col-header">
+                                        ${folder.name}
+                                        <span class="full-path" title="${folder.path}">${truncatePath(folder.path)}</span>
+                                    </div>
+                                    ${folder.files.map(file => `
+                                        <div class="folder-file shared">
+                                            <span class="hash-dot" style="background:${hashColor(file.hash)}"></span>
+                                            <span class="file-icon">\uD83D\uDCC4</span>
+                                            <span class="file-name" title="${file.name}">${file.name}</span>
+                                            <span class="file-size">${formatSize(file.size)}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        loadGroups();
+    </script>
+</body>
+</html>
