@@ -11,8 +11,10 @@ pub fn get_duplicates(tx: &Transaction, limit: Option<u64>) -> rusqlite::Result<
     let limit = limit.unwrap_or(100);
     let sql = format!(
         "
-        SELECT f.*
+        SELECT f.path, fn.name, f.size, f.modified, f.hash,
+               f.is_directory, f.is_file, f.is_symlink
         FROM files f
+        JOIN file_names fn ON f.file_name_id = fn.id
         JOIN duplicate_hashes d ON f.hash = d.hash
         LIMIT {}
         ",

@@ -45,19 +45,22 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         return Err(files_table_result.unwrap_err());
     }
 
-    let indexes_result = tx.execute(
-        "
-        -- Create index on hash (for fast lookup / duplicate detection)
-        CREATE INDEX idx_files_hash ON files(hash);
-
-        -- Optional: Index on folder to optimize grouping/filtering
-        CREATE INDEX idx_files_path ON files(path);
-        ",
+    let hash_index_result = tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash);",
         [],
     );
-    if indexes_result.is_err() {
-        eprintln!("Failed to create indexes: {:?}", indexes_result);
-        return Err(indexes_result.unwrap_err());
+    if hash_index_result.is_err() {
+        eprintln!("Failed to create hash index: {:?}", hash_index_result);
+        return Err(hash_index_result.unwrap_err());
+    }
+
+    let path_index_result = tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);",
+        [],
+    );
+    if path_index_result.is_err() {
+        eprintln!("Failed to create path index: {:?}", path_index_result);
+        return Err(path_index_result.unwrap_err());
     }
 
     return Ok(());
