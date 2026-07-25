@@ -212,7 +212,7 @@
 
     <main>
         <div class="filter-bar">
-            <input type="text" id="filter-input" placeholder="Filter by folder name..." oninput="applyFilter()">
+            <input type="text" id="filter-input" placeholder="Filter by folder or file name..." oninput="applyFilter()">
             <label>
                 <input type="checkbox" id="min-shared" onchange="applyFilter()">
                 Min 2 shared
@@ -312,7 +312,8 @@
                 if (query) {
                     return group.folders.some(f =>
                         f.name.toLowerCase().includes(query) ||
-                        f.path.toLowerCase().includes(query)
+                        f.path.toLowerCase().includes(query) ||
+                        f.files.some(file => file.name.toLowerCase().includes(query))
                     );
                 }
                 return true;
