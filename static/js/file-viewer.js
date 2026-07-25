@@ -33,162 +33,13 @@
         return div.innerHTML;
     }
 
-    function createSidebarStyles() {
-        if (document.getElementById('file-viewer-styles')) return;
-        const style = document.createElement('style');
-        style.id = 'file-viewer-styles';
-        style.textContent = `
-            .file-viewer-overlay {
-                position: fixed;
-                top: 0;
-                left: 0;
-                right: 0;
-                bottom: 0;
-                background: rgba(0,0,0,0.3);
-                z-index: 999;
-                opacity: 0;
-                transition: opacity 0.2s;
-            }
-            .file-viewer-overlay.open { opacity: 1; }
-            .file-viewer-sidebar {
-                position: fixed;
-                top: 0;
-                right: 0;
-                width: 50vw;
-                max-width: 800px;
-                min-width: 400px;
-                height: 100vh;
-                background: white;
-                box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-                z-index: 1000;
-                display: flex;
-                flex-direction: column;
-                transform: translateX(100%);
-                transition: transform 0.25s ease;
-            }
-            .file-viewer-sidebar.open { transform: translateX(0); }
-            .fv-header {
-                display: flex;
-                align-items: center;
-                gap: 0.75rem;
-                padding: 1rem 1.25rem;
-                border-bottom: 1px solid #eee;
-                background: #f8f9fa;
-            }
-            .fv-close {
-                background: none;
-                border: none;
-                font-size: 1.2rem;
-                cursor: pointer;
-                color: #666;
-                padding: 0.25rem;
-                border-radius: 4px;
-            }
-            .fv-close:hover { background: #e0e0e0; }
-            .fv-filename {
-                flex: 1;
-                font-weight: 600;
-                font-size: 0.95rem;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                white-space: nowrap;
-            }
-            .fv-type-selector {
-                display: flex;
-                gap: 0.25rem;
-            }
-            .fv-type-btn {
-                padding: 0.25rem 0.5rem;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background: white;
-                font-size: 0.75rem;
-                cursor: pointer;
-                color: #666;
-            }
-            .fv-type-btn.active {
-                background: #3498db;
-                color: white;
-                border-color: #3498db;
-            }
-            .fv-type-btn:hover:not(.active) {
-                background: #f0f0f0;
-            }
-            .fv-meta {
-                padding: 0.75rem 1.25rem;
-                border-bottom: 1px solid #eee;
-                display: grid;
-                grid-template-columns: auto 1fr;
-                gap: 0.3rem 1rem;
-                font-size: 0.8rem;
-            }
-            .fv-meta dt {
-                color: #999;
-                font-weight: 500;
-            }
-            .fv-meta dd {
-                color: #333;
-                font-family: monospace;
-                word-break: break-all;
-            }
-            .fv-content {
-                flex: 1;
-                overflow: auto;
-                padding: 0;
-            }
-            .fv-text {
-                padding: 1rem 1.25rem;
-                font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-                font-size: 0.8rem;
-                line-height: 1.5;
-                white-space: pre-wrap;
-                word-break: break-all;
-                color: #333;
-                margin: 0;
-                background: #fafbfc;
-            }
-            .fv-image {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 1rem;
-                min-height: 100%;
-                background: #f5f5f5;
-            }
-            .fv-image img {
-                max-width: 100%;
-                max-height: 100%;
-                object-fit: contain;
-                border-radius: 4px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            }
-            .fv-binary {
-                display: flex;
-                flex-direction: column;
-                align-items: center;
-                justify-content: center;
-                padding: 3rem;
-                color: #999;
-                text-align: center;
-                gap: 0.5rem;
-            }
-            .fv-binary-icon { font-size: 3rem; }
-            .fv-loading {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 3rem;
-                color: #999;
-            }
-            .fv-error {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                padding: 3rem;
-                color: #e74c3c;
-            }
-        `;
-        document.head.appendChild(style);
+    function loadStylesheet() {
+        if (document.getElementById('file-viewer-css')) return;
+        const link = document.createElement('link');
+        link.id = 'file-viewer-css';
+        link.rel = 'stylesheet';
+        link.href = '/css/file-viewer.css';
+        document.head.appendChild(link);
     }
 
     function createSidebarHTML() {
@@ -257,7 +108,7 @@
     }
 
     async function openFile(filePath, fileName) {
-        createSidebarStyles();
+        loadStylesheet();
         createSidebarHTML();
 
         const overlay = document.getElementById('file-viewer-overlay');
