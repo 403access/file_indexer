@@ -5,6 +5,8 @@ use crate::modules::commands::command_search_file::{OrderKind, PatternKind, Targ
 use crate::modules::sql::database::get_connection;
 use crate::modules::sql::search::search_file;
 
+use super::super::database::arrange::{create_test_data, delete_test_data};
+
 const SAMPLE_DIR: &str = "src/tests/data/sample-directory";
 
 fn sample_path() -> std::path::PathBuf {
@@ -29,86 +31,48 @@ fn count_where(db: &std::path::Path, where_clause: &str) -> i64 {
     conn.query_row(&sql, [], |row| row.get(0)).unwrap()
 }
 
-/// Golden test: assert the full structure of src/tests/data/sample-directory/.
-///
-/// When someone adds, removes, or renames a file here, this test breaks
-/// and the failure message tells them exactly what changed — update the
-/// expectations below to match.
-///
-/// ```text
-/// src/tests/data/sample-directory/
-/// ├── .DS_Store
-/// ├── file-a
-/// ├── file-b
-/// ├── folder-a/
-/// │   ├── file-a-1
-/// │   └── file-a-2
-/// ├── folder-b/
-/// │   └── file-b-1
-/// ├── folder-c/
-/// │   ├── file-a-1
-/// │   ├── file-c-1
-/// │   ├── file-c-2
-/// │   ├── file-c-3
-/// │   └── folder-d/
-/// │       ├── folder-a/
-/// │       │   ├── file-a-1
-/// │       │   └── file-a-2
-/// │       └── folder-b/
-/// │           └── file-b-1
-/// ├── folder-e/
-/// │   ├── folder-a/
-/// │   │   ├── file-a-1
-/// │   │   └── file-a-2
-/// │   ├── folder-b/
-/// │   │   └── file-b-1
-/// │   └── folder-c/
-/// │       ├── file-c-1
-/// │       └── file-c-2
-/// └── folder-f/
-///     ├── file-a
-///     ├── file-b
-///     └── file-f
-/// ```
+/// Golden test: the real src/tests/data/sample-directory/ and create_test_data()
+/// must produce the same indexed structure. When someone changes one but not the
+/// other, this test breaks. Update create_test_data() in arrange.rs to match.
 #[test]
-fn sample_directory_matches_expected_structure() {
+fn sample_directory_matches_create_test_data() {
+    // Index the real on-disk sample directory
     let root = sample_path();
-    let db = db_path();
+    let real_db = db_path();
+    index_directory(real_db.to_str().unwrap(), root.to_str().unwrap()).unwrap();
 
-    index_directory(db.to_str().unwrap(), root.to_str().unwrap()).unwrap();
+    // Index the synthetic copy from arrange.rs
+    let temp = create_test_data();
+    let synth_db = db_path();
+    index_directory(synth_db.to_str().unwrap(), temp.to_str().unwrap()).unwrap();
 
-    // --- aggregate counts (includes .DS_Store) ---
-    assert_eq!(count_where(&db, ""), 32, "total entry count changed");
-    assert_eq!(count_where(&db, "WHERE is_file = 1"), 21, "file count changed (includes .DS_Store)");
-    assert_eq!(count_where(&db, "WHERE is_directory = 1"), 11, "directory count changed");
+    // The real directory has .DS_Store; the synthetic copy does not.
+    // Account for that one extra file.
+    let real_total = count_where(&real_db, "");
+    let synth_total = count_where(&synth_db, "");
+    assert_eq!(real_total, synth_total + 1, "real dir should have exactly 1 more entry than create_test_data() (.DS_Store)");
 
-    // --- names that appear exactly twice ---
-    let file_a = search(&db, "file-a", TargetKind::Files, PatternKind::Exact);
-    assert_eq!(file_a.len(), 2, "file-a should appear twice (root + folder-f)");
-    assert!(file_a.iter().all(|e| e.is_file));
+    let real_files = count_where(&real_db, "WHERE is_file = 1");
+    let synth_files = count_where(&synth_db, "WHERE is_file = 1");
+    assert_eq!(real_files, synth_files + 1, "real dir should have 1 more file (.DS_Store)");
 
-    let folder_c = search(&db, "folder-c", TargetKind::Folders, PatternKind::Exact);
-    assert_eq!(folder_c.len(), 2, "folder-c should appear twice (root + folder-e)");
-    assert!(folder_c.iter().all(|e| e.is_directory));
+    let real_dirs = count_where(&real_db, "WHERE is_directory = 1");
+    let synth_dirs = count_where(&synth_db, "WHERE is_directory = 1");
+    assert_eq!(real_dirs, synth_dirs, "directory count must match exactly");
 
-    // --- names that appear exactly three times ---
-    let folder_a = search(&db, "folder-a", TargetKind::Folders, PatternKind::Exact);
-    assert_eq!(folder_a.len(), 3, "folder-a should appear three times (root + folder-c/folder-d + folder-e)");
+    // Search for names that appear multiple times — counts must agree
+    for name in &["file-a", "file-b", "file-a-1", "file-b-1", "file-c-1", "folder-a", "folder-c"] {
+        let real = search(&real_db, name, TargetKind::Both, PatternKind::Exact);
+        let synth = search(&synth_db, name, TargetKind::Both, PatternKind::Exact);
+        assert_eq!(
+            real.len(),
+            synth.len(),
+            "search for '{}' returned different counts: real={}, synthetic={}",
+            name, real.len(), synth.len()
+        );
+    }
 
-    let file_b1 = search(&db, "file-b-1", TargetKind::Files, PatternKind::Exact);
-    assert_eq!(file_b1.len(), 3, "file-b-1 should appear three times");
-
-    // --- names that appear exactly four times ---
-    let file_a1 = search(&db, "file-a-1", TargetKind::Files, PatternKind::Exact);
-    assert_eq!(file_a1.len(), 4, "file-a-1 should appear four times");
-
-    // --- names that appear exactly once ---
-    let file_f = search(&db, "file-f", TargetKind::Files, PatternKind::Exact);
-    assert_eq!(file_f.len(), 1, "file-f should appear once (folder-f only)");
-    assert_eq!(file_f[0].name, "file-f");
-
-    let file_c3 = search(&db, "file-c-3", TargetKind::Files, PatternKind::Exact);
-    assert_eq!(file_c3.len(), 1, "file-c-3 should appear once (folder-c only)");
-
-    let _ = std::fs::remove_file(&db);
+    let _ = std::fs::remove_file(&real_db);
+    let _ = std::fs::remove_file(&synth_db);
+    delete_test_data(&temp);
 }
