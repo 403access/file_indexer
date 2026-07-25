@@ -342,8 +342,8 @@
             <div class="merge-header">
                 <h2>Merge Duplicate Folders</h2>
                 <div class="merge-view-toggle">
-                    <button class="merge-view-btn active" id="view-list-btn" onclick="setMergeView('list')">List</button>
-                    <button class="merge-view-btn" id="view-tree-btn" onclick="setMergeView('tree')">Tree</button>
+                    <button class="merge-view-btn" id="view-list-btn" onclick="setMergeView('list')">List</button>
+                    <button class="merge-view-btn active" id="view-tree-btn" onclick="setMergeView('tree')">Tree</button>
                 </div>
                 <button class="merge-close" onclick="closeMerge()">&times;</button>
             </div>
@@ -531,7 +531,7 @@
 
         let mergeGroup = null;
         let mergeSelections = {};
-        let mergeViewMode = 'list';
+        let mergeViewMode = 'tree';
 
         function setMergeView(mode) {
             mergeViewMode = mode;
@@ -725,9 +725,9 @@
             setTimeout(() => { overlay.style.display = 'none'; }, 200);
             mergeGroup = null;
             mergeSelections = {};
-            mergeViewMode = 'list';
-            document.getElementById('view-list-btn').classList.add('active');
-            document.getElementById('view-tree-btn').classList.remove('active');
+            mergeViewMode = 'tree';
+            document.getElementById('view-list-btn').classList.remove('active');
+            document.getElementById('view-tree-btn').classList.add('active');
         }
 
         async function applyMerge() {
