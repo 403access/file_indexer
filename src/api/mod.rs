@@ -5,12 +5,14 @@ use crate::states::app_state::AppState;
 
 use self::duplicate_folders::duplicate_folders_handler;
 use self::duplicates::duplicates_handler;
+use self::file_content::file_content_handler;
 use self::index::index_handler;
 use self::search::search_handler;
 use self::tree::tree_handler;
 
 pub mod duplicate_folders;
 pub mod duplicates;
+pub mod file_content;
 pub mod index;
 pub mod search;
 pub mod tree;
@@ -21,6 +23,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/duplicates", get(duplicates_handler))
         .route("/api/duplicate-folders", get(duplicate_folders_handler))
         .route("/api/tree", get(tree_handler))
+        .route("/api/file", get(file_content_handler))
         .route("/api/index", post(index_handler))
         .with_state(state)
 }

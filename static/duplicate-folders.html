@@ -365,7 +365,7 @@
                                     </div>
                                     <div class="folder-col-files">
                                     ${folder.files.map(file => `
-                                        <div class="folder-file ${file.is_duplicate ? 'shared' : 'unique'}" ${!file.is_duplicate ? 'data-unique="true"' : ''}>
+                                        <div class="folder-file ${file.is_duplicate ? 'shared' : 'unique'}" ${!file.is_duplicate ? 'data-unique="true"' : ''} style="cursor:pointer" onclick="FileViewer.open('${folder.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${file.name}', '${file.name.replace(/'/g, "\\'")}')">
                                             <span class="hash-dot" style="background:${file.is_duplicate ? hashColor(file.hash) : '#ccc'}"></span>
                                             <span class="file-icon">\uD83D\uDCC4</span>
                                             <span class="file-name" title="${file.name}">${file.name}</span>
@@ -392,5 +392,6 @@
 
         loadGroups();
     </script>
+    <script src="/js/file-viewer.js"></script>
 </body>
 </html>

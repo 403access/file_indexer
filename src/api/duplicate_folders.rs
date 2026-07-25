@@ -157,10 +157,10 @@ pub async fn duplicate_folders_handler(
                     false
                 }
             })
-            .map(|(_, n, s, h)| FolderFile {
+            .map(|(p, n, s, h)| FolderFile {
                 is_duplicate: hashes.contains(&h),
                 name: n,
-                path: String::new(),
+                path: p.replace("//", "/"),
                 size: s,
                 hash: h,
             })
