@@ -63,6 +63,33 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         return Err(path_index_result.unwrap_err());
     }
 
+    let skipped_table_result = tx.execute(
+        "CREATE TABLE IF NOT EXISTS skipped_paths (
+            id INTEGER PRIMARY KEY,
+            path TEXT UNIQUE,
+            error TEXT
+        );",
+        [],
+    );
+    if skipped_table_result.is_err() {
+        eprintln!("Failed to create 'skipped_paths' table: {:?}", skipped_table_result);
+        return Err(skipped_table_result.unwrap_err());
+    }
+
+    let logs_table_result = tx.execute(
+        "CREATE TABLE IF NOT EXISTS logs (
+            id INTEGER PRIMARY KEY,
+            timestamp TEXT,
+            level TEXT,
+            message TEXT
+        );",
+        [],
+    );
+    if logs_table_result.is_err() {
+        eprintln!("Failed to create 'logs' table: {:?}", logs_table_result);
+        return Err(logs_table_result.unwrap_err());
+    }
+
     return Ok(());
 }
 
@@ -133,4 +160,49 @@ pub fn reset_duplicates_table(tx: &Transaction) -> rusqlite::Result<()> {
     remove_duplicates_table(tx)?;
     create_duplicates_table(tx)?;
     Ok(())
+}
+
+pub fn insert_skipped_path(tx: &Transaction, path: &str, error: &str) -> rusqlite::Result<i64> {
+    let affected = tx.execute(
+        "INSERT OR IGNORE INTO skipped_paths (path, error) VALUES (:path, :error)",
+        named_params! { ":path": path, ":error": error },
+    )?;
+    if affected == 1 {
+        Ok(tx.last_insert_rowid())
+    } else {
+        Err(rusqlite::Error::ExecuteReturnedResults)
+    }
+}
+
+pub fn get_skipped_paths(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare("SELECT path, error FROM skipped_paths")?;
+    let rows = stmt.query_map([], |row| {
+        Ok((row.get(0)?, row.get(1)?))
+    })?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
+pub fn insert_log(conn: &Connection, level: &str, message: &str) -> rusqlite::Result<()> {
+    let timestamp = chrono::Utc::now().to_rfc3339();
+    conn.execute(
+        "INSERT INTO logs (timestamp, level, message) VALUES (:timestamp, :level, :message)",
+        named_params! { ":timestamp": timestamp, ":level": level, ":message": message },
+    )?;
+    Ok(())
+}
+
+pub fn get_logs(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<(String, String, String)>> {
+    let mut stmt = conn.prepare("SELECT timestamp, level, message FROM logs ORDER BY id DESC LIMIT ?1")?;
+    let rows = stmt.query_map([limit], |row| {
+        Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+    })?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
 }

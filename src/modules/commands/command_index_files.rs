@@ -6,7 +6,7 @@ use crate::{
     modules::{
         file_entry::_types::FileEntry,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, init_db, insert_file, insert_file_name},
+        sql::database::{get_connection, init_db, insert_file, insert_file_name, insert_skipped_path},
     },
     states::app_state,
 };
@@ -64,6 +64,7 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
                 }
                 Err(e) => {
                     eprintln!("Skipping unreadable directory '{}': {}", path, e);
+                    let _ = insert_skipped_path(&transaction, path, &e.to_string());
                 }
             }
         }

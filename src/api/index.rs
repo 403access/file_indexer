@@ -51,3 +51,18 @@ pub fn ensure_indexed(db_path: &str, cwd: &str) {
         }
     }
 }
+
+pub async fn ensure_indexed_async(db_path: String, cwd: String) {
+    if count_entries(&db_path) == 0 {
+        println!("Database empty, indexing {} in background...", cwd);
+        tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd) {
+            Ok(()) => {
+                let count = count_entries(&db_path);
+                println!("Indexed {} entries.", count);
+            }
+            Err(e) => eprintln!("Auto-index failed: {}", e),
+        })
+        .await
+        .ok();
+    }
+}

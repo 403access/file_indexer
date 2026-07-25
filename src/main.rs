@@ -1,7 +1,7 @@
 use axum::Router;
 use tower_http::services::ServeDir;
 
-use file_indexer::api::{create_router, index::ensure_indexed};
+use file_indexer::api::{create_router, index::ensure_indexed_async};
 use file_indexer::modules::environment::check_vars::check_vars;
 use file_indexer::states::app_state::{self, AppState};
 
@@ -12,13 +12,14 @@ async fn main() {
     let database_url = file_indexer::modules::environment::env_vars::get_database_url();
 
     app_state::init(path, database_url.clone());
+    file_indexer::modules::logging::init(&database_url);
 
     let state = AppState {
         cwd: app_state::get_cwd(),
         db: database_url.clone(),
     };
 
-    ensure_indexed(&database_url, &state.cwd);
+    ensure_indexed_async(database_url.clone(), state.cwd.clone()).await;
 
     tracing_subscriber::fmt::init();
 

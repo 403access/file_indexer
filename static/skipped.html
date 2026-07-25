@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skipped Paths - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Search</a>
+            <a href="/duplicates.html">Duplicates</a>
+            <a href="/duplicate-folders.html">Folders</a>
+            <a href="/explorer.html">Explorer</a>
+            <a href="/skipped.html" class="active">Skipped</a>
+            <a href="/logs.html">Logs</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="results-info" id="results-info" style="display:none;">
+            <span id="result-count"></span>
+        </section>
+
+        <section class="results">
+            <table id="results-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+            </table>
+            <div id="no-results" style="display:none;">No skipped paths found</div>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const resultsTable = document.getElementById('results-table');
+            const resultsBody = document.getElementById('results-body');
+            const resultsInfo = document.getElementById('results-info');
+            const resultCount = document.getElementById('result-count');
+            const noResults = document.getElementById('no-results');
+
+            try {
+                const res = await fetch('/api/skipped');
+                const data = await res.json();
+
+                if (data.length === 0) {
+                    noResults.style.display = 'block';
+                    return;
+                }
+
+                resultCount.textContent = `${data.length} skipped path(s)`;
+                resultsInfo.style.display = 'block';
+                resultsTable.style.display = 'table';
+
+                data.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${escapeHtml(item.path)}</td>
+                        <td>${escapeHtml(item.error)}</td>
+                    `;
+                    resultsBody.appendChild(tr);
+                });
+            } catch (err) {
+                noResults.textContent = 'Failed to load skipped paths';
+                noResults.style.display = 'block';
+            }
+        });
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

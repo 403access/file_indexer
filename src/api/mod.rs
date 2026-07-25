@@ -8,8 +8,10 @@ use self::duplicate_folders::duplicate_folders_handler;
 use self::duplicates::duplicates_handler;
 use self::file_content::file_content_handler;
 use self::index::index_handler;
+use self::logs::logs_handler;
 use self::merge::merge_handler;
 use self::search::search_handler;
+use self::skipped::skipped_handler;
 use self::tree::tree_handler;
 
 pub mod config;
@@ -17,8 +19,10 @@ pub mod duplicate_folders;
 pub mod duplicates;
 pub mod file_content;
 pub mod index;
+pub mod logs;
 pub mod merge;
 pub mod search;
+pub mod skipped;
 pub mod tree;
 
 pub fn create_router(state: AppState) -> Router {
@@ -31,5 +35,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/index", post(index_handler))
         .route("/api/config", get(config_handler))
         .route("/api/merge", post(merge_handler))
+        .route("/api/skipped", get(skipped_handler))
+        .route("/api/logs", get(logs_handler))
         .with_state(state)
 }

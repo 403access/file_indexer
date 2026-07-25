@@ -195,11 +195,8 @@ fn compute_sha256_fast(path: &Path) -> Result<String, std::io::Error> {
         }
     }
 
-    println!("SHA-256 hash computed successfully.");
-
     // print hash then return it
     let hash = format!("{:x}", hasher.finalize());
-    println!("SHA-256 hash: {}", hash);
     Ok(hash)
 }
 

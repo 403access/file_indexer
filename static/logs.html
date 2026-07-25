@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logs - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .log-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+        }
+        .log-controls select, .log-controls input {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .log-controls button {
+            padding: 8px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .log-controls button:hover {
+            background: #0056b3;
+        }
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: monospace;
+        }
+        .log-table th, .log-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .log-table th {
+            background: #f5f5f5;
+            font-weight: bold;
+        }
+        .log-table tr:hover {
+            background: #f9f9f9;
+        }
+        .level-error { color: #dc3545; font-weight: bold; }
+        .level-warn { color: #ffc107; font-weight: bold; }
+        .level-info { color: #17a2b8; }
+        .level-debug { color: #6c757d; }
+        .timestamp { color: #666; white-space: nowrap; }
+        .message { word-break: break-word; }
+        #no-results {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Search</a>
+            <a href="/duplicates.html">Duplicates</a>
+            <a href="/duplicate-folders.html">Folders</a>
+            <a href="/explorer.html">Explorer</a>
+            <a href="/skipped.html">Skipped</a>
+            <a href="/logs.html" class="active">Logs</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="log-controls">
+            <label>Level:
+                <select id="level-filter">
+                    <option value="all">All</option>
+                    <option value="ERROR">Error</option>
+                    <option value="WARN">Warning</option>
+                    <option value="INFO">Info</option>
+                    <option value="DEBUG">Debug</option>
+                </select>
+            </label>
+            <label>Limit:
+                <select id="limit-filter">
+                    <option value="100">100</option>
+                    <option value="500" selected>500</option>
+                    <option value="1000">1000</option>
+                    <option value="5000">5000</option>
+                </select>
+            </label>
+            <button onclick="fetchLogs()">Refresh</button>
+            <div class="auto-refresh">
+                <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()">
+                <label for="auto-refresh">Auto-refresh (5s)</label>
+            </div>
+        </section>
+
+        <section class="results-info" id="results-info" style="display:none;">
+            <span id="result-count"></span>
+        </section>
+
+        <section class="results">
+            <table class="log-table" id="results-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Level</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+            </table>
+            <div id="no-results">No logs found</div>
+        </section>
+    </main>
+
+    <script>
+        let refreshInterval = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchLogs();
+            document.getElementById('level-filter').addEventListener('change', fetchLogs);
+            document.getElementById('limit-filter').addEventListener('change', fetchLogs);
+        });
+
+        async function fetchLogs() {
+            const limit = document.getElementById('limit-filter').value;
+            const level = document.getElementById('level-filter').value;
+
+            try {
+                const res = await fetch(`/api/logs?limit=${limit}`);
+                const data = await res.json();
+
+                const resultsTable = document.getElementById('results-table');
+                const resultsBody = document.getElementById('results-body');
+                const resultsInfo = document.getElementById('results-info');
+                const resultCount = document.getElementById('result-count');
+                const noResults = document.getElementById('no-results');
+
+                resultsBody.innerHTML = '';
+
+                const filtered = level === 'all' ? data : data.filter(log => log.level === level);
+
+                if (filtered.length === 0) {
+                    noResults.style.display = 'block';
+                    resultsTable.style.display = 'none';
+                    resultsInfo.style.display = 'none';
+                    return;
+                }
+
+                noResults.style.display = 'none';
+                resultsTable.style.display = 'table';
+                resultCount.textContent = `${filtered.length} log(s)`;
+                resultsInfo.style.display = 'block';
+
+                filtered.forEach(log => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td class="timestamp">${escapeHtml(log.timestamp)}</td>
+                        <td class="level-${log.level.toLowerCase()}">${escapeHtml(log.level)}</td>
+                        <td class="message">${escapeHtml(log.message)}</td>
+                    `;
+                    resultsBody.appendChild(tr);
+                });
+            } catch (err) {
+                document.getElementById('no-results').textContent = 'Failed to load logs';
+                document.getElementById('no-results').style.display = 'block';
+            }
+        }
+
+        function toggleAutoRefresh() {
+            if (document.getElementById('auto-refresh').checked) {
+                refreshInterval = setInterval(fetchLogs, 5000);
+            } else {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
