@@ -363,20 +363,20 @@
             const parts = rel.split('/').filter(Boolean);
 
             let lines = [];
-            // Show root
             const rootName = rootNorm.split('/').pop() || rootNorm;
-            lines.push({ prefix: '', name: rootName, isCurrent: false });
+            lines.push({ indent: '', connector: '', name: rootName, isCurrent: false, isRoot: true });
 
             for (let i = 0; i < parts.length; i++) {
                 const isLast = i === parts.length - 1;
-                const prefix = '  '.repeat(i) + (isLast ? '\u2514\u2500 ' : '\u251C\u2500 ');
-                lines.push({ prefix, name: parts[i], isCurrent: isLast });
+                const indent = '  '.repeat(i + 1);
+                const connector = isLast ? '\u2514\u2500 ' : '\u251C\u2500 ';
+                lines.push({ indent, connector, name: parts[i], isCurrent: isLast, isRoot: false });
             }
 
             return lines.map(l =>
                 `<div class="tree-line${l.isCurrent ? ' current' : ''}">` +
-                `<span class="tree-prefix">${l.prefix}</span>` +
-                `<span>${l.isCurrent ? '\uD83D\uDCC1' : '\u251C\u2500'} ${l.name}</span>` +
+                `<span class="tree-prefix">${l.indent}${l.connector}</span>` +
+                `<span>${l.isRoot ? '' : (l.isCurrent ? '\uD83D\uDCC1' : '')} ${l.name}</span>` +
                 `</div>`
             ).join('');
         }
