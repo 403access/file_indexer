@@ -11,6 +11,7 @@ pub struct FolderFile {
     pub path: String,
     pub size: u64,
     pub hash: String,
+    pub is_duplicate: bool,
 }
 
 #[derive(Serialize)]
@@ -135,7 +136,7 @@ pub async fn duplicate_folders_handler(
         };
 
         let folders: Vec<FolderInfo> = group.into_iter().map(|(path, hashes)| {
-            // Get files for this folder that have duplicate hashes
+            // Get ALL files for this folder (not just duplicates)
             let mut stmt = conn.prepare(
                 "SELECT f.path, fn.name, f.size, f.hash FROM files f JOIN file_names fn ON f.file_name_id = fn.id WHERE f.hash IS NOT NULL"
             ).unwrap();
@@ -148,15 +149,21 @@ pub async fn duplicate_folders_handler(
                 Ok((p, n, s, h))
             }).unwrap()
             .filter_map(|r| r.ok())
-            .filter(|(p, _, _, h)| {
+            .filter(|(p, _, _, _)| {
                 let normalized = p.replace("//", "/");
                 if let Some(parent) = normalized.rsplit_once('/') {
-                    parent.0 == path && hashes.contains(h)
+                    parent.0 == path
                 } else {
                     false
                 }
             })
-            .map(|(_, n, s, h)| FolderFile { name: n, path: String::new(), size: s, hash: h })
+            .map(|(_, n, s, h)| FolderFile {
+                is_duplicate: hashes.contains(&h),
+                name: n,
+                path: String::new(),
+                size: s,
+                hash: h,
+            })
             .collect();
 
             let display_name = folder_names.get(&path).cloned().unwrap_or_else(|| {

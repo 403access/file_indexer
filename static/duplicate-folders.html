@@ -112,8 +112,29 @@
         .folder-file:hover {
             background: #fafafa;
         }
-        .folder-file.shared {
-            background: #fff8e1;
+        .folder-file.unique {
+            background: #f8f9fa;
+            opacity: 0.6;
+        }
+        .folder-file.unique:hover {
+            opacity: 1;
+        }
+        .show-all-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            font-size: 0.8rem;
+            color: #666;
+            cursor: pointer;
+        }
+        .show-all-toggle:hover {
+            background: #f0f4f8;
+        }
+        .show-all-toggle input {
+            cursor: pointer;
         }
         .folder-file .file-icon {
             font-size: 0.9rem;
@@ -224,6 +245,28 @@
             ).join('');
         }
 
+        function toggleShowAll(el) {
+            const checkbox = el.querySelector('input');
+            const col = el.closest('.folder-col');
+            const uniqueFiles = col.querySelectorAll('.folder-file.unique');
+            uniqueFiles.forEach(f => {
+                f.style.display = checkbox.checked ? 'flex' : 'none';
+            });
+        }
+
+        function initToggles() {
+            document.querySelectorAll('.show-all-toggle').forEach(el => {
+                const col = el.closest('.folder-col');
+                const uniqueFiles = col.querySelectorAll('.folder-file.unique');
+                if (uniqueFiles.length === 0) {
+                    el.style.display = 'none';
+                } else {
+                    // Hide unique files by default
+                    uniqueFiles.forEach(f => f.style.display = 'none');
+                }
+            });
+        }
+
         async function loadGroups() {
             const res = await fetch('/api/duplicate-folders');
             if (!res.ok) return;
@@ -266,10 +309,14 @@
                                         <span class="full-path" title="${folder.path}">${truncatePath(folder.path)}</span>
                                     </div>
                                     <div class="mini-tree">${buildMiniTree(folder.path, commonRoot)}</div>
+                                    <div class="show-all-toggle" onclick="toggleShowAll(this)">
+                                        <input type="checkbox" id="show-all-${gi}-${folder.name}">
+                                        <label for="show-all-${gi}-${folder.name}">Show all files (${folder.files.length})</label>
+                                    </div>
                                     <div class="folder-col-files">
                                     ${folder.files.map(file => `
-                                        <div class="folder-file shared">
-                                            <span class="hash-dot" style="background:${hashColor(file.hash)}"></span>
+                                        <div class="folder-file ${file.is_duplicate ? 'shared' : 'unique'}" ${!file.is_duplicate ? 'data-unique="true"' : ''}>
+                                            <span class="hash-dot" style="background:${file.is_duplicate ? hashColor(file.hash) : '#ccc'}"></span>
                                             <span class="file-icon">\uD83D\uDCC4</span>
                                             <span class="file-name" title="${file.name}">${file.name}</span>
                                             <span class="file-size">${formatSize(file.size)}</span>
@@ -282,6 +329,8 @@
                     </div>
                 `;
             }).join('');
+
+            initToggles();
         }
 
         loadGroups();
