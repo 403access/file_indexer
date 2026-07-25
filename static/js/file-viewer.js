@@ -27,6 +27,12 @@
         return new Date(ts * 1000).toLocaleString();
     }
 
+    function parentDir(path) {
+        const parts = path.replace(/\/+/g, '/').split('/').filter(Boolean);
+        parts.pop();
+        return parts.length ? '/' + parts.join('/') : '/';
+    }
+
     function escapeHtml(str) {
         const div = document.createElement('div');
         div.textContent = str;
@@ -87,10 +93,13 @@
         const meta = document.getElementById('fv-meta');
         meta.innerHTML = `
             <dt>Name</dt><dd>${escapeHtml(file.name)}</dd>
+            <dt>Type</dt><dd>${file.ext ? escapeHtml(file.ext.toUpperCase()) : '(none)'} <span style="color:#999;font-size:0.7rem">${escapeHtml(file.mime)}</span></dd>
             <dt>Size</dt><dd>${formatSize(file.size)}</dd>
+            <dt>Directory</dt><dd style="font-size:0.75rem">${escapeHtml(file.parent)}</dd>
             <dt>Modified</dt><dd>${formatDate(file.modified)}</dd>
-            ${file.hash ? `<dt>Hash</dt><dd>${escapeHtml(file.hash.substring(0, 16))}...</dd>` : ''}
-            <dt>Path</dt><dd style="font-size:0.75rem;color:#666">${escapeHtml(file.path || '')}</dd>
+            <dt>Created</dt><dd>${formatDate(file.created)}</dd>
+            <dt>Permissions</dt><dd>${escapeHtml(file.permissions)}</dd>
+            <dt>Viewer</dt><dd>${escapeHtml(file.type)}</dd>
         `;
         const tree = document.getElementById('fv-tree');
         if (tree && file.path) {
@@ -149,6 +158,13 @@
 
             const isText = response.headers.get('x-is-text') === 'true';
             const fileSize = parseInt(response.headers.get('x-file-size') || '0');
+            const ext = response.headers.get('x-ext') || '';
+            const mime = response.headers.get('x-mime') || '';
+            const isDir = response.headers.get('x-is-dir') === 'true';
+            const permissions = response.headers.get('x-permissions') || '';
+            const modifiedTs = parseInt(response.headers.get('x-modified') || '0');
+            const createdTs = parseInt(response.headers.get('x-created') || '0');
+            const parent = response.headers.get('x-parent') || parentDir(filePath);
 
             let detectedType = detectType(fileName);
             if (!detectedType) {
@@ -162,9 +178,16 @@
             renderMeta({
                 name: fileName,
                 size: fileSize,
-                modified: null,
+                modified: modifiedTs || null,
                 hash: null,
-                path: filePath
+                path: filePath,
+                ext: ext,
+                mime: mime,
+                isDir: isDir,
+                permissions: permissions,
+                created: createdTs || null,
+                parent: parent,
+                type: detectedType
             });
 
             renderTypeSelector(detectedType);

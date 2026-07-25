@@ -60,30 +60,55 @@ pub async fn file_content_handler(
 
     let ext = ext_from_path(&full_path).to_lowercase();
     let mime = content_type_for_ext(&ext);
+    let is_dir = metadata.is_dir();
+
+    #[cfg(unix)]
+    let permissions = {
+        use std::os::unix::fs::PermissionsExt;
+        format!("{:o}", metadata.permissions().mode())
+    };
+    #[cfg(not(unix))]
+    let permissions = "N/A".to_string();
+
+    let modified = metadata.modified().ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_default();
+
+    let created = metadata.created().ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs().to_string())
+        .unwrap_or_default();
+
+    let parent = std::path::Path::new(&full_path)
+        .parent()
+        .and_then(|p| p.to_str())
+        .unwrap_or("")
+        .to_string();
 
     let is_text = mime.starts_with("text/") || mime == "application/json"
         || mime == "application/xml" || mime == "image/svg+xml";
 
+    let mut headers = HeaderMap::new();
+    headers.insert("content-type", HeaderValue::from_str(mime).unwrap());
+    headers.insert("x-file-size", HeaderValue::from_str(&metadata.len().to_string()).unwrap());
+    headers.insert("x-is-text", HeaderValue::from_str(if is_text { "true" } else { "false" }).unwrap());
+    headers.insert("x-ext", HeaderValue::from_str(&ext).unwrap());
+    headers.insert("x-mime", HeaderValue::from_str(mime).unwrap());
+    headers.insert("x-is-dir", HeaderValue::from_str(if is_dir { "true" } else { "false" }).unwrap());
+    headers.insert("x-permissions", HeaderValue::from_str(&permissions).unwrap());
+    headers.insert("x-modified", HeaderValue::from_str(&modified).unwrap());
+    headers.insert("x-created", HeaderValue::from_str(&created).unwrap());
+    headers.insert("x-parent", HeaderValue::from_str(&parent).unwrap());
+
     if is_text {
         let content = tokio::fs::read_to_string(&full_path).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Read error: {}", e)))?;
-
-        let mut headers = HeaderMap::new();
-        headers.insert("content-type", HeaderValue::from_str(mime).unwrap());
-        headers.insert("x-file-size", HeaderValue::from_str(&metadata.len().to_string()).unwrap());
-        headers.insert("x-is-text", HeaderValue::from_static("true"));
-
         Ok((headers, content).into_response())
     } else {
         let content = tokio::fs::read(&full_path).await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Read error: {}", e)))?;
-
-        let mut headers = HeaderMap::new();
-        headers.insert("content-type", HeaderValue::from_str(mime).unwrap());
         headers.insert("content-length", HeaderValue::from_str(&content.len().to_string()).unwrap());
-        headers.insert("x-file-size", HeaderValue::from_str(&metadata.len().to_string()).unwrap());
-        headers.insert("x-is-text", HeaderValue::from_static("false"));
-
         Ok((headers, Body::from(content)).into_response())
     }
 }
