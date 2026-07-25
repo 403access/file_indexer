@@ -147,3 +147,25 @@
     padding: 3rem;
     color: #e74c3c;
 }
+.fv-tree {
+    padding: 0.75rem 1.25rem;
+    border-bottom: 1px solid #eee;
+    background: #fafbfc;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.78rem;
+    line-height: 1.6;
+    color: #555;
+    max-height: 160px;
+    overflow: auto;
+}
+.fv-tree-line {
+    white-space: nowrap;
+}
+.fv-tree-line.current {
+    color: #3498db;
+    font-weight: 600;
+}
+.fv-tree-prefix {
+    color: #aaa;
+    user-select: none;
+}

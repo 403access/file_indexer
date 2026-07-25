@@ -60,11 +60,25 @@
                 <div class="fv-type-selector" id="fv-type-selector"></div>
             </div>
             <dl class="fv-meta" id="fv-meta"></dl>
+            <div class="fv-tree" id="fv-tree"></div>
             <div class="fv-content" id="fv-content"></div>
         `;
 
         document.body.appendChild(overlay);
         document.body.appendChild(sidebar);
+    }
+
+    function buildPathTree(filePath) {
+        const parts = filePath.replace(/\/+/g, '/').split('/').filter(Boolean);
+        let lines = [];
+        for (let i = 0; i < parts.length; i++) {
+            const isLast = i === parts.length - 1;
+            const indent = '  '.repeat(i);
+            const connector = isLast ? '\u2514\u2500 ' : '\u251C\u2500 ';
+            const icon = isLast ? '\uD83D\uDCC4' : '\uD83D\uDCC1';
+            lines.push(`<div class="fv-tree-line${isLast ? ' current' : ''}"><span class="fv-tree-prefix">${indent}${connector}</span>${icon} ${parts[i]}</div>`);
+        }
+        return lines.join('');
     }
 
     function renderMeta(file) {
@@ -74,8 +88,11 @@
             <dt>Size</dt><dd>${formatSize(file.size)}</dd>
             <dt>Modified</dt><dd>${formatDate(file.modified)}</dd>
             ${file.hash ? `<dt>Hash</dt><dd>${escapeHtml(file.hash.substring(0, 16))}...</dd>` : ''}
-            <dt>Path</dt><dd style="font-size:0.75rem;color:#666">${escapeHtml(file.path || '')}</dd>
         `;
+        const tree = document.getElementById('fv-tree');
+        if (tree && file.path) {
+            tree.innerHTML = buildPathTree(file.path);
+        }
     }
 
     function renderTypeSelector(currentType) {
