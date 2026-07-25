@@ -13,6 +13,10 @@ async function pollStatus() {
         } else {
             dot.className = 'status-dot idle';
             dot.title = 'Idle';
+            if (statusPollInterval) {
+                clearInterval(statusPollInterval);
+                statusPollInterval = null;
+            }
         }
     } catch (e) {
         const dot = document.getElementById('status-dot');

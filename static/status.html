@@ -178,6 +178,10 @@
                     progressBar.classList.remove('active');
                     progressBar.style.width = '0%';
                     currentDirCard.style.display = 'none';
+                    if (statusInterval) {
+                        clearInterval(statusInterval);
+                        statusInterval = null;
+                    }
                 }
             } catch (e) {
                 document.getElementById('big-dot').className = 'dot error';
@@ -187,9 +191,10 @@
             }
         }
 
+        let statusInterval = null;
         document.addEventListener('DOMContentLoaded', () => {
             refreshStatus();
-            setInterval(refreshStatus, 2000);
+            statusInterval = setInterval(refreshStatus, 2000);
         });
     </script>
 </body>
