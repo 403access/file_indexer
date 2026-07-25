@@ -12,6 +12,7 @@ use self::logs::logs_handler;
 use self::merge::merge_handler;
 use self::search::search_handler;
 use self::skipped::skipped_handler;
+use self::status::status_handler;
 use self::tree::tree_handler;
 
 pub mod config;
@@ -23,6 +24,7 @@ pub mod logs;
 pub mod merge;
 pub mod search;
 pub mod skipped;
+pub mod status;
 pub mod tree;
 
 pub fn create_router(state: AppState) -> Router {
@@ -37,5 +39,6 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/merge", post(merge_handler))
         .route("/api/skipped", get(skipped_handler))
         .route("/api/logs", get(logs_handler))
+        .route("/api/status", get(status_handler))
         .with_state(state)
 }
