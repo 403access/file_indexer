@@ -6,10 +6,11 @@ pub fn actual_test() {
         panic!("Test database already exists. Deleting it before running the test.");
     }
 
-    arrange::create_database();
-
     let temp_folder_path = arrange::create_test_data();
+    let _database_file_path = temp_folder_path.join("file_index.db");
+    let database_file_path = arrange::create_database(&_database_file_path);
+
     arrange::delete_test_data(&temp_folder_path);
 
-    arrange::delete_database();
+    arrange::delete_database(&database_file_path);
 }

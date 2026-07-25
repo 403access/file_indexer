@@ -1,5 +1,6 @@
 Goal:
 - Delete duplicate files
+- Resolve difference of similar directories
 
 Tasks
 - Index all files
@@ -44,7 +45,7 @@ Tasks
     - Diffing View
     Show a tabled tree view (in html) similar to:
 
-
+```
     Name                    Version a             Version b
                             Path                  Path
 
@@ -58,6 +59,7 @@ Tasks
     |  |  |  |-folder-a
     |  |  |  |  |-file-a-2
     |  |  |  |  |-file-a-1
+```
 
 - Delete duplicate files
 

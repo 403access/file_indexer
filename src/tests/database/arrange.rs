@@ -1,5 +1,5 @@
 use std::env::temp_dir;
-use std::fs::{self, create_dir_all, remove_dir, DirBuilder, File};
+use std::fs::{self, create_dir_all, remove_dir, File};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -12,8 +12,8 @@ pub fn database_exists() -> bool {
     return fs::exists(TEST_DATABASE_FILE_PATH).unwrap();
 }
 
-pub fn create_database() -> PathBuf {
-    let database_file_path = Path::new("file_index.db");
+pub fn create_database(database_file_path_buf: &PathBuf) -> PathBuf {
+    let database_file_path = Path::new(database_file_path_buf);
     let database_file_path_buf = database_file_path.to_path_buf();
 
     let result = _init_db(&database_file_path_buf);
@@ -22,8 +22,8 @@ pub fn create_database() -> PathBuf {
     return database_file_path_buf;
 }
 
-pub fn delete_database() {
-    let result = fs::remove_file("file_index.db");
+pub fn delete_database(database_file_path_buf: &PathBuf) {
+    let result = fs::remove_file(database_file_path_buf);
     assert!(result.is_ok());
 }
 
@@ -44,7 +44,7 @@ pub fn create_temp_folder() -> PathBuf {
     //     .recursive(true)
     //     .create(path.clone())
     //     .unwrap();
-    create_dir_all(&path);
+    create_dir_all(&path).unwrap();
 
     assert!(fs::metadata(&path).unwrap().is_dir());
 
@@ -70,15 +70,17 @@ pub fn create_test_data() -> PathBuf {
     create_file(&temp_folder_path, "file-a");
     // |  |-folder-c
     let folder_c_path = temp_folder_path.join("folder-c");
-    DirBuilder::new().create(folder_c_path.clone()).unwrap();
+    create_dir_all(&folder_c_path).unwrap();
     // |  |  |-file-c-1
     create_file(&folder_c_path, "file-c-1");
     // |  |  |-folder-d
     let folder_c_folder_d_path = folder_c_path.join("folder-d");
+    create_dir_all(&folder_c_folder_d_path).unwrap();
     // |  |  |  |-folder-b
     let folder_c_folder_d_folder_b_path = folder_c_folder_d_path.join("folder-b");
-    create_file(&folder_c_folder_d_folder_b_path, "file-b-1");
+    create_dir_all(&folder_c_folder_d_folder_b_path).unwrap();
     // |  |  |  |  |-file-b-1
+    create_file(&folder_c_folder_d_folder_b_path, "file-b-1");
     // |  |  |  |-folder-a
     // |  |  |  |  |-file-a-2
     // |  |  |  |  |-file-a-1
@@ -109,5 +111,5 @@ pub fn create_test_data() -> PathBuf {
 }
 
 pub fn delete_test_data(temp_folder_path_buf: &PathBuf) {
-    remove_dir(temp_folder_path_buf);
+    remove_dir(temp_folder_path_buf).unwrap();
 }
