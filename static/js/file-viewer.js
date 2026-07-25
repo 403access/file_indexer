@@ -341,7 +341,7 @@
         _currentPath: null,
         _currentFileName: null,
         _currentFileData: null,
-        _pathMode: 'absolute',
+        _pathMode: 'relative',
         _textSep: 'dot',
         _treeSep: 'tree'
     };
