@@ -1,7 +1,7 @@
 use axum::Router;
 use tower_http::services::ServeDir;
 
-use file_indexer::api::create_router;
+use file_indexer::api::{create_router, index::ensure_indexed};
 use file_indexer::modules::environment::check_vars::check_vars;
 use file_indexer::states::app_state::{self, AppState};
 
@@ -15,8 +15,10 @@ async fn main() {
 
     let state = AppState {
         cwd: app_state::get_cwd(),
-        db: database_url,
+        db: database_url.clone(),
     };
+
+    ensure_indexed(&database_url, &state.cwd);
 
     tracing_subscriber::fmt::init();
 
