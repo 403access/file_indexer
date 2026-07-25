@@ -197,6 +197,91 @@
             cursor: pointer;
             white-space: nowrap;
         }
+        .merge-folders-btn {
+            padding: 0.3rem 0.75rem;
+            font-size: 0.8rem;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-left: auto;
+        }
+        .merge-folders-btn:hover { background: #219a52; }
+        .merge-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.4); z-index: 999;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; transition: opacity 0.2s;
+        }
+        .merge-overlay.open { opacity: 1; }
+        .merge-panel {
+            background: white; border-radius: 10px; width: 90vw; max-width: 900px;
+            max-height: 85vh; display: flex; flex-direction: column;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        }
+        .merge-header {
+            display: flex; align-items: center; gap: 1rem;
+            padding: 1rem 1.5rem; border-bottom: 1px solid #eee;
+        }
+        .merge-header h2 { flex: 1; font-size: 1.1rem; }
+        .merge-close {
+            background: none; border: none; font-size: 1.3rem;
+            cursor: pointer; color: #666; padding: 0.25rem;
+        }
+        .merge-close:hover { color: #333; }
+        .merge-dest {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.75rem 1.5rem; border-bottom: 1px solid #eee;
+            background: #fafbfc;
+        }
+        .merge-dest label { font-size: 0.85rem; font-weight: 600; color: #555; }
+        .merge-dest input {
+            flex: 1; padding: 0.4rem 0.6rem; border: 1px solid #ddd;
+            border-radius: 4px; font-size: 0.85rem; font-family: monospace;
+        }
+        .merge-body { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
+        .merge-dir-group { margin-bottom: 1rem; }
+        .merge-dir-label {
+            font-size: 0.75rem; font-weight: 600; color: #888;
+            text-transform: uppercase; letter-spacing: 0.03em;
+            margin-bottom: 0.4rem;
+        }
+        .merge-file-row {
+            display: flex; align-items: center; gap: 0.75rem;
+            padding: 0.5rem 0.75rem; border-radius: 6px;
+            border: 1px solid transparent; margin-bottom: 0.3rem;
+            font-size: 0.85rem;
+        }
+        .merge-file-row.keep {
+            background: #eafaf1; border-color: #27ae60;
+        }
+        .merge-file-row.remove {
+            background: #fdf2f2; border-color: #e0e0e0; opacity: 0.6;
+        }
+        .merge-file-check {
+            width: 16px; height: 16px; cursor: pointer;
+            accent-color: #27ae60;
+        }
+        .merge-file-name { font-weight: 500; min-width: 120px; }
+        .merge-file-path {
+            flex: 1; color: #666; font-family: monospace;
+            font-size: 0.78rem; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        .merge-file-size { color: #999; font-family: monospace; font-size: 0.8rem; }
+        .merge-file-hash {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .merge-footer {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0.75rem 1.5rem; border-top: 1px solid #eee;
+            background: #fafbfc;
+        }
+        .merge-stats { font-size: 0.8rem; color: #666; }
+        .merge-apply { background: #27ae60; }
+        .merge-apply:hover { background: #219a52; }
+        .merge-apply:disabled { background: #bdc3c7; cursor: not-allowed; }
     </style>
 </head>
 <body>
@@ -221,6 +306,24 @@
         <div class="summary" id="summary"></div>
         <div id="groups"></div>
     </main>
+
+    <div class="merge-overlay" id="merge-overlay" style="display:none;">
+        <div class="merge-panel">
+            <div class="merge-header">
+                <h2>Merge Duplicate Folders</h2>
+                <button class="merge-close" onclick="closeMerge()">&times;</button>
+            </div>
+            <div class="merge-dest">
+                <label>Destination:</label>
+                <input type="text" id="merge-dest-path" placeholder="/path/to/merged/output">
+            </div>
+            <div class="merge-body" id="merge-body"></div>
+            <div class="merge-footer">
+                <span class="merge-stats" id="merge-stats"></span>
+                <button class="merge-apply" id="merge-apply" onclick="applyMerge()">Apply Merge</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const HASH_COLORS = [
@@ -351,6 +454,7 @@
                         <div class="group-header">
                             <span class="badge">${group.shared_count} shared</span>
                             <span class="label">${group.folders.length} folders with duplicate content</span>
+                            <button class="merge-folders-btn" onclick="openMergeFolders(${gi})">Merge</button>
                         </div>
                         <div class="folders-row">
                             ${group.folders.map(folder => `
@@ -390,6 +494,165 @@
             groupsData = await res.json();
             renderGroups(groupsData);
         }
+
+        let mergeGroup = null;
+        let mergeSelections = {};
+
+        function openMergeFolders(groupIdx) {
+            const group = groupsData.groups[groupIdx];
+            if (!group || group.folders.length < 2) return;
+            mergeGroup = group;
+
+            // Collect all files across all folders, grouped by hash
+            const byHash = {};
+            group.folders.forEach(folder => {
+                folder.files.forEach(file => {
+                    if (!byHash[file.hash]) byHash[file.hash] = [];
+                    byHash[file.hash].push({
+                        ...file,
+                        folderPath: folder.path,
+                        folderName: folder.name
+                    });
+                });
+            });
+
+            // Auto-select: for shared files, keep from first folder; unique files always kept
+            mergeSelections = {};
+            Object.entries(byHash).forEach(([hash, files]) => {
+                const isShared = files.length > 1;
+                files.forEach((f, idx) => {
+                    const key = f.folderPath + '/' + f.name;
+                    mergeSelections[key] = isShared ? idx === 0 : true;
+                });
+            });
+
+            // Set default destination
+            const firstPath = group.folders[0]?.path || '';
+            const parentDir = firstPath.replace(/\/[^/]+$/, '') || firstPath;
+            document.getElementById('merge-dest-path').value = parentDir + '/merged';
+
+            renderMergeBody();
+            const overlay = document.getElementById('merge-overlay');
+            overlay.style.display = 'flex';
+            requestAnimationFrame(() => overlay.classList.add('open'));
+        }
+
+        function renderMergeBody() {
+            const body = document.getElementById('merge-body');
+            const byHash = {};
+            mergeGroup.folders.forEach(folder => {
+                folder.files.forEach(file => {
+                    if (!byHash[file.hash]) byHash[file.hash] = [];
+                    byHash[file.hash].push({
+                        ...file,
+                        folderPath: folder.path,
+                        folderName: folder.name
+                    });
+                });
+            });
+
+            // Sort: shared files first, then unique
+            const entries = Object.entries(byHash).sort((a, b) => {
+                const aShared = a[1].length > 1 ? 0 : 1;
+                const bShared = b[1].length > 1 ? 0 : 1;
+                return aShared - bShared;
+            });
+
+            let html = '';
+            entries.forEach(([hash, files]) => {
+                const isShared = files.length > 1;
+                const label = isShared ? `Shared (${files.length} copies)` : 'Unique';
+                html += `<div class="merge-dir-group">
+                    <div class="merge-dir-label">${label}</div>`;
+                files.forEach(f => {
+                    const key = f.folderPath + '/' + f.name;
+                    const isKeep = mergeSelections[key];
+                    html += `
+                        <div class="merge-file-row ${isKeep ? 'keep' : 'remove'}">
+                            <span class="merge-file-hash" style="background:${hashColor(hash)}"></span>
+                            <input type="checkbox" class="merge-file-check"
+                                ${isKeep ? 'checked' : ''}
+                                onchange="toggleMergeFile('${key.replace(/'/g, "\\'")}', this.checked)">
+                            <span class="merge-file-name">${f.name}</span>
+                            <span class="merge-file-path" title="${f.folderPath}/${f.name}">${truncatePath(f.folderPath)}/${f.name}</span>
+                            <span class="merge-file-size">${formatSize(f.size)}</span>
+                        </div>`;
+                });
+                html += '</div>';
+            });
+            body.innerHTML = html;
+            updateMergeStats();
+        }
+
+        function toggleMergeFile(key, checked) {
+            mergeSelections[key] = checked;
+            renderMergeBody();
+        }
+
+        function updateMergeStats() {
+            const kept = Object.values(mergeSelections).filter(v => v).length;
+            const removed = Object.values(mergeSelections).filter(v => !v).length;
+            const totalSize = mergeGroup.folders.reduce((sum, f) =>
+                sum + f.files.reduce((s, file) => s + file.size, 0), 0);
+            const freedSize = mergeGroup.folders.reduce((sum, f) =>
+                sum + f.files.filter(file => !mergeSelections[f.path + '/' + file.name])
+                    .reduce((s, file) => s + file.size, 0), 0);
+            document.getElementById('merge-stats').textContent =
+                `Keeping ${kept} file${kept !== 1 ? 's' : ''}, removing ${removed} (${formatSize(freedSize)} freed)`;
+        }
+
+        function closeMerge() {
+            const overlay = document.getElementById('merge-overlay');
+            overlay.classList.remove('open');
+            setTimeout(() => { overlay.style.display = 'none'; }, 200);
+            mergeGroup = null;
+            mergeSelections = {};
+        }
+
+        async function applyMerge() {
+            const dest = document.getElementById('merge-dest-path').value.trim();
+            if (!dest) { alert('Please set a destination path.'); return; }
+
+            const keep = Object.entries(mergeSelections)
+                .filter(([_, v]) => v)
+                .map(([key]) => key);
+
+            const remove = Object.entries(mergeSelections)
+                .filter(([_, v]) => !v)
+                .map(([key]) => key);
+
+            if (keep.length === 0) { alert('Keep at least one file.'); return; }
+
+            const btn = document.getElementById('merge-apply');
+            btn.disabled = true;
+            btn.textContent = 'Merging...';
+
+            try {
+                const res = await fetch('/api/merge', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keep, remove, destination: dest })
+                });
+                if (!res.ok) {
+                    const err = await res.text();
+                    alert('Merge failed: ' + err);
+                } else {
+                    const result = await res.json();
+                    alert(`Merge complete: ${result.copied} copied, ${result.removed} removed.`);
+                    closeMerge();
+                    loadGroups();
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Apply Merge';
+            }
+        }
+
+        document.getElementById('merge-overlay').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeMerge();
+        });
 
         loadGroups();
     </script>
