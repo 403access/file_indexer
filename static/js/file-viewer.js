@@ -7,7 +7,7 @@
         binary: { label: 'Binary', extensions: [] }
     };
 
-    const TEXT_SEP = { dot: '\u00B7', slash: '/', arrow: '\u2192' };
+    const TEXT_SEP = { dot: ' \u00B7 ', slash: ' / ', arrow: ' \u2192 ' };
     const TREE_SEP = {
         tree: { connector: '\u2514\u2500 ', branch: '\u251C\u2500 ' },
         slash: { connector: '/ ', branch: '| ' },
@@ -171,7 +171,8 @@
         }
         const textSepBtn = document.getElementById('fv-textsep-toggle');
         if (textSepBtn) {
-            textSepBtn.textContent = TEXT_SEP[window.FileViewer._textSep] || TEXT_SEP.dot;
+            const btnLabels = { dot: '\u00B7', slash: '/', arrow: '\u2192' };
+            textSepBtn.textContent = btnLabels[window.FileViewer._textSep] || btnLabels.dot;
         }
         const treeBtn = document.getElementById('fv-tree-toggle');
         if (treeBtn) {
