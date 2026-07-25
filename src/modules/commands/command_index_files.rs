@@ -6,31 +6,44 @@ use crate::{
     modules::{
         file_entry::_types::FileEntry,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, insert_file, insert_file_name},
+        sql::database::{get_connection, init_db, insert_file, insert_file_name},
     },
     states::app_state,
 };
 
-pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
-    println!("Starting directory listing...");
-
+/// Core indexing function. Recursively scans `root_dir` and stores all files
+/// and directories into the SQLite database at `db_path`.
+pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
     let mut names: Vec<(String, i64)> = vec![];
 
-    let mut conn = get_connection("file_index.db").map_err(|e| {
+    let mut conn = get_connection(db_path).map_err(|e| {
         eprintln!("Failed to connect to database: {}", e);
         io::Error::new(io::ErrorKind::Other, e.to_string())
     })?;
-    println!("Database connection established.");
 
-    let cwd = app_state::get_cwd();
-    let mut paths: Vec<String> = vec![cwd.to_string()];
-    println!("Starting to process directories...");
+    {
+        let tx = conn.transaction().map_err(|e| {
+            eprintln!("Failed to start transaction: {}", e);
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+        init_db(&tx).map_err(|e| {
+            eprintln!("Failed to initialize database: {}", e);
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+        tx.commit().map_err(|e| {
+            eprintln!("Failed to commit transaction: {}", e);
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+    }
+
+    let root = if root_dir.ends_with('/') {
+        root_dir.to_string()
+    } else {
+        format!("{}/", root_dir)
+    };
+
+    let mut paths: Vec<String> = vec![root];
     loop {
-        println!("Paths to iterate through:");
-        for path in &paths {
-            println!("- {}", path);
-        }
-
         let transaction = match conn.transaction() {
             Ok(tx) => tx,
             Err(e) => {
@@ -39,12 +52,10 @@ pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
             }
         };
 
-        // let mut directories = Vec::new();
         let mut new_paths: Vec<String> = Vec::new();
         for path in &paths {
             match get_and_insert_entries(&transaction, &mut names, path) {
                 Ok(dirs) => {
-                    // directories.extend(dirs);
                     new_paths.extend(
                         dirs.iter()
                             .filter(|d| d.is_directory)
@@ -62,17 +73,26 @@ pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
             eprintln!("Failed to commit transaction: {}", e);
             io::Error::new(io::ErrorKind::Other, e.to_string())
         })?;
-        println!("Transaction committed successfully.");
 
         if new_paths.is_empty() {
-            println!("No more directories to process.");
             break;
         }
 
-        // Update paths for the next iteration
         paths.clear();
         paths.extend(new_paths);
     }
+    Ok(())
+}
+
+pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
+    println!("Starting directory listing...");
+
+    let cwd = app_state::get_cwd();
+    let db_path = "file_index.db";
+
+    index_directory(db_path, &cwd)?;
+
+    println!("Indexing complete.");
     Ok(false)
 }
 
@@ -82,11 +102,7 @@ fn get_and_insert_entries(
     path: &String,
 ) -> io::Result<Vec<FileEntry>> {
     let entries = match try_get_dir_entries(&path, None) {
-        Ok(entries) => {
-            println!("Successfully retrieved directory entries.");
-            println!("Found {} entries.", entries.len());
-            entries
-        }
+        Ok(entries) => entries,
         Err(e) => {
             eprintln!("Failed to retrieve directory entries: {}", e);
             return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
@@ -94,17 +110,12 @@ fn get_and_insert_entries(
     };
 
     let mut directories: Vec<FileEntry> = Vec::new();
-    let mut inserted_files = 0;
     for entry in entries {
-        println!("Processing entry: {}", entry.name);
-        // get id of the file name from the names vector
         let file_name_id = get_file_id(transaction, names, &entry.name);
 
         match insert_file(&transaction, &entry, file_name_id.unwrap()) {
-            Ok(inserted_rowid) => {
-                println!("Insert file '{}' with id '{}'", entry.name, inserted_rowid);
-                inserted_files += 1;
-                names.push((entry.name.clone(), inserted_rowid));
+            Ok(_) => {
+                names.push((entry.name.clone(), 0));
             }
             Err(e) => {
                 eprintln!("Failed to insert {}: {}", entry.name, e);
@@ -113,20 +124,11 @@ fn get_and_insert_entries(
         }
 
         if entry.is_directory {
-            println!("This is a directory.");
             directories.push(entry.clone());
-        } else if entry.is_file {
-            println!("This is a file.");
-        } else if entry.is_symlink {
-            println!("This is a symlink.");
-        } else {
-            println!("Unknown type.");
         }
     }
 
-    println!("Inserted {} entries into the database.", inserted_files);
-
-    return Ok(directories);
+    Ok(directories)
 }
 
 fn get_file_id(
@@ -134,29 +136,22 @@ fn get_file_id(
     names: &mut Vec<(String, i64)>,
     file_name: &str,
 ) -> io::Result<i64> {
-    // get id of the file name from the names vector
     let file_name_id = names
         .iter()
         .find(|(name, _)| name == file_name)
         .map(|(_, id)| *id);
-    // If the file name ID is already in the names vector, skip insertion
+
     if let Some(id) = file_name_id {
-        println!(
-            "File name '{}' already exists with ID '{}', skipping insertion.",
-            &file_name, id
-        );
         return Ok(id);
     }
 
-    // Insert the new entry name into the names vector
     let inserted_id = match insert_file_name(&transaction, &file_name) {
         Ok(id) => id,
         Err(e) => {
             eprintln!("Failed to insert file name '{}': {}", &file_name, e);
-            // continue; // Skip this entry if insertion fails
             return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
         }
     };
     names.push((file_name.to_string(), inserted_id));
-    return Ok(inserted_id);
+    Ok(inserted_id)
 }
