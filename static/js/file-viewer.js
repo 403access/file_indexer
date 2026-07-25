@@ -108,11 +108,9 @@
             <div class="fv-header">
                 <button class="fv-close" onclick="window.FileViewer.close()">&times;</button>
                 <span class="fv-filename" id="fv-filename"></span>
-                <button class="fv-path-toggle" id="fv-path-toggle" onclick="window.FileViewer.togglePathMode()" title="Toggle absolute/relative path"></button>
-                <button class="fv-textsep-toggle" id="fv-textsep-toggle" onclick="window.FileViewer.toggleTextSep()" title="Toggle path separator in text"></button>
-                <button class="fv-tree-toggle" id="fv-tree-toggle" onclick="window.FileViewer.toggleTreeSep()" title="Toggle tree separator style"></button>
                 <div class="fv-type-selector" id="fv-type-selector"></div>
             </div>
+            <div class="fv-chips" id="fv-chips"></div>
             <dl class="fv-meta" id="fv-meta"></dl>
             <div class="fv-body">
                 <div class="fv-tree" id="fv-tree"></div>
@@ -159,30 +157,36 @@
         if (tree && file.path) {
             tree.innerHTML = buildPathTree(displayPath);
         }
-        updateToggleLabels();
+        renderChips();
     }
 
-    function updateToggleLabels() {
-        const pathBtn = document.getElementById('fv-path-toggle');
-        if (pathBtn) {
-            const m = window.FileViewer._pathMode;
-            pathBtn.textContent = m === 'absolute' ? 'Rel' : 'Abs';
-            pathBtn.title = m === 'absolute' ? 'Absolute path \u2014 click for relative' : 'Relative path \u2014 click for absolute';
-        }
-        const textSepBtn = document.getElementById('fv-textsep-toggle');
-        if (textSepBtn) {
-            const btnLabels = { dot: '\u00B7', slash: '/', arrow: '\u2192' };
-            const idx = TEXT_SEP_ORDER.indexOf(window.FileViewer._textSep);
-            const next = TEXT_SEP_ORDER[(idx + 1) % TEXT_SEP_ORDER.length];
-            textSepBtn.textContent = btnLabels[next];
-        }
-        const treeBtn = document.getElementById('fv-tree-toggle');
-        if (treeBtn) {
-            const labels = { tree: '\u251C', slash: '/', arrow: '\u2192' };
-            const idx = TREE_SEP_ORDER.indexOf(window.FileViewer._treeSep);
-            const next = TREE_SEP_ORDER[(idx + 1) % TREE_SEP_ORDER.length];
-            treeBtn.textContent = labels[next];
-        }
+    function renderChips() {
+        const container = document.getElementById('fv-chips');
+        if (!container) return;
+
+        const pathMode = window.FileViewer._pathMode;
+        const textSep = window.FileViewer._textSep;
+        const treeSep = window.FileViewer._treeSep;
+
+        container.innerHTML = `
+            <div class="fv-chip-group">
+                <span class="fv-chip-label">Position</span>
+                <button class="fv-chip ${pathMode === 'relative' ? 'active' : ''}" onclick="window.FileViewer.setPathMode('relative')">Rel</button>
+                <button class="fv-chip ${pathMode === 'absolute' ? 'active' : ''}" onclick="window.FileViewer.setPathMode('absolute')">Abs</button>
+            </div>
+            <div class="fv-chip-group">
+                <span class="fv-chip-label">Text sep</span>
+                <button class="fv-chip ${textSep === 'dot' ? 'active' : ''}" onclick="window.FileViewer.setTextSep('dot')">\u00B7</button>
+                <button class="fv-chip ${textSep === 'slash' ? 'active' : ''}" onclick="window.FileViewer.setTextSep('slash')">/</button>
+                <button class="fv-chip ${textSep === 'arrow' ? 'active' : ''}" onclick="window.FileViewer.setTextSep('arrow')">\u2192</button>
+            </div>
+            <div class="fv-chip-group">
+                <span class="fv-chip-label">Tree sep</span>
+                <button class="fv-chip ${treeSep === 'tree' ? 'active' : ''}" onclick="window.FileViewer.setTreeSep('tree')">\u251C</button>
+                <button class="fv-chip ${treeSep === 'slash' ? 'active' : ''}" onclick="window.FileViewer.setTreeSep('slash')">/</button>
+                <button class="fv-chip ${treeSep === 'arrow' ? 'active' : ''}" onclick="window.FileViewer.setTreeSep('arrow')">\u2192</button>
+            </div>
+        `;
     }
 
     function renderTypeSelector(currentType) {
@@ -301,22 +305,18 @@
         if (data) renderMeta(data);
     }
 
-    function togglePathMode() {
-        window.FileViewer._pathMode = window.FileViewer._pathMode === 'relative' ? 'absolute' : 'relative';
+    function setPathMode(mode) {
+        window.FileViewer._pathMode = mode;
         reRender();
     }
 
-    const TEXT_SEP_ORDER = ['dot', 'slash', 'arrow'];
-    function toggleTextSep() {
-        const idx = TEXT_SEP_ORDER.indexOf(window.FileViewer._textSep);
-        window.FileViewer._textSep = TEXT_SEP_ORDER[(idx + 1) % TEXT_SEP_ORDER.length];
+    function setTextSep(sep) {
+        window.FileViewer._textSep = sep;
         reRender();
     }
 
-    const TREE_SEP_ORDER = ['tree', 'slash', 'arrow'];
-    function toggleTreeSep() {
-        const idx = TREE_SEP_ORDER.indexOf(window.FileViewer._treeSep);
-        window.FileViewer._treeSep = TREE_SEP_ORDER[(idx + 1) % TREE_SEP_ORDER.length];
+    function setTreeSep(sep) {
+        window.FileViewer._treeSep = sep;
         reRender();
     }
 
@@ -334,9 +334,9 @@
         open: openFile,
         close,
         setViewType,
-        togglePathMode,
-        toggleTextSep,
-        toggleTreeSep,
+        setPathMode,
+        setTextSep,
+        setTreeSep,
         _currentType: null,
         _currentPath: null,
         _currentFileName: null,

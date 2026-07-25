@@ -57,35 +57,45 @@
     display: flex;
     gap: 0.25rem;
 }
-.fv-path-toggle {
-    padding: 0.25rem 0.5rem;
+.fv-chips {
+    display: flex;
+    gap: 1rem;
+    padding: 0.5rem 1.25rem;
+    border-bottom: 1px solid #eee;
+    background: #fafbfc;
+    flex-wrap: wrap;
+    align-items: center;
+}
+.fv-chip-group {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+}
+.fv-chip-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #999;
+    margin-right: 0.25rem;
+}
+.fv-chip {
+    padding: 0.2rem 0.5rem;
     border: 1px solid #ddd;
     border-radius: 4px;
-    background: #f0f4f8;
-    font-size: 0.7rem;
-    font-weight: 600;
+    background: white;
+    font-size: 0.75rem;
     cursor: pointer;
-    color: #555;
-    letter-spacing: 0.02em;
+    color: #777;
+    line-height: 1.2;
 }
-.fv-path-toggle:hover {
-    background: #e2e8f0;
+.fv-chip:hover {
+    background: #f0f0f0;
 }
-.fv-textsep-toggle,
-.fv-tree-toggle {
-    padding: 0.25rem 0.5rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background: #f0f4f8;
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    color: #555;
-    line-height: 1;
-}
-.fv-textsep-toggle:hover,
-.fv-tree-toggle:hover {
-    background: #e2e8f0;
+.fv-chip.active {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
 }
 .fv-type-btn {
     padding: 0.25rem 0.5rem;
