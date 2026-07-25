@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .status-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .status-card h2 {
+            margin-bottom: 1rem;
+            font-size: 1.1rem;
+            color: #2c3e50;
+        }
+        .status-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 0.75rem;
+        }
+        .status-label {
+            color: #666;
+            min-width: 120px;
+            font-size: 0.9rem;
+        }
+        .status-value {
+            font-weight: 500;
+            font-size: 0.95rem;
+        }
+        .status-value.idle { color: #27ae60; }
+        .status-value.indexing { color: #f39c12; }
+        .progress-bar-container {
+            background: #ecf0f1;
+            border-radius: 8px;
+            height: 8px;
+            margin-top: 1rem;
+            overflow: hidden;
+        }
+        .progress-bar {
+            height: 100%;
+            background: #3498db;
+            border-radius: 8px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+        .progress-bar.active {
+            background: #f39c12;
+            animation: progress-pulse 1.5s infinite;
+        }
+        @keyframes progress-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        .dir-display {
+            font-family: monospace;
+            font-size: 0.85rem;
+            color: #333;
+            background: #f8f9fa;
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            word-break: break-all;
+            margin-top: 0.5rem;
+        }
+        .big-status {
+            text-align: center;
+            padding: 2rem;
+        }
+        .big-status .dot {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-bottom: 0.75rem;
+        }
+        .big-status .dot.idle { background: #27ae60; }
+        .big-status .dot.indexing { background: #f39c12; animation: pulse 1s infinite; }
+        .big-status .text {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        .big-status .text.idle { color: #27ae60; }
+        .big-status .text.indexing { color: #f39c12; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Search</a>
+            <a href="/duplicates.html">Duplicates</a>
+            <a href="/duplicate-folders.html">Folders</a>
+            <a href="/explorer.html">Explorer</a>
+            <a href="/skipped.html">Skipped</a>
+            <a href="/logs.html">Logs</a>
+            <a href="/status.html" class="active">Status</a>
+            <span id="status-dot" class="status-dot idle" title="Idle"></span>
+        </nav>
+    </header>
+
+    <main>
+        <div class="status-card">
+            <div class="big-status">
+                <div class="dot" id="big-dot"></div>
+                <div class="text" id="big-text">Idle</div>
+            </div>
+        </div>
+
+        <div class="status-card">
+            <h2>Indexing Progress</h2>
+            <div class="status-row">
+                <span class="status-label">Status</span>
+                <span class="status-value" id="status">-</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Entries</span>
+                <span class="status-value" id="entries">-</span>
+            </div>
+            <div class="status-row">
+                <span class="status-label">Elapsed</span>
+                <span class="status-value" id="elapsed">-</span>
+            </div>
+            <div class="progress-bar-container">
+                <div class="progress-bar" id="progress-bar"></div>
+            </div>
+        </div>
+
+        <div class="status-card" id="current-dir-card" style="display:none;">
+            <h2>Current Directory</h2>
+            <div class="dir-display" id="current-dir">-</div>
+        </div>
+    </main>
+
+    <script src="/js/status.js"></script>
+    <script>
+        async function refreshStatus() {
+            try {
+                const res = await fetch('/api/status');
+                const data = await res.json();
+
+                const bigDot = document.getElementById('big-dot');
+                const bigText = document.getElementById('big-text');
+                const status = document.getElementById('status');
+                const entries = document.getElementById('entries');
+                const elapsed = document.getElementById('elapsed');
+                const progressBar = document.getElementById('progress-bar');
+                const currentDirCard = document.getElementById('current-dir-card');
+                const currentDir = document.getElementById('current-dir');
+
+                bigDot.className = 'dot ' + data.status;
+                bigText.className = 'text ' + data.status;
+                bigText.textContent = data.status === 'indexing' ? 'Indexing...' : 'Idle';
+
+                status.textContent = data.status;
+                status.className = 'status-value ' + data.status;
+                entries.textContent = data.total_entries.toLocaleString();
+
+                if (data.elapsed_secs !== null) {
+                    const secs = Math.floor(data.elapsed_secs);
+                    const mins = Math.floor(secs / 60);
+                    const remainSecs = secs % 60;
+                    elapsed.textContent = mins > 0 ? `${mins}m ${remainSecs}s` : `${remainSecs}s`;
+                } else {
+                    elapsed.textContent = '-';
+                }
+
+                if (data.status === 'indexing') {
+                    progressBar.classList.add('active');
+                    progressBar.style.width = '100%';
+                    currentDirCard.style.display = 'block';
+                    currentDir.textContent = data.current_dir || '...';
+                } else {
+                    progressBar.classList.remove('active');
+                    progressBar.style.width = '0%';
+                    currentDirCard.style.display = 'none';
+                }
+            } catch (e) {
+                document.getElementById('big-dot').className = 'dot error';
+                document.getElementById('big-text').textContent = 'Server unreachable';
+                document.getElementById('big-text').className = 'text';
+                document.getElementById('big-text').style.color = '#e74c3c';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshStatus();
+            setInterval(refreshStatus, 2000);
+        });
+    </script>
+</body>
+</html>
