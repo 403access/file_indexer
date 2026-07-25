@@ -369,9 +369,8 @@
 
             for (let i = 0; i < parts.length; i++) {
                 const isLast = i === parts.length - 1;
-                const indent = '  '.repeat(i + 1);
-                const connector = isLast ? '\u2514\u2500 ' : '\u251C\u2500 ';
-                lines.push({ prefix: indent + connector, name: parts[i], isCurrent: isLast });
+                const prefix = '  '.repeat(i) + (isLast ? '\u2514\u2500 ' : '\u251C\u2500 ');
+                lines.push({ prefix, name: parts[i], isCurrent: isLast });
             }
 
             return lines.map(l =>
