@@ -302,11 +302,14 @@
             padding: 1rem 1.5rem;
         }
         .merge-tree .tree-line {
-            display: flex; align-items: center; gap: 0;
-            white-space: nowrap; padding-left: 0;
+            display: flex; align-items: center; gap: 0.35rem;
+            white-space: nowrap;
         }
-        .merge-tree .tree-prefix { color: #bbb; user-select: none; font-size: 0.8rem; }
-        .merge-tree .tree-icon { flex-shrink: 0; margin-right: 0.3rem; }
+        .merge-tree .tree-line.removed {
+            opacity: 0.4; text-decoration: line-through;
+        }
+        .merge-tree .tree-prefix { color: #ccc; user-select: none; }
+        .merge-tree .tree-icon { flex-shrink: 0; }
         .merge-tree .tree-name { }
         .merge-tree .tree-size { color: #999; font-size: 0.75rem; margin-left: 0.5rem; }
         .merge-tree .tree-hash-dot {
@@ -696,7 +699,7 @@
             if (node.isDir && node.children) {
                 const entries = Object.values(node.children);
                 entries.forEach((child, i) => {
-                    const childPrefix = prefix + (isLast ? '      ' : '│     ');
+                    const childPrefix = prefix + (isLast ? '    ' : '│   ');
                     html += renderTreeNode(child, childPrefix, i === entries.length - 1);
                 });
             }
