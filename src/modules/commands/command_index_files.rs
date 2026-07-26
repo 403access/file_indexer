@@ -10,7 +10,7 @@ use crate::{
         logging,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, get_ignore_rules, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed, refresh_duplicate_hashes, IgnoreRule},
+        sql::database::{get_connection, get_ignore_rules, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed, update_duplicate_hashes_incremental, IgnoreRule},
     },
     states::app_state,
 };
@@ -20,6 +20,7 @@ struct InsertResult {
     file_count: usize,
     folder_count: usize,
     skipped: Option<(String, String)>,
+    inserted_hashes: Vec<String>,
 }
 
 pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<AtomicBool>>) -> io::Result<()> {
@@ -171,13 +172,11 @@ pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<Ato
                     io::Error::new(io::ErrorKind::Other, e.to_string())
                 })?;
 
-                // Refresh duplicate hashes after folder commit
-                {
-                    let conn = get_connection(db_path).map_err(|e| {
-                        logging::error(&format!("Failed to connect to database: {}", e));
-                        io::Error::new(io::ErrorKind::Other, e.to_string())
-                    })?;
-                    refresh_duplicate_hashes(&conn);
+                // Incrementally update duplicate hashes for newly inserted files
+                if let Ok(ref r) = result {
+                    if !r.inserted_hashes.is_empty() {
+                        update_duplicate_hashes_incremental(&conn, &r.inserted_hashes);
+                    }
                 }
 
                 result
@@ -268,12 +267,21 @@ fn get_and_insert_entries(
     let mut directories: Vec<FileEntry> = Vec::new();
     let mut file_count = 0usize;
     let mut folder_count = 0usize;
+    let mut inserted_hashes: Vec<String> = Vec::new();
 
     for entry in &entries {
         let file_name_id = get_file_id(transaction, names, &entry.name);
 
         match insert_file(&transaction, &entry, file_name_id.unwrap(), parent_path) {
-            Ok(_) => {
+            Ok(id) => {
+                if id > 0 {
+                    // New file inserted (not a duplicate key)
+                    if let Some(hash) = &entry.hash {
+                        if !hash.is_empty() {
+                            inserted_hashes.push(hash.clone());
+                        }
+                    }
+                }
                 if entry.is_directory {
                     folder_count += 1;
                 } else {
@@ -298,6 +306,7 @@ fn get_and_insert_entries(
         file_count,
         folder_count,
         skipped: None,
+        inserted_hashes,
     })
 }
 

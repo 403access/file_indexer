@@ -5,7 +5,7 @@ use crate::states::app_state::AppState;
 
 use self::config::config_handler;
 use self::dashboard::{dashboard_handler, refresh_handler};
-use self::duplicate_folders::duplicate_folders_handler;
+use self::duplicate_folders::{duplicate_folders_handler, folder_files_handler};
 use self::duplicates::duplicates_handler;
 use self::file_content::file_content_handler;
 use self::folder::folder_handler;
@@ -35,10 +35,11 @@ pub mod tree;
 
 pub fn create_router(state: AppState) -> Router {
     Router::new()
-        .route("/api/dashboard", get(dashboard_handler))
         .route("/api/dashboard/refresh", post(refresh_handler))
+        .route("/api/dashboard", get(dashboard_handler))
         .route("/api/search", get(search_handler))
         .route("/api/duplicates", get(duplicates_handler))
+        .route("/api/duplicate-folders/files", get(folder_files_handler))
         .route("/api/duplicate-folders", get(duplicate_folders_handler))
         .route("/api/tree", get(tree_handler))
         .route("/api/file", get(file_content_handler))

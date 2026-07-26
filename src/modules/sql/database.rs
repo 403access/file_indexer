@@ -276,6 +276,51 @@ pub fn refresh_duplicate_hashes(conn: &Connection) {
     );
 }
 
+/// Incrementally update duplicate_hashes for only the given hashes.
+/// Checks if each hash is now a duplicate (count > 1) and adds it if so.
+pub fn update_duplicate_hashes_incremental(conn: &Connection, hashes: &[String]) {
+    if hashes.is_empty() {
+        return;
+    }
+
+    // Ensure duplicate_hashes table exists
+    let _ = conn.execute(
+        "CREATE TABLE IF NOT EXISTS duplicate_hashes (hash TEXT PRIMARY KEY)",
+        [],
+    );
+
+    for hash in hashes {
+        // Check if this hash already exists in duplicate_hashes
+        let already_exists: bool = conn
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM duplicate_hashes WHERE hash = ?1",
+                [hash],
+                |row| row.get(0),
+            )
+            .unwrap_or(false);
+
+        if already_exists {
+            continue;
+        }
+
+        // Check if this hash now has >1 file
+        let count: u64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM files WHERE hash = ?1 AND hash IS NOT NULL AND hash != ''",
+                [hash],
+                |row| row.get(0),
+            )
+            .unwrap_or(0);
+
+        if count > 1 {
+            let _ = conn.execute(
+                "INSERT OR IGNORE INTO duplicate_hashes (hash) VALUES (?1)",
+                [hash],
+            );
+        }
+    }
+}
+
 pub fn insert_skipped_path(tx: &Transaction, path: &str, error: &str) -> rusqlite::Result<i64> {
     let affected = tx.execute(
         "INSERT OR IGNORE INTO skipped_paths (path, error) VALUES (:path, :error)",

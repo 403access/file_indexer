@@ -17,25 +17,16 @@ fn default_page() -> u32 { 1 }
 fn default_per_page() -> u32 { 20 }
 
 #[derive(Serialize)]
-pub struct FolderFile {
-    pub name: String,
+pub struct FolderInfo {
     pub path: String,
-    pub size: u64,
-    pub hash: String,
-    pub is_duplicate: bool,
+    pub name: String,
+    pub file_count: usize,
 }
 
 #[derive(Serialize)]
 pub struct FolderGroup {
     pub shared_count: usize,
     pub folders: Vec<FolderInfo>,
-}
-
-#[derive(Serialize)]
-pub struct FolderInfo {
-    pub path: String,
-    pub name: String,
-    pub files: Vec<FolderFile>,
 }
 
 #[derive(Serialize)]
@@ -46,6 +37,20 @@ pub struct DuplicateFoldersResponse {
     pub per_page: u32,
 }
 
+#[derive(Serialize)]
+pub struct FolderFilesResponse {
+    pub files: Vec<FolderFile>,
+}
+
+#[derive(Serialize)]
+pub struct FolderFile {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub hash: String,
+    pub is_duplicate: bool,
+}
+
 pub async fn duplicate_folders_handler(
     State(state): State<AppState>,
     Query(params): Query<DuplicateFoldersParams>,
@@ -54,46 +59,41 @@ pub async fn duplicate_folders_handler(
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Phase 1: Find all duplicate hashes (fast with index)
+    // Single query: get all files that have duplicate hashes, with their folder info
     let mut stmt = conn.prepare(
-        "SELECT hash FROM duplicate_hashes"
+        "SELECT f.path, fn.name, f.hash
+         FROM files f
+         JOIN file_names fn ON f.file_name_id = fn.id
+         WHERE f.hash IN (SELECT hash FROM duplicate_hashes)
+           AND f.hash IS NOT NULL AND f.hash != ''"
     ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let dup_hashes: Vec<String> = stmt.query_map([], |row| row.get(0))
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .filter_map(|r| r.ok())
-        .collect();
-    drop(stmt);
-
-    // Phase 2: Build folder -> hashes mapping
     let mut folder_hashes: std::collections::HashMap<String, std::collections::HashSet<String>> =
         std::collections::HashMap::new();
     let mut folder_names: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+    let mut folder_file_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
 
-    for hash in &dup_hashes {
-        let mut stmt = conn.prepare(
-            "SELECT f.path, fn.name FROM files f JOIN file_names fn ON f.file_name_id = fn.id WHERE f.hash = ?1"
-        ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let rows = stmt.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+        ))
+    }).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        let rows: Vec<(String, String)> = stmt.query_map(rusqlite::params![hash], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-        })
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .filter_map(|r| r.ok())
-        .collect();
-        drop(stmt);
-
-        for (path, _name) in rows {
-            let normalized = path.replace("//", "/");
-            if let Some(parent) = normalized.rsplit_once('/') {
-                let folder = parent.0.to_string();
-                folder_hashes.entry(folder.clone()).or_default().insert(hash.clone());
-                if let Some(display) = folder.rsplit_once('/') {
-                    folder_names.entry(folder.clone()).or_insert_with(|| display.1.to_string());
-                }
+    for row in rows {
+        let (path, _name, hash) = row.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let normalized = path.replace("//", "/");
+        if let Some(parent) = normalized.rsplit_once('/') {
+            let folder = parent.0.to_string();
+            folder_hashes.entry(folder.clone()).or_default().insert(hash.clone());
+            if let Some(display) = folder.rsplit_once('/') {
+                folder_names.entry(folder.clone()).or_insert_with(|| display.1.to_string());
             }
+            *folder_file_counts.entry(folder.clone()).or_insert(0) += 1;
         }
     }
+    drop(stmt);
 
     // Phase 3: Group folders by shared hashes
     let mut folder_list: Vec<(String, std::collections::HashSet<String>)> = folder_hashes.into_iter().collect();
@@ -148,32 +148,13 @@ pub async fn duplicate_folders_handler(
             std::collections::HashSet::new()
         };
 
-        let folders: Vec<FolderInfo> = group.iter().map(|(path, hashes)| {
-            let mut stmt = conn.prepare(
-                "SELECT f.path, fn.name, f.size, f.hash FROM files f JOIN file_names fn ON f.file_name_id = fn.id WHERE f.parent_path = ?1 AND f.hash IS NOT NULL"
-            ).unwrap();
-
-            let files: Vec<FolderFile> = stmt.query_map(rusqlite::params![path], |row| {
-                Ok(FolderFile {
-                    path: row.get(0)?,
-                    name: row.get(1)?,
-                    size: row.get(2)?,
-                    hash: row.get(3)?,
-                    is_duplicate: false,
-                })
-            }).unwrap()
-            .filter_map(|r| r.ok())
-            .map(|mut f| {
-                f.is_duplicate = hashes.contains(&f.hash);
-                f
-            })
-            .collect();
-
+        let folders: Vec<FolderInfo> = group.iter().map(|(path, _hashes)| {
             let display_name = folder_names.get(path).cloned().unwrap_or_else(|| {
                 path.rsplit_once('/').map(|s| s.1.to_string()).unwrap_or_default()
             });
+            let file_count = folder_file_counts.get(path).copied().unwrap_or(0);
 
-            FolderInfo { path: path.clone(), name: display_name, files }
+            FolderInfo { path: path.clone(), name: display_name, file_count }
         }).collect();
 
         FolderGroup {
@@ -188,4 +169,62 @@ pub async fn duplicate_folders_handler(
         page: params.page,
         per_page: params.per_page,
     }))
+}
+
+/// Load files for a specific folder in a duplicate group.
+pub async fn folder_files_handler(
+    State(state): State<AppState>,
+    Query(params): Query<FolderFilesParams>,
+) -> Result<Json<FolderFilesResponse>, (axum::http::StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
+    let conn = get_connection(&state.db)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Get all duplicate hashes for reference
+    let dup_hashes: std::collections::HashSet<String> = {
+        let mut stmt = conn.prepare("SELECT hash FROM duplicate_hashes")
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let result: Vec<String> = stmt.query_map([], |row| row.get(0))
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
+        drop(stmt);
+        result.into_iter().collect()
+    };
+
+    // Get files for this folder
+    let files: Vec<FolderFile> = {
+        let mut stmt = conn.prepare(
+            "SELECT f.path, fn.name, f.size, f.hash
+             FROM files f
+             JOIN file_names fn ON f.file_name_id = fn.id
+             WHERE f.parent_path = ?1 AND f.hash IS NOT NULL"
+        ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let result: Vec<FolderFile> = stmt.query_map(rusqlite::params![params.path], |row| {
+            Ok(FolderFile {
+                path: row.get(0)?,
+                name: row.get(1)?,
+                size: row.get(2)?,
+                hash: row.get(3)?,
+                is_duplicate: false,
+            })
+        })
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .filter_map(|r| r.ok())
+        .collect();
+        drop(stmt);
+
+        result.into_iter().map(|mut f| {
+            f.is_duplicate = dup_hashes.contains(&f.hash);
+            f
+        }).collect()
+    };
+
+    Ok(Json(FolderFilesResponse { files }))
+}
+
+#[derive(Deserialize)]
+pub struct FolderFilesParams {
+    pub path: String,
 }

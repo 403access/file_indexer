@@ -666,26 +666,17 @@
 
         function renderFolderColumns(group, gi, commonRoot) {
             return `<div class="folders-row">
-                ${group.folders.map(folder => `
-                    <div class="folder-col">
+                ${group.folders.map((folder, fi) => `
+                    <div class="folder-col" data-gi="${gi}" data-fi="${fi}" data-path="${folder.path}">
                         <div class="folder-col-header">
                             ${folder.name}
                             <span class="full-path" title="${folder.path}">${truncatePath(folder.path)}</span>
                         </div>
                         <div class="mini-tree">${buildMiniTree(folder.path, commonRoot)}</div>
-                        <div class="show-all-toggle" onclick="toggleShowAll(this)">
-                            <input type="checkbox" id="show-all-${gi}-${folder.name}">
-                            <label for="show-all-${gi}-${folder.name}">Show all files (${folder.files.length})</label>
-                        </div>
                         <div class="folder-col-files">
-                        ${folder.files.map(file => `
-                            <div class="folder-file ${file.is_duplicate ? 'shared' : 'unique'}" ${!file.is_duplicate ? 'data-unique="true"' : ''} style="cursor:pointer" onclick="FileViewer.open('${folder.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${file.name}', '${file.name.replace(/'/g, "\\'")}')">
-                                <span class="hash-dot" style="background:${file.is_duplicate ? hashColor(file.hash) : '#ccc'}"></span>
-                                <span class="file-icon">\uD83D\uDCC4</span>
-                                <span class="file-name" title="${file.name}">${file.name}</span>
-                                <span class="file-size">${formatSize(file.size)}</span>
+                            <div class="folder-load-btn" onclick="loadFolderFiles(this, '${folder.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${gi}, ${fi})" style="padding:1rem;text-align:center;color:#3498db;cursor:pointer;font-size:0.85rem;">
+                                Click to load ${folder.file_count} files
                             </div>
-                        `).join('')}
                         </div>
                     </div>
                 `).join('')}
@@ -696,55 +687,109 @@
             const folders = group.folders;
             const folderCount = folders.length;
 
-            // Collect all files, group by hash
-            const byHash = {};
-            folders.forEach((folder, fi) => {
-                folder.files.forEach(file => {
-                    if (!byHash[file.hash]) byHash[file.hash] = [];
-                    byHash[file.hash].push({ ...file, folderIdx: fi, folderPath: folder.path, folderName: folder.name });
-                });
-            });
-
-            // Sort: shared hashes first (by count desc), then unique; within same type, sort by name
-            const hashEntries = Object.entries(byHash).sort((a, b) => {
-                const aShared = a[1].length > 1 ? 0 : 1;
-                const bShared = b[1].length > 1 ? 0 : 1;
-                if (aShared !== bShared) return aShared - bShared;
-                return a[1][0].name.localeCompare(b[1][0].name);
-            });
-
-            // Build rows: one per hash
-            const rows = hashEntries.map(([hash, files]) => {
-                const cells = new Array(folderCount).fill(null);
-                files.forEach(f => { cells[f.folderIdx] = f; });
-                return { hash, cells, isShared: files.length > 1 };
-            });
-
-            let html = '<table class="aligned-table"><thead><tr>';
-            html += '<th style="width:24px"></th>';
-            folders.forEach(folder => {
-                html += `<th>${folder.name}<span class="th-path" title="${folder.path}">${truncatePath(folder.path)}</span></th>`;
-            });
-            html += '</tr></thead><tbody>';
-
-            rows.forEach(row => {
-                html += '<tr>';
-                html += `<td><span class="hash-dot" style="background:${row.isShared ? hashColor(row.hash) : '#ccc'}"></span></td>`;
-                row.cells.forEach(cell => {
-                    if (cell) {
-                        html += `<td><div class="file-cell" onclick="FileViewer.open('${cell.folderPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${cell.name}', '${cell.name.replace(/'/g, "\\'")}')">`;
-                        html += `<span class="file-name" title="${cell.name}">${cell.name}</span>`;
-                        html += `<span class="file-size">${formatSize(cell.size)}</span>`;
-                        html += '</div></td>';
-                    } else {
-                        html += '<td class="empty-cell">\u2014</td>';
-                    }
-                });
-                html += '</tr>';
-            });
-
-            html += '</tbody></table>';
+            let html = '<div style="padding:1rem;text-align:center;">';
+            html += `<div class="folder-load-btn" onclick="loadAlignedFiles(this, ${gi})" style="color:#3498db;cursor:pointer;font-size:0.85rem;">`;
+            html += `Click to load files for aligned comparison`;
+            html += '</div></div>';
             return html;
+        }
+
+        async function loadFolderFiles(btn, path, gi, fi) {
+            btn.textContent = 'Loading...';
+            btn.style.color = '#999';
+            btn.style.cursor = 'default';
+            btn.onclick = null;
+
+            try {
+                const res = await fetch(`/api/duplicate-folders/files?path=${encodeURIComponent(path)}`);
+                if (!res.ok) throw new Error('Failed to load');
+                const data = await res.json();
+
+                const container = btn.parentElement;
+                container.innerHTML = data.files.map(file => `
+                    <div class="folder-file ${file.is_duplicate ? 'shared' : 'unique'}" ${!file.is_duplicate ? 'data-unique="true"' : ''} style="cursor:pointer" onclick="FileViewer.open('${path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${file.name}', '${file.name.replace(/'/g, "\\'")}')">
+                        <span class="hash-dot" style="background:${file.is_duplicate ? hashColor(file.hash) : '#ccc'}"></span>
+                        <span class="file-icon">\uD83D\uDCC4</span>
+                        <span class="file-name" title="${file.name}">${file.name}</span>
+                        <span class="file-size">${formatSize(file.size)}</span>
+                    </div>
+                `).join('');
+            } catch (e) {
+                btn.textContent = 'Failed to load';
+                btn.style.color = '#e74c3c';
+            }
+        }
+
+        async function loadAlignedFiles(btn, gi) {
+            btn.textContent = 'Loading...';
+            btn.style.color = '#999';
+            btn.style.cursor = 'default';
+            btn.onclick = null;
+
+            const group = groupsData.groups[gi];
+            const folders = group.folders;
+
+            try {
+                const allFiles = await Promise.all(folders.map(async (folder) => {
+                    const res = await fetch(`/api/duplicate-folders/files?path=${encodeURIComponent(folder.path)}`);
+                    if (!res.ok) return [];
+                    const data = await res.json();
+                    return data.files;
+                }));
+
+                // Build the aligned table
+                const folderCount = folders.length;
+                const byHash = {};
+                folders.forEach((folder, fi) => {
+                    allFiles[fi].forEach(file => {
+                        if (!byHash[file.hash]) byHash[file.hash] = [];
+                        byHash[file.hash].push({ ...file, folderIdx: fi, folderPath: folder.path, folderName: folder.name });
+                    });
+                });
+
+                const hashEntries = Object.entries(byHash).sort((a, b) => {
+                    const aShared = a[1].length > 1 ? 0 : 1;
+                    const bShared = b[1].length > 1 ? 0 : 1;
+                    if (aShared !== bShared) return aShared - bShared;
+                    return a[1][0].name.localeCompare(b[1][0].name);
+                });
+
+                const rows = hashEntries.map(([hash, files]) => {
+                    const cells = new Array(folderCount).fill(null);
+                    files.forEach(f => { cells[f.folderIdx] = f; });
+                    return { hash, cells, isShared: files.length > 1 };
+                });
+
+                let html = '<table class="aligned-table"><thead><tr>';
+                html += '<th style="width:24px"></th>';
+                folders.forEach(folder => {
+                    html += `<th>${folder.name}<span class="th-path" title="${folder.path}">${truncatePath(folder.path)}</span></th>`;
+                });
+                html += '</tr></thead><tbody>';
+
+                rows.forEach(row => {
+                    html += '<tr>';
+                    html += `<td><span class="hash-dot" style="background:${row.isShared ? hashColor(row.hash) : '#ccc'}"></span></td>`;
+                    row.cells.forEach(cell => {
+                        if (cell) {
+                            html += `<td><div class="file-cell" onclick="FileViewer.open('${cell.folderPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${cell.name}', '${cell.name.replace(/'/g, "\\'")}')">`;
+                            html += `<span class="file-name" title="${cell.name}">${cell.name}</span>`;
+                            html += `<span class="file-size">${formatSize(cell.size)}</span>`;
+                            html += '</div></td>';
+                        } else {
+                            html += '<td class="empty-cell">\u2014</td>';
+                        }
+                    });
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+
+                btn.parentElement.innerHTML = html;
+            } catch (e) {
+                btn.textContent = 'Failed to load';
+                btn.style.color = '#e74c3c';
+            }
         }
 
         async function loadGroups() {
@@ -765,47 +810,61 @@
             renderMergeBody();
         }
 
-        function openMergeFolders(groupIdx) {
+        async function openMergeFolders(groupIdx) {
             const group = groupsData.groups[groupIdx];
             if (!group || group.folders.length < 2) return;
             mergeGroup = group;
 
-            // Collect all files across all folders, grouped by hash
-            const byHash = {};
-            group.folders.forEach(folder => {
-                folder.files.forEach(file => {
-                    if (!byHash[file.hash]) byHash[file.hash] = [];
-                    byHash[file.hash].push({
-                        ...file,
-                        folderPath: folder.path,
-                        folderName: folder.name
-                    });
-                });
-            });
-
-            // Auto-select: for shared files, keep from first folder; unique files always kept
+            // Open sidebar immediately
             mergeSelections = {};
-            Object.entries(byHash).forEach(([hash, files]) => {
-                const isShared = files.length > 1;
-                files.forEach((f, idx) => {
-                    const key = f.folderPath + '/' + f.name;
-                    mergeSelections[key] = isShared ? idx === 0 : true;
-                });
-            });
-
-            // Set default destination
-            const firstPath = group.folders[0]?.path || '';
-            const parentDir = firstPath.replace(/\/[^/]+$/, '') || firstPath;
-            document.getElementById('merge-dest-path').value = parentDir + '/merged';
-
+            document.getElementById('merge-dest-path').value = (group.folders[0]?.path || '').replace(/\/[^/]+$/, '') + '/merged';
             renderMergeBody();
             const overlay = document.getElementById('merge-overlay');
             overlay.style.display = 'block';
             requestAnimationFrame(() => overlay.classList.add('open'));
+
+            // Load files in background
+            try {
+                const allFiles = await Promise.all(group.folders.map(async (folder) => {
+                    const res = await fetch(`/api/duplicate-folders/files?path=${encodeURIComponent(folder.path)}`);
+                    if (!res.ok) return { path: folder.path, name: folder.name, files: [] };
+                    const data = await res.json();
+                    return { path: folder.path, name: folder.name, files: data.files };
+                }));
+
+                mergeGroup.foldersWithFiles = allFiles;
+
+                const byHash = {};
+                allFiles.forEach(({ path, name, files }) => {
+                    files.forEach(file => {
+                        if (!byHash[file.hash]) byHash[file.hash] = [];
+                        byHash[file.hash].push({ ...file, folderPath: path, folderName: name });
+                    });
+                });
+
+                mergeSelections = {};
+                Object.entries(byHash).forEach(([hash, files]) => {
+                    const isShared = files.length > 1;
+                    files.forEach((f, idx) => {
+                        const key = f.folderPath + '/' + f.name;
+                        mergeSelections[key] = isShared ? idx === 0 : true;
+                    });
+                });
+
+                renderMergeBody();
+            } catch (e) {
+                console.error('Failed to load merge files:', e);
+            }
         }
 
         function renderMergeBody() {
             const body = document.getElementById('merge-body');
+            if (!mergeGroup.foldersWithFiles) {
+                body.innerHTML = '<div style="padding:2rem;text-align:center;color:#999;">Loading files...</div>';
+                body.className = 'merge-body';
+                updateMergeStats();
+                return;
+            }
             if (mergeViewMode === 'tree') {
                 renderMergeTree(body);
             } else {
@@ -816,13 +875,13 @@
 
         function renderMergeList(body) {
             const byHash = {};
-            mergeGroup.folders.forEach(folder => {
-                folder.files.forEach(file => {
+            mergeGroup.foldersWithFiles.forEach(({ path, name, files }) => {
+                files.forEach(file => {
                     if (!byHash[file.hash]) byHash[file.hash] = [];
                     byHash[file.hash].push({
                         ...file,
-                        folderPath: folder.path,
-                        folderName: folder.name
+                        folderPath: path,
+                        folderName: name
                     });
                 });
             });
@@ -867,11 +926,11 @@
             const tree = { name: destName, children: {}, isDir: true };
             const allFiles = [];
 
-            mergeGroup.folders.forEach(folder => {
-                folder.files.forEach(file => {
-                    const key = folder.path + '/' + file.name;
+            mergeGroup.foldersWithFiles.forEach(({ path, files }) => {
+                files.forEach(file => {
+                    const key = path + '/' + file.name;
                     const isKeep = mergeSelections[key];
-                    allFiles.push({ ...file, folderPath: folder.path, key, isKeep });
+                    allFiles.push({ ...file, folderPath: path, key, isKeep });
                 });
             });
 
@@ -935,9 +994,13 @@
         function updateMergeStats() {
             const kept = Object.values(mergeSelections).filter(v => v).length;
             const removed = Object.values(mergeSelections).filter(v => !v).length;
-            const totalSize = mergeGroup.folders.reduce((sum, f) =>
+            if (!mergeGroup.foldersWithFiles) {
+                document.getElementById('merge-stats').textContent = `Loading...`;
+                return;
+            }
+            const totalSize = mergeGroup.foldersWithFiles.reduce((sum, f) =>
                 sum + f.files.reduce((s, file) => s + file.size, 0), 0);
-            const freedSize = mergeGroup.folders.reduce((sum, f) =>
+            const freedSize = mergeGroup.foldersWithFiles.reduce((sum, f) =>
                 sum + f.files.filter(file => !mergeSelections[f.path + '/' + file.name])
                     .reduce((s, file) => s + file.size, 0), 0);
             document.getElementById('merge-stats').textContent =
