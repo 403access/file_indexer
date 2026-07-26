@@ -73,6 +73,14 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         return Err(path_index_result.unwrap_err());
     }
 
+    // Composite indexes for hot queries
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_hash_is_file ON files(hash, is_file);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_hash_is_dir ON files(hash, is_directory);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_is_file ON files(is_file);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_is_dir ON files(is_directory);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_modified ON files(modified);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);", []);
+
     let skipped_table_result = tx.execute(
         "CREATE TABLE IF NOT EXISTS skipped_paths (
             id INTEGER PRIMARY KEY,

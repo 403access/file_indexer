@@ -28,6 +28,9 @@ pub struct FileSummary {
     size: u64,
 }
 
+// Only enrich this many log entries with file lists (N+1 query cost)
+const MAX_ENRICHED_ENTRIES: usize = 50;
+
 pub async fn logs_handler(
     State(state): State<AppState>,
     Query(params): Query<LogsParams>,
@@ -42,10 +45,19 @@ pub async fn logs_handler(
     let logs = get_logs(&conn, limit, level, search, sort_asc).unwrap_or_default();
 
     let mut entries: Vec<LogEntry> = Vec::with_capacity(logs.len());
+    let mut enriched_count = 0usize;
+
     for (timestamp, level, message) in logs {
-        let files = if level == "INFO" && message.starts_with("Indexed '") {
+        let files = if enriched_count < MAX_ENRICHED_ENTRIES
+            && level == "INFO"
+            && message.starts_with("Indexed '")
+        {
             extract_indexed_path(&message)
                 .and_then(|path| get_files_for_dir(&conn, &path))
+                .map(|f| {
+                    enriched_count += 1;
+                    f
+                })
         } else {
             None
         };
@@ -64,35 +76,27 @@ fn extract_indexed_path(message: &str) -> Option<String> {
 
 fn get_files_for_dir(conn: &rusqlite::Connection, dir_path: &str) -> Option<Vec<FileSummary>> {
     let normalized = dir_path.replace("//", "/");
-    let prefix = if normalized.ends_with('/') {
-        normalized.clone()
-    } else {
-        format!("{}/", normalized)
-    };
+
+    // Use parent_path index for direct children lookup
+    let parent_path = normalized.trim_end_matches('/');
 
     let mut stmt = conn
         .prepare(
-            "SELECT fn.name, f.size, f.path FROM files f JOIN file_names fn ON f.file_name_id = fn.id
-             WHERE f.is_file = 1 AND f.path LIKE ?1",
+            "SELECT fn.name, f.size FROM files f
+             JOIN file_names fn ON f.file_name_id = fn.id
+             WHERE f.is_file = 1 AND f.parent_path = ?1",
         )
         .ok()?;
 
-    let pattern = format!("{}%", prefix);
     let rows: Vec<FileSummary> = stmt
-        .query_map(rusqlite::params![pattern], |row| {
-            let name: String = row.get(0)?;
-            let size: u64 = row.get(1)?;
-            let path: String = row.get(2)?;
-            Ok((name, size, path))
+        .query_map([parent_path], |row| {
+            Ok(FileSummary {
+                name: row.get(0)?,
+                size: row.get(1)?,
+            })
         })
         .ok()?
         .filter_map(|r| r.ok())
-        .filter(|(_, _, path)| {
-            // Only direct children: after removing prefix, no remaining slashes
-            let rel = &path[prefix.len()..];
-            !rel.contains('/')
-        })
-        .map(|(name, size, _)| FileSummary { name, size })
         .collect();
 
     if rows.is_empty() {

@@ -41,15 +41,18 @@ pub async fn dashboard_handler(
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let total_files: u64 = conn
-        .query_row("SELECT COUNT(*) FROM files WHERE is_file = 1", [], |r| r.get(0))
-        .unwrap_or(0);
-    let total_folders: u64 = conn
-        .query_row("SELECT COUNT(*) FROM files WHERE is_directory = 1", [], |r| r.get(0))
-        .unwrap_or(0);
-    let total_size: u64 = conn
-        .query_row("SELECT COALESCE(SUM(size), 0) FROM files WHERE is_file = 1", [], |r| r.get(0))
-        .unwrap_or(0);
+    // Single pass for basic counts
+    let (total_files, total_folders, total_size): (u64, u64, u64) = conn
+        .query_row(
+            "SELECT
+                COALESCE(SUM(CASE WHEN is_file = 1 THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN is_directory = 1 THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN is_file = 1 THEN size ELSE 0 END), 0)
+             FROM files",
+            [],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+        )
+        .unwrap_or((0, 0, 0));
 
     let db_size = std::fs::metadata(&state.db).map(|m| m.len()).unwrap_or(0);
 
@@ -57,59 +60,37 @@ pub async fn dashboard_handler(
         .query_row("SELECT COUNT(*) FROM skipped_paths", [], |r| r.get(0))
         .unwrap_or(0);
 
-    // Duplicate files: hashes that appear > 1 among files
-    let duplicate_file_groups: u64 = conn
+    // Duplicate file stats in one query
+    let (duplicate_file_groups, duplicate_files, wasted_file_bytes): (u64, u64, u64) = conn
         .query_row(
-            "SELECT COUNT(*) FROM (
-                SELECT hash FROM files WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash HAVING COUNT(*) > 1
-            )",
+            "SELECT COUNT(*), COALESCE(SUM(cnt), 0), COALESCE(SUM((cnt - 1) * size), 0)
+             FROM (
+                SELECT COUNT(*) as cnt, MIN(size) as size
+                FROM files
+                WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
+                GROUP BY hash
+                HAVING COUNT(*) > 1
+             )",
             [],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
         )
-        .unwrap_or(0);
-    let duplicate_files: u64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(cnt), 0) FROM (
-                SELECT COUNT(*) as cnt FROM files WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash HAVING COUNT(*) > 1
-            )",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
-    let wasted_file_bytes: u64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM((cnt - 1) * size), 0) FROM (
-                SELECT COUNT(*) as cnt, size FROM files WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash HAVING COUNT(*) > 1
-            )",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+        .unwrap_or((0, 0, 0));
 
-    // Duplicate folders: directory hashes that appear > 1
-    let duplicate_folder_groups: u64 = conn
+    // Duplicate folder stats in one query
+    let (duplicate_folder_groups, duplicate_folders): (u64, u64) = conn
         .query_row(
-            "SELECT COUNT(*) FROM (
-                SELECT hash FROM files WHERE is_directory = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash HAVING COUNT(*) > 1
-            )",
+            "SELECT COUNT(*), COALESCE(SUM(cnt), 0)
+             FROM (
+                SELECT COUNT(*) as cnt
+                FROM files
+                WHERE is_directory = 1 AND hash IS NOT NULL AND hash != ''
+                GROUP BY hash
+                HAVING COUNT(*) > 1
+             )",
             [],
-            |r| r.get(0),
+            |r| Ok((r.get(0)?, r.get(1)?)),
         )
-        .unwrap_or(0);
-    let duplicate_folders: u64 = conn
-        .query_row(
-            "SELECT COALESCE(SUM(cnt), 0) FROM (
-                SELECT COUNT(*) as cnt FROM files WHERE is_directory = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash HAVING COUNT(*) > 1
-            )",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0);
+        .unwrap_or((0, 0));
 
     // Timeline
     let interval = params.interval.as_deref().unwrap_or("month");

@@ -3,7 +3,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::modules::file_entry::_types::FileEntry;
-use crate::modules::sql::database::{get_connection, reset_duplicates_table};
+use crate::modules::sql::database::get_connection;
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
@@ -37,70 +37,79 @@ pub async fn duplicates_handler(
     Query(params): Query<DuplicatesParams>,
 ) -> Result<Json<DuplicatesResponse>, (axum::http::StatusCode, String)> {
     let _guard = IndexerPauseGuard::new(&state);
-    {
-        let mut conn = get_connection(&state.db)
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let tx = conn.transaction()
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        reset_duplicates_table(&tx)
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        tx.commit()
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    }
 
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut stmt = conn.prepare(
-        "SELECT hash FROM duplicate_hashes"
-    ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let hashes: Vec<String> = stmt.query_map([], |row| row.get(0))
+    // Count total duplicate groups (fast with index)
+    let total_groups: usize = conn
+        .query_row(
+            "SELECT COUNT(*)
+             FROM (
+                SELECT hash FROM files
+                WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
+                GROUP BY hash HAVING COUNT(*) > 1
+             )",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0);
+
+    // Get hashes for this page (skip/limit on the subquery)
+    let offset = ((params.page - 1) * params.per_page) as i64;
+    let limit = params.per_page as i64;
+
+    let mut stmt = conn
+        .prepare(
+            "SELECT hash FROM (
+                SELECT hash, COUNT(*) as cnt FROM files
+                WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
+                GROUP BY hash HAVING cnt > 1
+                ORDER BY cnt DESC
+             )
+             LIMIT ?1 OFFSET ?2",
+        )
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let page_hashes: Vec<String> = stmt
+        .query_map(rusqlite::params![limit, offset], |row| row.get(0))
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
         .filter_map(|r| r.ok())
         .collect();
     drop(stmt);
 
-    let total_groups = hashes.len();
+    let mut groups = Vec::with_capacity(page_hashes.len());
+    for hash in &page_hashes {
+        let mut stmt = conn
+            .prepare(
+                "SELECT f.path, fn.name, f.size, f.modified, f.hash,
+                        f.is_directory, f.is_file, f.is_symlink
+                 FROM files f
+                 JOIN file_names fn ON f.file_name_id = fn.id
+                 WHERE f.hash = ?1 AND f.is_file = 1",
+            )
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let start = ((params.page - 1) * params.per_page) as usize;
-    let end = (start + params.per_page as usize).min(total_groups);
-    let page_hashes = if start < total_groups { &hashes[start..end] } else { &[] };
-
-    let mut groups = Vec::new();
-    for hash in page_hashes {
-        let mut stmt = conn.prepare(
-            "SELECT f.path, fn.name, f.size, f.modified, f.hash,
-                    f.is_directory, f.is_file, f.is_symlink
-             FROM files f
-             JOIN file_names fn ON f.file_name_id = fn.id
-             WHERE f.hash = ?"
-        ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-        let h = hash.as_str();
-        let mut rows = stmt.query(rusqlite::params![h])
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("query error for hash {}: {}", h, e)))?;
-
-        let mut files = Vec::new();
-        while let Some(row) = rows.next().map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))? {
-            let path: Option<String> = row.get(0).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 0: {}", e)))?;
-            let name: String = row.get(1).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 1: {}", e)))?;
-            let size: u64 = row.get(2).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 2: {}", e)))?;
-            let modified_f64: Option<f64> = row.get(3).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 3: {}", e)))?;
-            let modified = modified_f64.map(|v| v as u64);
-            let hash_val: Option<String> = row.get(4).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 4: {}", e)))?;
-            let is_directory: bool = row.get::<_, i32>(5).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 5: {}", e)))? != 0;
-            let is_file: bool = row.get::<_, i32>(6).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 6: {}", e)))? != 0;
-            let is_symlink: bool = row.get::<_, i32>(7).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("col 7: {}", e)))? != 0;
-
-            files.push(FileEntry {
-                path, name, size, modified, hash: hash_val,
-                is_directory, is_file, is_symlink,
-                created: None,
-                accessed: None,
-                parent_path: None,
-            });
-        }
-        drop(rows);
+        let files: Vec<FileEntry> = stmt
+            .query_map(rusqlite::params![hash], |row| {
+                let modified_f64: Option<f64> = row.get(3)?;
+                Ok(FileEntry {
+                    path: row.get(0)?,
+                    name: row.get(1)?,
+                    size: row.get(2)?,
+                    modified: modified_f64.map(|v| v as u64),
+                    hash: row.get(4)?,
+                    is_directory: row.get::<_, i32>(5)? != 0,
+                    is_file: row.get::<_, i32>(6)? != 0,
+                    is_symlink: row.get::<_, i32>(7)? != 0,
+                    created: None,
+                    accessed: None,
+                    parent_path: None,
+                })
+            })
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
         drop(stmt);
 
         let wasted = if files.len() > 1 {
