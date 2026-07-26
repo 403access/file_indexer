@@ -1,4 +1,4 @@
-use rusqlite::{named_params, Connection, Transaction};
+use rusqlite::{named_params, Connection, Transaction, OptionalExtension};
 
 use crate::modules::file_entry::_types::FileEntry;
 use crate::modules::logging;
@@ -93,6 +93,18 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         return Err(logs_table_result.unwrap_err());
     }
 
+    let settings_table_result = tx.execute(
+        "CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );",
+        [],
+    );
+    if settings_table_result.is_err() {
+        logging::error(&format!("Failed to create 'settings' table: {:?}", settings_table_result));
+        return Err(settings_table_result.unwrap_err());
+    }
+
     return Ok(());
 }
 
@@ -132,11 +144,9 @@ pub fn insert_file(tx: &Transaction, file: &FileEntry, file_name_id: i64) -> rus
     if affected == 1 {
         // Row was inserted, return the new id
         Ok(tx.last_insert_rowid())
-    } else if affected == 0 {
-        // Row was ignored (already exists)
-        Err(rusqlite::Error::ExecuteReturnedResults)
     } else {
-        Err(rusqlite::Error::ExecuteReturnedResults)
+        // Row was ignored (already exists) — not an error
+        Ok(0)
     }
 }
 
@@ -246,4 +256,39 @@ pub fn get_logs(
         result.push(row?);
     }
     Ok(result)
+}
+
+pub fn get_setting(conn: &Connection, key: &str) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT value FROM settings WHERE key = ?1",
+        [key],
+        |row| row.get(0),
+    )
+    .optional()
+}
+
+pub fn set_setting(conn: &Connection, key: &str, value: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR REPLACE INTO settings (key, value) VALUES (:key, :value)",
+        named_params! { ":key": key, ":value": value },
+    )?;
+    Ok(())
+}
+
+pub fn get_ignore_list(conn: &Connection) -> Vec<String> {
+    get_setting(conn, "ignore_folders")
+        .ok()
+        .flatten()
+        .map(|v| {
+            v.split('\n')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn set_ignore_list(conn: &Connection, folders: &[String]) -> rusqlite::Result<()> {
+    let value = folders.join("\n");
+    set_setting(conn, "ignore_folders", &value)
 }

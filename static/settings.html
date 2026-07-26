@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .settings-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .settings-card h2 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.05rem;
+            color: #2c3e50;
+        }
+        .settings-card .desc {
+            color: #888;
+            font-size: 0.82rem;
+            margin-bottom: 1rem;
+        }
+        .ignore-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+        .ignore-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .ignore-item input {
+            flex: 1;
+            padding: 0.4rem 0.6rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 0.85rem;
+        }
+        .ignore-item input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        .ignore-item .remove-btn {
+            background: none;
+            border: none;
+            color: #ccc;
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+        }
+        .ignore-item .remove-btn:hover {
+            color: #e74c3c;
+            background: #fdf2f2;
+        }
+        .add-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            margin-top: 0.5rem;
+            padding: 0.4rem 0.75rem;
+            background: #f0f4f8;
+            border: 1px dashed #ccc;
+            border-radius: 4px;
+            color: #666;
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+        .add-btn:hover {
+            background: #e8eef4;
+            border-color: #999;
+        }
+        .save-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .save-btn {
+            padding: 0.5rem 1.25rem;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .save-btn:hover { background: #219a52; }
+        .save-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .save-msg {
+            font-size: 0.82rem;
+            color: #27ae60;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .save-msg.show { opacity: 1; }
+        .preset-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.5rem;
+        }
+        .preset-tag {
+            padding: 0.2rem 0.55rem;
+            background: #f0f4f8;
+            border: 1px solid #ddd;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: #555;
+            cursor: pointer;
+        }
+        .preset-tag:hover {
+            background: #e0e8f0;
+            border-color: #3498db;
+            color: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/search.html">Search</a>
+            <a href="/duplicates.html">Duplicates</a>
+            <a href="/duplicate-folders.html">Folders</a>
+            <a href="/explorer.html">Explorer</a>
+            <a href="/skipped.html">Skipped</a>
+            <a href="/logs.html">Logs</a>
+            <a href="/status.html">Status</a>
+            <a href="/settings.html" class="active">Settings</a>
+            <span id="status-dot" class="status-dot idle" title="Idle"></span>
+        </nav>
+    </header>
+
+    <main>
+        <div class="settings-card">
+            <h2>Ignored Folders</h2>
+            <p class="desc">These folder names are skipped during indexing. They will not appear in search, duplicates, or the explorer. Re-index after changing.</p>
+            <div class="ignore-list" id="ignore-list"></div>
+            <button class="add-btn" onclick="addIgnoreItem()">+ Add folder</button>
+            <div class="save-bar">
+                <button class="save-btn" id="save-btn" onclick="saveSettings()">Save</button>
+                <span class="save-msg" id="save-msg">Saved</span>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Common Presets</h2>
+            <p class="desc">Click to add common folders to ignore.</p>
+            <div class="preset-tags" id="preset-tags"></div>
+        </div>
+    </main>
+
+    <script src="/js/status.js"></script>
+    <script>
+        const PRESETS = [
+            'node_modules', '.next', 'dist', 'build', '.cache',
+            'target', '__pycache__', '.venv', 'venv', '.git',
+            '.svn', '.hg', 'vendor', '.gradle', '.m2',
+            '.npm', '.yarn', '.pnpm', '.turbo', '.pytest_cache',
+            '.mypy_cache', '.tox', 'coverage', '.nyc_output',
+            '.DS_Store', 'Thumbs.db', '.idea', '.vscode'
+        ];
+
+        let currentList = [];
+
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                currentList = data.ignore_folders || [];
+                renderList();
+                renderPresets();
+            } catch (e) {
+                console.error('Failed to load settings', e);
+            }
+        }
+
+        function renderList() {
+            const container = document.getElementById('ignore-list');
+            if (currentList.length === 0) {
+                container.innerHTML = '<div style="color:#999;font-size:0.85rem;padding:0.5rem 0;">No folders ignored</div>';
+                return;
+            }
+            container.innerHTML = currentList.map((item, i) => `
+                <div class="ignore-item">
+                    <input type="text" value="${escapeAttr(item)}" onchange="updateItem(${i}, this.value)" onkeydown="if(event.key==='Enter')saveSettings()">
+                    <button class="remove-btn" onclick="removeItem(${i})" title="Remove">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function renderPresets() {
+            const container = document.getElementById('preset-tags');
+            container.innerHTML = PRESETS
+                .filter(p => !currentList.includes(p))
+                .map(p => `<span class="preset-tag" onclick="addPreset('${p}')">${p}</span>`)
+                .join('');
+        }
+
+        function addIgnoreItem() {
+            currentList.push('');
+            renderList();
+            const inputs = document.querySelectorAll('.ignore-item input');
+            inputs[inputs.length - 1].focus();
+        }
+
+        function updateItem(idx, value) {
+            currentList[idx] = value.trim();
+        }
+
+        function removeItem(idx) {
+            currentList.splice(idx, 1);
+            renderList();
+            renderPresets();
+        }
+
+        function addPreset(name) {
+            if (!currentList.includes(name)) {
+                currentList.push(name);
+                renderList();
+                renderPresets();
+            }
+        }
+
+        async function saveSettings() {
+            const cleaned = currentList.filter(s => s.trim() !== '');
+            const btn = document.getElementById('save-btn');
+            const msg = document.getElementById('save-msg');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ignore_folders: cleaned })
+                });
+                if (res.ok) {
+                    currentList = cleaned;
+                    renderList();
+                    renderPresets();
+                    msg.classList.add('show');
+                    setTimeout(() => msg.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                alert('Failed to save settings');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function escapeAttr(s) {
+            return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+
+        loadSettings();
+    </script>
+</body>
+</html>

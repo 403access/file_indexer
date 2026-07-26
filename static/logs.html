@@ -63,6 +63,58 @@
         .level-debug { color: #6c757d; }
         .timestamp { color: #666; white-space: nowrap; }
         .message { word-break: break-word; }
+        .indexed-row {
+            cursor: pointer;
+        }
+        .indexed-row:hover {
+            background: #eef6ff !important;
+        }
+        .expand-icon {
+            display: inline-block;
+            width: 1rem;
+            text-align: center;
+            color: #999;
+            transition: transform 0.15s;
+            flex-shrink: 0;
+        }
+        .expand-icon.open {
+            transform: rotate(90deg);
+        }
+        .file-list-row td {
+            padding: 0 !important;
+        }
+        .file-list {
+            padding: 0.25rem 1rem 0.5rem 2.5rem;
+            background: #f8f9fa;
+            border-bottom: 1px solid #eee;
+            font-size: 0.8rem;
+        }
+        .file-list-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.15rem 0;
+            color: #555;
+        }
+        .file-list-item .fl-name {
+            font-family: monospace;
+        }
+        .file-list-item .fl-size {
+            color: #999;
+            margin-left: auto;
+            font-family: monospace;
+            font-size: 0.75rem;
+        }
+        .file-list-toggle {
+            font-size: 0.75rem;
+            color: #3498db;
+            cursor: pointer;
+            border: none;
+            background: none;
+            padding: 0.15rem 0;
+            margin-top: 0.15rem;
+        }
+        .file-list-toggle:hover { text-decoration: underline; }
         #no-results {
             display: none;
             text-align: center;
@@ -94,6 +146,7 @@
             <a href="/skipped.html">Skipped</a>
             <a href="/logs.html" class="active">Logs</a>
             <a href="/status.html">Status</a>
+            <a href="/settings.html">Settings</a>
             <span id="status-dot" class="status-dot idle" title="Idle"></span>
         </nav>
     </header>
@@ -180,6 +233,7 @@
 
                 const res = await fetch(`/api/logs?${params}`);
                 const data = await res.json();
+                lastData = data;
 
                 const resultsTable = document.getElementById('results-table');
                 const resultsBody = document.getElementById('results-body');
@@ -201,14 +255,40 @@
                 resultCount.textContent = `${data.length} log(s)`;
                 resultsInfo.style.display = 'block';
 
-                data.forEach(log => {
+                data.forEach((log, idx) => {
+                    const isIndexed = log.files && log.files.length > 0;
                     const tr = document.createElement('tr');
+                    if (isIndexed) {
+                        tr.className = 'indexed-row';
+                        tr.dataset.idx = idx;
+                        tr.onclick = () => toggleLogFile(idx);
+                    }
                     tr.innerHTML = `
-                        <td class="timestamp">${escapeHtml(log.timestamp)}</td>
+                        <td class="timestamp">${isIndexed ? '<span class="expand-icon" id="icon-' + idx + '">\u25B6</span>' : ''}${escapeHtml(log.timestamp)}</td>
                         <td class="level-${log.level.toLowerCase()}">${escapeHtml(log.level)}</td>
                         <td class="message">${escapeHtml(log.message)}</td>
                     `;
                     resultsBody.appendChild(tr);
+
+                    if (isIndexed) {
+                        const fileRow = document.createElement('tr');
+                        fileRow.className = 'file-list-row';
+                        fileRow.id = 'files-' + idx;
+                        fileRow.style.display = 'none';
+                        const MAX_SHOW = 50;
+                        let fileHtml = '<td colspan="3"><div class="file-list">';
+                        const files = log.files;
+                        const shown = files.slice(0, MAX_SHOW);
+                        shown.forEach(f => {
+                            fileHtml += `<div class="file-list-item"><span class="fl-name">${escapeHtml(f.name)}</span><span class="fl-size">${formatSize(f.size)}</span></div>`;
+                        });
+                        if (files.length > MAX_SHOW) {
+                            fileHtml += `<button class="file-list-toggle" onclick="event.stopPropagation(); expandAllFiles(${idx}, ${files.length})">Show all ${files.length} files...</button>`;
+                        }
+                        fileHtml += '</div></td>';
+                        fileRow.innerHTML = fileHtml;
+                        resultsBody.appendChild(fileRow);
+                    }
                 });
             } catch (err) {
                 document.getElementById('no-results').textContent = 'Failed to load logs';
@@ -229,6 +309,36 @@
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
+        }
+
+        function toggleLogFile(idx) {
+            const row = document.getElementById('files-' + idx);
+            const icon = document.getElementById('icon-' + idx);
+            if (!row) return;
+            const isOpen = row.style.display !== 'none';
+            row.style.display = isOpen ? 'none' : '';
+            icon.classList.toggle('open', !isOpen);
+        }
+
+        function expandAllFiles(idx, total) {
+            const row = document.getElementById('files-' + idx);
+            if (!row) return;
+            // Find the log entry in the cached data
+            const log = lastData[idx];
+            if (!log || !log.files) return;
+            const list = row.querySelector('.file-list');
+            list.innerHTML = log.files.map(f =>
+                `<div class="file-list-item"><span class="fl-name">${escapeHtml(f.name)}</span><span class="fl-size">${formatSize(f.size)}</span></div>`
+            ).join('');
+        }
+
+        let lastData = [];
+
+        function formatSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+            return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
         }
     </script>
     <script src="/js/status.js"></script>

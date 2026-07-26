@@ -132,7 +132,7 @@ fn insert_file_returns_id() {
 }
 
 #[test]
-fn insert_file_duplicate_path_returns_error() {
+fn insert_file_duplicate_path_returns_ok() {
     let temp = create_temp_folder();
     let mut conn = setup_db(&temp);
 
@@ -154,7 +154,8 @@ fn insert_file_duplicate_path_returns_error() {
 
     let _ = insert_file(&tx, &file, name_id).unwrap();
     let result = insert_file(&tx, &file, name_id);
-    assert!(result.is_err());
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), 0);
     tx.commit().unwrap();
 
     delete_test_data(&temp);

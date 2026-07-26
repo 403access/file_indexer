@@ -34,19 +34,17 @@ pub fn try_get_dir_entries(
                 match file_entry {
                     Ok(entry) => dir_entries.push(entry),
                     Err(e) => {
-                        logging::error(&format!("Error converting entry: {}", e));
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            "Failed to convert directory entry",
+                        logging::warn(&format!(
+                            "Skipping unreadable entry in '{}': {}",
+                            path, e
                         ));
                     }
                 }
             }
             Err(e) => {
-                logging::error(&format!("Error reading directory entry: {}", e));
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "Failed to read directory entry",
+                logging::warn(&format!(
+                    "Skipping unreadable entry in '{}': {}",
+                    path, e
                 ));
             }
         }

@@ -8,7 +8,7 @@ use crate::{
         logging,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, init_db, insert_file, insert_file_name, insert_skipped_path},
+        sql::database::{get_connection, get_ignore_list, init_db, insert_file, insert_file_name, insert_skipped_path},
     },
     states::app_state,
 };
@@ -46,8 +46,17 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
         format!("{}/", root_dir)
     };
 
+    let ignore_list: Vec<String> = match get_connection(db_path) {
+        Ok(conn) => get_ignore_list(&conn),
+        Err(e) => {
+            logging::warn(&format!("Could not load ignore list: {}", e));
+            Vec::new()
+        }
+    };
+
     let mut names: Vec<(String, i64)> = vec![];
     let mut paths: Vec<String> = vec![root];
+    let mut total_entries = 0usize;
     loop {
         let mut new_paths: Vec<String> = Vec::new();
         for path in &paths {
@@ -90,11 +99,14 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
                         r.file_count,
                         r.folder_count
                     ));
-                    new_paths.extend(
-                        r.directories
-                            .iter()
-                            .map(|d| format!("{}/{}/", path.trim_end_matches('/'), d.name)),
-                    );
+                    total_entries += r.file_count + r.folder_count;
+                    for d in &r.directories {
+                        if ignore_list.iter().any(|ignored| ignored == &d.name) {
+                            logging::debug(&format!("Ignoring folder '{}'", d.name));
+                            continue;
+                        }
+                        new_paths.push(format!("{}/{}/", path.trim_end_matches('/'), d.name));
+                    }
                 }
                 Err(e) => {
                     logging::warn(&format!("Skipping unreadable directory '{}': {}", path, e));
@@ -102,7 +114,7 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
             }
         }
 
-        progress::update_dir(paths.first().unwrap_or(&String::new()), names.len());
+        progress::update_dir(paths.first().unwrap_or(&String::new()), total_entries);
 
         if new_paths.is_empty() {
             break;
@@ -153,10 +165,12 @@ fn get_and_insert_entries(
                 } else {
                     file_count += 1;
                 }
-                names.push((entry.name.clone(), 0));
             }
             Err(e) => {
-                return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
+                logging::warn(&format!(
+                    "Skipping entry '{}' in '{}': {}",
+                    entry.name, path, e
+                ));
             }
         }
 

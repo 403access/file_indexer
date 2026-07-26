@@ -161,6 +161,79 @@
             border-radius: 50%;
             flex-shrink: 0;
         }
+        .aligned-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .aligned-table th {
+            padding: 0.5rem 0.75rem;
+            background: #f0f4f8;
+            border-bottom: 2px solid #ddd;
+            text-align: left;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #2c3e50;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .aligned-table th .th-path {
+            display: block;
+            font-weight: 400;
+            font-size: 0.7rem;
+            color: #999;
+            font-family: monospace;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .aligned-table td {
+            padding: 0.35rem 0.75rem;
+            border-bottom: 1px solid #f0f0f0;
+            font-size: 0.85rem;
+            vertical-align: middle;
+        }
+        .aligned-table tr:hover td {
+            background: #fafbfc;
+        }
+        .aligned-table .file-cell {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            cursor: pointer;
+        }
+        .aligned-table .file-cell:hover {
+            color: #3498db;
+        }
+        .aligned-table .file-cell .file-name {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .aligned-table .file-cell .file-size {
+            color: #999;
+            font-family: monospace;
+            font-size: 0.78rem;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .aligned-table td.empty-cell {
+            color: #ddd;
+            font-style: italic;
+            font-size: 0.8rem;
+        }
+        .align-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.85rem;
+            color: #666;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+        .align-toggle input {
+            cursor: pointer;
+        }
         .empty-msg {
             text-align: center;
             padding: 3rem;
@@ -326,6 +399,7 @@
             <a href="/skipped.html">Skipped</a>
             <a href="/logs.html">Logs</a>
             <a href="/status.html">Status</a>
+            <a href="/settings.html">Settings</a>
             <span id="status-dot" class="status-dot idle" title="Idle"></span>
         </nav>
     </header>
@@ -336,6 +410,10 @@
             <label>
                 <input type="checkbox" id="min-shared" onchange="applyFilter()">
                 Min 2 shared
+            </label>
+            <label class="align-toggle">
+                <input type="checkbox" id="align-files" onchange="applyFilter()">
+                Align shared files
             </label>
         </div>
         <div class="summary" id="summary"></div>
@@ -467,6 +545,7 @@
         function renderGroups(data) {
             const container = document.getElementById('groups');
             const summary = document.getElementById('summary');
+            const aligned = document.getElementById('align-files').checked;
 
             if (data.groups.length === 0) {
                 container.innerHTML = '<div class="empty-msg">No duplicate folders found</div>';
@@ -479,7 +558,6 @@
             summary.textContent = `${data.groups.length} group${data.groups.length !== 1 ? 's' : ''} \u2022 ${totalFolders} folders compared`;
 
             container.innerHTML = data.groups.map((group, gi) => {
-                // Find common root from all folder paths
                 const paths = group.folders.map(f => f.path.replace(/\/+/g, '/'));
                 let commonRoot = paths[0] || '';
                 for (const p of paths) {
@@ -488,6 +566,10 @@
                     }
                 }
 
+                const folderContent = aligned
+                    ? renderAlignedTable(group, gi)
+                    : renderFolderColumns(group, gi, commonRoot);
+
                 return `
                     <div class="group-card">
                         <div class="group-header">
@@ -495,36 +577,95 @@
                             <span class="label">${group.folders.length} folders with duplicate content</span>
                             <button class="merge-folders-btn" onclick="openMergeFolders(${gi})">Merge</button>
                         </div>
-                        <div class="folders-row">
-                            ${group.folders.map(folder => `
-                                <div class="folder-col">
-                                    <div class="folder-col-header">
-                                        ${folder.name}
-                                        <span class="full-path" title="${folder.path}">${truncatePath(folder.path)}</span>
-                                    </div>
-                                    <div class="mini-tree">${buildMiniTree(folder.path, commonRoot)}</div>
-                                    <div class="show-all-toggle" onclick="toggleShowAll(this)">
-                                        <input type="checkbox" id="show-all-${gi}-${folder.name}">
-                                        <label for="show-all-${gi}-${folder.name}">Show all files (${folder.files.length})</label>
-                                    </div>
-                                    <div class="folder-col-files">
-                                    ${folder.files.map(file => `
-                                        <div class="folder-file ${file.is_duplicate ? 'shared' : 'unique'}" ${!file.is_duplicate ? 'data-unique="true"' : ''} style="cursor:pointer" onclick="FileViewer.open('${folder.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${file.name}', '${file.name.replace(/'/g, "\\'")}')">
-                                            <span class="hash-dot" style="background:${file.is_duplicate ? hashColor(file.hash) : '#ccc'}"></span>
-                                            <span class="file-icon">\uD83D\uDCC4</span>
-                                            <span class="file-name" title="${file.name}">${file.name}</span>
-                                            <span class="file-size">${formatSize(file.size)}</span>
-                                        </div>
-                                    `).join('')}
-                                    </div>
-                                </div>
-                            `).join('')}
-                        </div>
+                        ${folderContent}
                     </div>
                 `;
             }).join('');
 
-            initToggles();
+            if (!aligned) initToggles();
+        }
+
+        function renderFolderColumns(group, gi, commonRoot) {
+            return `<div class="folders-row">
+                ${group.folders.map(folder => `
+                    <div class="folder-col">
+                        <div class="folder-col-header">
+                            ${folder.name}
+                            <span class="full-path" title="${folder.path}">${truncatePath(folder.path)}</span>
+                        </div>
+                        <div class="mini-tree">${buildMiniTree(folder.path, commonRoot)}</div>
+                        <div class="show-all-toggle" onclick="toggleShowAll(this)">
+                            <input type="checkbox" id="show-all-${gi}-${folder.name}">
+                            <label for="show-all-${gi}-${folder.name}">Show all files (${folder.files.length})</label>
+                        </div>
+                        <div class="folder-col-files">
+                        ${folder.files.map(file => `
+                            <div class="folder-file ${file.is_duplicate ? 'shared' : 'unique'}" ${!file.is_duplicate ? 'data-unique="true"' : ''} style="cursor:pointer" onclick="FileViewer.open('${folder.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${file.name}', '${file.name.replace(/'/g, "\\'")}')">
+                                <span class="hash-dot" style="background:${file.is_duplicate ? hashColor(file.hash) : '#ccc'}"></span>
+                                <span class="file-icon">\uD83D\uDCC4</span>
+                                <span class="file-name" title="${file.name}">${file.name}</span>
+                                <span class="file-size">${formatSize(file.size)}</span>
+                            </div>
+                        `).join('')}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>`;
+        }
+
+        function renderAlignedTable(group, gi) {
+            const folders = group.folders;
+            const folderCount = folders.length;
+
+            // Collect all files, group by hash
+            const byHash = {};
+            folders.forEach((folder, fi) => {
+                folder.files.forEach(file => {
+                    if (!byHash[file.hash]) byHash[file.hash] = [];
+                    byHash[file.hash].push({ ...file, folderIdx: fi, folderPath: folder.path, folderName: folder.name });
+                });
+            });
+
+            // Sort: shared hashes first (by count desc), then unique; within same type, sort by name
+            const hashEntries = Object.entries(byHash).sort((a, b) => {
+                const aShared = a[1].length > 1 ? 0 : 1;
+                const bShared = b[1].length > 1 ? 0 : 1;
+                if (aShared !== bShared) return aShared - bShared;
+                return a[1][0].name.localeCompare(b[1][0].name);
+            });
+
+            // Build rows: one per hash
+            const rows = hashEntries.map(([hash, files]) => {
+                const cells = new Array(folderCount).fill(null);
+                files.forEach(f => { cells[f.folderIdx] = f; });
+                return { hash, cells, isShared: files.length > 1 };
+            });
+
+            let html = '<table class="aligned-table"><thead><tr>';
+            html += '<th style="width:24px"></th>';
+            folders.forEach(folder => {
+                html += `<th>${folder.name}<span class="th-path" title="${folder.path}">${truncatePath(folder.path)}</span></th>`;
+            });
+            html += '</tr></thead><tbody>';
+
+            rows.forEach(row => {
+                html += '<tr>';
+                html += `<td><span class="hash-dot" style="background:${row.isShared ? hashColor(row.hash) : '#ccc'}"></span></td>`;
+                row.cells.forEach(cell => {
+                    if (cell) {
+                        html += `<td><div class="file-cell" onclick="FileViewer.open('${cell.folderPath.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}/${cell.name}', '${cell.name.replace(/'/g, "\\'")}')">`;
+                        html += `<span class="file-name" title="${cell.name}">${cell.name}</span>`;
+                        html += `<span class="file-size">${formatSize(cell.size)}</span>`;
+                        html += '</div></td>';
+                    } else {
+                        html += '<td class="empty-cell">\u2014</td>';
+                    }
+                });
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            return html;
         }
 
         async function loadGroups() {

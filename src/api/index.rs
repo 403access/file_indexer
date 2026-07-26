@@ -20,7 +20,11 @@ pub async fn index_handler(
     let cwd = &state.cwd;
     let db = &state.db;
 
-    match index_directory(db, cwd) {
+    crate::modules::progress::start(0);
+    let result = index_directory(db, cwd);
+    crate::modules::progress::finish();
+
+    match result {
         Ok(()) => {
             let count = count_entries(db);
             Ok(Json(IndexResponse {
