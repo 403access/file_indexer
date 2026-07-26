@@ -8,6 +8,7 @@ use self::dashboard::dashboard_handler;
 use self::duplicate_folders::duplicate_folders_handler;
 use self::duplicates::duplicates_handler;
 use self::file_content::file_content_handler;
+use self::folder::folder_handler;
 use self::index::index_handler;
 use self::logs::logs_handler;
 use self::merge::merge_handler;
@@ -22,6 +23,7 @@ pub mod dashboard;
 pub mod duplicate_folders;
 pub mod duplicates;
 pub mod file_content;
+pub mod folder;
 pub mod index;
 pub mod logs;
 pub mod merge;
@@ -39,6 +41,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/duplicate-folders", get(duplicate_folders_handler))
         .route("/api/tree", get(tree_handler))
         .route("/api/file", get(file_content_handler))
+        .route("/api/folder", get(folder_handler))
         .route("/api/index", post(index_handler))
         .route("/api/config", get(config_handler))
         .route("/api/merge", post(merge_handler))
