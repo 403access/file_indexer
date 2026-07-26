@@ -4,6 +4,7 @@ use axum::Router;
 use crate::states::app_state::AppState;
 
 use self::config::config_handler;
+use self::dashboard::dashboard_handler;
 use self::duplicate_folders::duplicate_folders_handler;
 use self::duplicates::duplicates_handler;
 use self::file_content::file_content_handler;
@@ -16,6 +17,7 @@ use self::status::status_handler;
 use self::tree::tree_handler;
 
 pub mod config;
+pub mod dashboard;
 pub mod duplicate_folders;
 pub mod duplicates;
 pub mod file_content;
@@ -29,6 +31,7 @@ pub mod tree;
 
 pub fn create_router(state: AppState) -> Router {
     Router::new()
+        .route("/api/dashboard", get(dashboard_handler))
         .route("/api/search", get(search_handler))
         .route("/api/duplicates", get(duplicates_handler))
         .route("/api/duplicate-folders", get(duplicate_folders_handler))
