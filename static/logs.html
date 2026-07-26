@@ -11,11 +11,15 @@
             gap: 10px;
             margin-bottom: 15px;
             align-items: center;
+            flex-wrap: wrap;
         }
         .log-controls select, .log-controls input {
             padding: 8px;
             border: 1px solid #ddd;
             border-radius: 4px;
+        }
+        .log-controls input[type="text"] {
+            width: 220px;
         }
         .log-controls button {
             padding: 8px 16px;
@@ -26,6 +30,9 @@
             cursor: pointer;
         }
         .log-controls button:hover {
+            background: #0056b3;
+        }
+        .log-controls button.active {
             background: #0056b3;
         }
         .log-table {
@@ -41,6 +48,11 @@
         .log-table th {
             background: #f5f5f5;
             font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .log-table th:hover {
+            background: #e9ecef;
         }
         .log-table tr:hover {
             background: #f9f9f9;
@@ -61,6 +73,12 @@
             display: flex;
             align-items: center;
             gap: 5px;
+        }
+        .search-hint {
+            font-size: 12px;
+            color: #999;
+            margin-top: -8px;
+            margin-bottom: 10px;
         }
     </style>
 </head>
@@ -90,6 +108,9 @@
                     <option value="DEBUG">Debug</option>
                 </select>
             </label>
+            <label>Search:
+                <input type="text" id="search-filter" placeholder="message contains...">
+            </label>
             <label>Limit:
                 <select id="limit-filter">
                     <option value="100">100</option>
@@ -98,12 +119,14 @@
                     <option value="5000">5000</option>
                 </select>
             </label>
+            <button id="sort-btn" onclick="toggleSort()">Timestamp ▼</button>
             <button onclick="fetchLogs()">Refresh</button>
             <div class="auto-refresh">
                 <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()">
                 <label for="auto-refresh">Auto-refresh (5s)</label>
             </div>
         </section>
+        <div class="search-hint">Search: plain text = exact match, <code>prefix*</code> = starts with</div>
 
         <section class="results-info" id="results-info" style="display:none;">
             <span id="result-count"></span>
@@ -126,19 +149,35 @@
 
     <script>
         let refreshInterval = null;
+        let sortAsc = false;
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchLogs();
             document.getElementById('level-filter').addEventListener('change', fetchLogs);
             document.getElementById('limit-filter').addEventListener('change', fetchLogs);
+            document.getElementById('search-filter').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') fetchLogs();
+            });
         });
+
+        function toggleSort() {
+            sortAsc = !sortAsc;
+            document.getElementById('sort-btn').textContent = sortAsc ? 'Timestamp ▲' : 'Timestamp ▼';
+            fetchLogs();
+        }
 
         async function fetchLogs() {
             const limit = document.getElementById('limit-filter').value;
             const level = document.getElementById('level-filter').value;
+            const search = document.getElementById('search-filter').value;
+            const sort = sortAsc ? 'asc' : 'desc';
 
             try {
-                const res = await fetch(`/api/logs?limit=${limit}`);
+                const params = new URLSearchParams({ limit, sort });
+                if (level !== 'all') params.set('level', level);
+                if (search) params.set('search', search);
+
+                const res = await fetch(`/api/logs?${params}`);
                 const data = await res.json();
 
                 const resultsTable = document.getElementById('results-table');
@@ -149,9 +188,7 @@
 
                 resultsBody.innerHTML = '';
 
-                const filtered = level === 'all' ? data : data.filter(log => log.level === level);
-
-                if (filtered.length === 0) {
+                if (data.length === 0) {
                     noResults.style.display = 'block';
                     resultsTable.style.display = 'none';
                     resultsInfo.style.display = 'none';
@@ -160,10 +197,10 @@
 
                 noResults.style.display = 'none';
                 resultsTable.style.display = 'table';
-                resultCount.textContent = `${filtered.length} log(s)`;
+                resultCount.textContent = `${data.length} log(s)`;
                 resultsInfo.style.display = 'block';
 
-                filtered.forEach(log => {
+                data.forEach(log => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `
                         <td class="timestamp">${escapeHtml(log.timestamp)}</td>

@@ -36,16 +36,21 @@ pub async fn duplicates_handler(
     State(state): State<AppState>,
     Query(params): Query<DuplicatesParams>,
 ) -> Result<Json<DuplicatesResponse>, (axum::http::StatusCode, String)> {
-    let mut conn = get_connection(&state.db)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let tx = conn.transaction()
+    {
+        let mut conn = get_connection(&state.db)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let tx = conn.transaction()
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        reset_duplicates_table(&tx)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        tx.commit()
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    reset_duplicates_table(&tx)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    // Get all duplicate hashes
-    let mut stmt = tx.prepare(
+    let mut stmt = conn.prepare(
         "SELECT hash FROM duplicate_hashes"
     ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let hashes: Vec<String> = stmt.query_map([], |row| row.get(0))
@@ -56,15 +61,13 @@ pub async fn duplicates_handler(
 
     let total_groups = hashes.len();
 
-    // Paginate hashes
     let start = ((params.page - 1) * params.per_page) as usize;
     let end = (start + params.per_page as usize).min(total_groups);
     let page_hashes = if start < total_groups { &hashes[start..end] } else { &[] };
 
-    // For each hash, get the files
     let mut groups = Vec::new();
     for hash in page_hashes {
-        let mut stmt = tx.prepare(
+        let mut stmt = conn.prepare(
             "SELECT f.path, fn.name, f.size, f.modified, f.hash,
                     f.is_directory, f.is_file, f.is_symlink
              FROM files f
@@ -98,7 +101,6 @@ pub async fn duplicates_handler(
         drop(rows);
         drop(stmt);
 
-        // wasted = (count - 1) * size of first file
         let wasted = if files.len() > 1 {
             (files.len() as u64 - 1) * files[0].size
         } else {
@@ -111,9 +113,6 @@ pub async fn duplicates_handler(
             wasted_bytes: wasted,
         });
     }
-
-    tx.commit()
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(DuplicatesResponse {
         groups,
