@@ -10,7 +10,7 @@ use crate::{
         logging,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, get_ignore_rules, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed, IgnoreRule},
+        sql::database::{get_connection, get_ignore_rules, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed, refresh_duplicate_hashes, IgnoreRule},
     },
     states::app_state,
 };
@@ -170,6 +170,15 @@ pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<Ato
                     logging::error(&format!("Failed to commit transaction: {}", e));
                     io::Error::new(io::ErrorKind::Other, e.to_string())
                 })?;
+
+                // Refresh duplicate hashes after folder commit
+                {
+                    let conn = get_connection(db_path).map_err(|e| {
+                        logging::error(&format!("Failed to connect to database: {}", e));
+                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                    })?;
+                    refresh_duplicate_hashes(&conn);
+                }
 
                 result
             };

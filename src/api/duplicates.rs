@@ -41,34 +41,17 @@ pub async fn duplicates_handler(
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Count total duplicate groups (fast with index)
+    // Count total duplicate groups from maintained table
     let total_groups: usize = conn
-        .query_row(
-            "SELECT COUNT(*)
-             FROM (
-                SELECT hash FROM files
-                WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash HAVING COUNT(*) > 1
-             )",
-            [],
-            |r| r.get(0),
-        )
+        .query_row("SELECT COUNT(*) FROM duplicate_hashes", [], |r| r.get(0))
         .unwrap_or(0);
 
-    // Get hashes for this page (skip/limit on the subquery)
+    // Get hashes for this page
     let offset = ((params.page - 1) * params.per_page) as i64;
     let limit = params.per_page as i64;
 
     let mut stmt = conn
-        .prepare(
-            "SELECT hash FROM (
-                SELECT hash, COUNT(*) as cnt FROM files
-                WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash HAVING cnt > 1
-                ORDER BY cnt DESC
-             )
-             LIMIT ?1 OFFSET ?2",
-        )
+        .prepare("SELECT hash FROM duplicate_hashes LIMIT ?1 OFFSET ?2")
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let page_hashes: Vec<String> = stmt

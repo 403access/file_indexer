@@ -232,6 +232,18 @@ pub fn reset_duplicates_table(tx: &Transaction) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Refresh the duplicate_hashes table (drop + recreate). Call after folder commits.
+pub fn refresh_duplicate_hashes(conn: &Connection) {
+    let _ = conn.execute("DROP TABLE IF EXISTS duplicate_hashes", []);
+    let _ = conn.execute(
+        "CREATE TABLE duplicate_hashes AS
+         SELECT hash FROM files
+         WHERE hash IS NOT NULL AND hash != ''
+         GROUP BY hash HAVING COUNT(*) > 1",
+        [],
+    );
+}
+
 pub fn insert_skipped_path(tx: &Transaction, path: &str, error: &str) -> rusqlite::Result<i64> {
     let affected = tx.execute(
         "INSERT OR IGNORE INTO skipped_paths (path, error) VALUES (:path, :error)",

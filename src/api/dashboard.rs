@@ -60,37 +60,66 @@ pub async fn dashboard_handler(
         .query_row("SELECT COUNT(*) FROM skipped_paths", [], |r| r.get(0))
         .unwrap_or(0);
 
-    // Duplicate file stats in one query
-    let (duplicate_file_groups, duplicate_files, wasted_file_bytes): (u64, u64, u64) = conn
-        .query_row(
-            "SELECT COUNT(*), COALESCE(SUM(cnt), 0), COALESCE(SUM((cnt - 1) * size), 0)
-             FROM (
-                SELECT COUNT(*) as cnt, MIN(size) as size
-                FROM files
-                WHERE is_file = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash
-                HAVING COUNT(*) > 1
-             )",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
-        )
-        .unwrap_or((0, 0, 0));
+    // Duplicate file stats from maintained table
+    let duplicate_file_groups: u64 = conn
+        .query_row("SELECT COUNT(*) FROM duplicate_hashes", [], |r| r.get(0))
+        .unwrap_or(0);
 
-    // Duplicate folder stats in one query
-    let (duplicate_folder_groups, duplicate_folders): (u64, u64) = conn
-        .query_row(
-            "SELECT COUNT(*), COALESCE(SUM(cnt), 0)
+    let (duplicate_files, wasted_file_bytes): (u64, u64) = if duplicate_file_groups > 0 {
+        conn.query_row(
+            "SELECT COALESCE(SUM(cnt), 0), COALESCE(SUM((cnt - 1) * size), 0)
              FROM (
-                SELECT COUNT(*) as cnt
-                FROM files
-                WHERE is_directory = 1 AND hash IS NOT NULL AND hash != ''
-                GROUP BY hash
-                HAVING COUNT(*) > 1
+                SELECT COUNT(*) as cnt, MIN(f.size) as size
+                FROM files f
+                JOIN duplicate_hashes d ON f.hash = d.hash
+                WHERE f.is_file = 1
+                GROUP BY f.hash
              )",
             [],
             |r| Ok((r.get(0)?, r.get(1)?)),
         )
-        .unwrap_or((0, 0));
+        .unwrap_or((0, 0))
+    } else {
+        (0, 0)
+    };
+
+    // Duplicate folder stats from maintained table
+    let duplicate_folders: u64 = if duplicate_file_groups > 0 {
+        conn.query_row(
+            "SELECT COALESCE(SUM(cnt), 0)
+             FROM (
+                SELECT COUNT(*) as cnt
+                FROM files f
+                JOIN duplicate_hashes d ON f.hash = d.hash
+                WHERE f.is_directory = 1
+                GROUP BY f.hash
+             )",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0)
+    } else {
+        0
+    };
+
+    let duplicate_folder_groups: u64 = if duplicate_folders > 0 {
+        conn.query_row(
+            "SELECT COUNT(*)
+             FROM (
+                SELECT f.hash
+                FROM files f
+                JOIN duplicate_hashes d ON f.hash = d.hash
+                WHERE f.is_directory = 1
+                GROUP BY f.hash
+                HAVING COUNT(*) > 1
+             )",
+            [],
+            |r| r.get(0),
+        )
+        .unwrap_or(0)
+    } else {
+        0
+    };
 
     // Timeline
     let interval = params.interval.as_deref().unwrap_or("month");
