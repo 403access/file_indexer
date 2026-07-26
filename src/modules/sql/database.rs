@@ -119,9 +119,25 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         |row| row.get::<_, i32>(0),
     ).unwrap_or(0);
     if has_ignore == 0 {
+        let seed_rules = [
+            "node_modules:package.json",
+            ".next:package.json",
+            "dist:package.json",
+            "build:package.json",
+            "target:Cargo.toml",
+            ".gradle:build.gradle",
+            "vendor:composer.json",
+            "__pycache__:setup.py",
+            ".venv:pyproject.toml",
+            ".turbo:package.json",
+            "bin:*.csproj",
+            "obj:*.csproj",
+            "__history:*.dpr",
+            "__recovery:*.dpr",
+        ].join("\n");
         let _ = tx.execute(
-            "INSERT OR IGNORE INTO settings (key, value) VALUES ('ignore_folders', 'node_modules:package.json')",
-            [],
+            "INSERT OR IGNORE INTO settings (key, value) VALUES ('ignore_folders', ?1)",
+            [&seed_rules],
         );
     }
 
