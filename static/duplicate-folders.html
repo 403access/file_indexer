@@ -239,6 +239,41 @@
             padding: 3rem;
             color: #999;
         }
+        .pagination {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+            padding: 1rem;
+        }
+        .pagination button {
+            padding: 0.4rem 0.8rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: white;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #333;
+        }
+        .pagination button:hover:not(:disabled) {
+            background: #f0f4f8;
+            border-color: #3498db;
+        }
+        .pagination button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .pagination button.active {
+            background: #3498db;
+            color: white;
+            border-color: #3498db;
+        }
+        .pagination .page-info {
+            font-size: 0.85rem;
+            color: #666;
+            margin: 0 0.5rem;
+        }
         .summary {
             color: #666;
             font-size: 0.85rem;
@@ -406,7 +441,7 @@
 
     <main>
         <div class="filter-bar">
-            <input type="text" id="filter-input" placeholder="Filter by folder or file name..." oninput="applyFilter()">
+            <input type="text" id="filter-input" placeholder="Filter by folder or file name..." onkeydown="if(event.key==='Enter')applyFilter()">
             <label>
                 <input type="checkbox" id="min-shared" onchange="applyFilter()">
                 Min 2 shared
@@ -415,9 +450,11 @@
                 <input type="checkbox" id="align-files" onchange="applyFilter()">
                 Align shared files
             </label>
+            <button class="merge-folders-btn" onclick="applyFilter()" style="background:#3498db">Search</button>
         </div>
         <div class="summary" id="summary"></div>
         <div id="groups"></div>
+        <div class="pagination" id="pagination"></div>
     </main>
 
     <div class="merge-overlay" id="merge-overlay" style="display:none;">
@@ -521,25 +558,66 @@
         }
 
         let groupsData = null;
+        let currentPage = 1;
+        const perPage = 20;
 
         function applyFilter() {
-            if (!groupsData) return;
-            const query = document.getElementById('filter-input').value.toLowerCase();
-            const minShared = document.getElementById('min-shared').checked;
+            currentPage = 1;
+            loadGroups();
+        }
 
-            const filtered = groupsData.groups.filter(group => {
-                if (minShared && group.shared_count < 2) return false;
-                if (query) {
-                    return group.folders.some(f =>
-                        f.name.toLowerCase().includes(query) ||
-                        f.path.toLowerCase().includes(query) ||
-                        f.files.some(file => file.name.toLowerCase().includes(query))
-                    );
-                }
-                return true;
-            });
+        async function loadGroups() {
+            const res = await fetch(`/api/duplicate-folders?page=${currentPage}&per_page=${perPage}`);
+            if (!res.ok) return;
+            groupsData = await res.json();
+            renderGroups(groupsData);
+            renderPagination();
+        }
 
-            renderGroups({ groups: filtered });
+        function renderPagination() {
+            const container = document.getElementById('pagination');
+            const totalPages = Math.ceil(groupsData.total_groups / perPage);
+
+            if (totalPages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
+            let html = '';
+            html += `<button ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">Previous</button>`;
+
+            // Show page numbers
+            const maxVisible = 5;
+            let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+            let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+            if (endPage - startPage < maxVisible - 1) {
+                startPage = Math.max(1, endPage - maxVisible + 1);
+            }
+
+            if (startPage > 1) {
+                html += `<button onclick="goToPage(1)">1</button>`;
+                if (startPage > 2) html += `<span class="page-info">...</span>`;
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += `<span class="page-info">...</span>`;
+                html += `<button onclick="goToPage(${totalPages})">${totalPages}</button>`;
+            }
+
+            html += `<button ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">Next</button>`;
+            html += `<span class="page-info">${groupsData.total_groups} total groups</span>`;
+
+            container.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            loadGroups();
+            window.scrollTo(0, 0);
         }
 
         function renderGroups(data) {

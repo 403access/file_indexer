@@ -1,9 +1,20 @@
-use axum::extract::State;
+use axum::extract::{Query, State};
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::modules::sql::database::get_connection;
 use crate::states::app_state::{AppState, IndexerPauseGuard};
+
+#[derive(Deserialize)]
+pub struct DuplicateFoldersParams {
+    #[serde(default = "default_page")]
+    pub page: u32,
+    #[serde(default = "default_per_page")]
+    pub per_page: u32,
+}
+
+fn default_page() -> u32 { 1 }
+fn default_per_page() -> u32 { 20 }
 
 #[derive(Serialize)]
 pub struct FolderFile {
@@ -30,18 +41,22 @@ pub struct FolderInfo {
 #[derive(Serialize)]
 pub struct DuplicateFoldersResponse {
     pub groups: Vec<FolderGroup>,
+    pub total_groups: usize,
+    pub page: u32,
+    pub per_page: u32,
 }
 
 pub async fn duplicate_folders_handler(
     State(state): State<AppState>,
+    Query(params): Query<DuplicateFoldersParams>,
 ) -> Result<Json<DuplicateFoldersResponse>, (axum::http::StatusCode, String)> {
     let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Find all hashes that appear more than once
+    // Phase 1: Find all duplicate hashes (fast with index)
     let mut stmt = conn.prepare(
-        "SELECT hash, COUNT(*) as cnt FROM files WHERE hash IS NOT NULL GROUP BY hash HAVING cnt > 1"
+        "SELECT hash FROM duplicate_hashes"
     ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let dup_hashes: Vec<String> = stmt.query_map([], |row| row.get(0))
@@ -50,11 +65,9 @@ pub async fn duplicate_folders_handler(
         .collect();
     drop(stmt);
 
-    // For each dup hash, find all folder paths containing it
-    // Map: folder_path -> set of hashes found there
+    // Phase 2: Build folder -> hashes mapping
     let mut folder_hashes: std::collections::HashMap<String, std::collections::HashSet<String>> =
         std::collections::HashMap::new();
-    // Map: folder_path -> display name
     let mut folder_names: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
     for hash in &dup_hashes {
@@ -72,11 +85,9 @@ pub async fn duplicate_folders_handler(
 
         for (path, _name) in rows {
             let normalized = path.replace("//", "/");
-            // Extract folder path (parent of the file)
             if let Some(parent) = normalized.rsplit_once('/') {
                 let folder = parent.0.to_string();
                 folder_hashes.entry(folder.clone()).or_default().insert(hash.clone());
-                // Store the folder's display name (last component)
                 if let Some(display) = folder.rsplit_once('/') {
                     folder_names.entry(folder.clone()).or_insert_with(|| display.1.to_string());
                 }
@@ -84,13 +95,10 @@ pub async fn duplicate_folders_handler(
         }
     }
 
-    // Build groups: find folders that share the most hashes
-    // Sort folders by number of shared hashes (descending)
+    // Phase 3: Group folders by shared hashes
     let mut folder_list: Vec<(String, std::collections::HashSet<String>)> = folder_hashes.into_iter().collect();
     folder_list.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
 
-    // Group folders: two folders are in the same group if they share at least one hash
-    // and we want to find the most connected groups
     let mut groups: Vec<Vec<(String, std::collections::HashSet<String>)>> = Vec::new();
     let mut used: std::collections::HashSet<usize> = std::collections::HashSet::new();
 
@@ -105,7 +113,6 @@ pub async fn duplicate_folders_handler(
             if used.contains(&j) {
                 continue;
             }
-            // Check if this folder shares any hash with any folder in the group
             let shares = group.iter().any(|g| g.1.intersection(&folder_list[j].1).next().is_some());
             if shares {
                 group.push(folder_list[j].clone());
@@ -118,16 +125,21 @@ pub async fn duplicate_folders_handler(
         }
     }
 
-    // Sort groups by total shared count (sum of intersection sizes), descending
+    // Sort groups by total shared count descending
     groups.sort_by(|a, b| {
         let a_count: usize = a.iter().map(|f| f.1.len()).sum();
         let b_count: usize = b.iter().map(|f| f.1.len()).sum();
         b_count.cmp(&a_count)
     });
 
-    // Build response
-    let response_groups: Vec<FolderGroup> = groups.into_iter().map(|group| {
-        // Compute the intersection of all folder hashes in this group
+    let total_groups = groups.len();
+
+    // Phase 4: Paginate - only build full details for current page
+    let start = ((params.page - 1) * params.per_page) as usize;
+    let end = (start + params.per_page as usize).min(total_groups);
+    let page_groups = if start < total_groups { &groups[start..end] } else { &[] };
+
+    let response_groups: Vec<FolderGroup> = page_groups.iter().map(|group| {
         let shared_hashes: std::collections::HashSet<String> = if let Some(first) = group.first() {
             group.iter().skip(1).fold(first.1.clone(), |acc, f| {
                 acc.intersection(&f.1).cloned().collect()
@@ -136,42 +148,32 @@ pub async fn duplicate_folders_handler(
             std::collections::HashSet::new()
         };
 
-        let folders: Vec<FolderInfo> = group.into_iter().map(|(path, hashes)| {
-            // Get ALL files for this folder (not just duplicates)
+        let folders: Vec<FolderInfo> = group.iter().map(|(path, hashes)| {
             let mut stmt = conn.prepare(
-                "SELECT f.path, fn.name, f.size, f.hash FROM files f JOIN file_names fn ON f.file_name_id = fn.id WHERE f.hash IS NOT NULL"
+                "SELECT f.path, fn.name, f.size, f.hash FROM files f JOIN file_names fn ON f.file_name_id = fn.id WHERE f.parent_path = ?1 AND f.hash IS NOT NULL"
             ).unwrap();
 
-            let files: Vec<FolderFile> = stmt.query_map([], |row| {
-                let p: String = row.get(0)?;
-                let n: String = row.get(1)?;
-                let s: u64 = row.get(2)?;
-                let h: String = row.get(3)?;
-                Ok((p, n, s, h))
+            let files: Vec<FolderFile> = stmt.query_map(rusqlite::params![path], |row| {
+                Ok(FolderFile {
+                    path: row.get(0)?,
+                    name: row.get(1)?,
+                    size: row.get(2)?,
+                    hash: row.get(3)?,
+                    is_duplicate: false,
+                })
             }).unwrap()
             .filter_map(|r| r.ok())
-            .filter(|(p, _, _, _)| {
-                let normalized = p.replace("//", "/");
-                if let Some(parent) = normalized.rsplit_once('/') {
-                    parent.0 == path
-                } else {
-                    false
-                }
-            })
-            .map(|(p, n, s, h)| FolderFile {
-                is_duplicate: hashes.contains(&h),
-                name: n,
-                path: p.replace("//", "/"),
-                size: s,
-                hash: h,
+            .map(|mut f| {
+                f.is_duplicate = hashes.contains(&f.hash);
+                f
             })
             .collect();
 
-            let display_name = folder_names.get(&path).cloned().unwrap_or_else(|| {
+            let display_name = folder_names.get(path).cloned().unwrap_or_else(|| {
                 path.rsplit_once('/').map(|s| s.1.to_string()).unwrap_or_default()
             });
 
-            FolderInfo { path, name: display_name, files }
+            FolderInfo { path: path.clone(), name: display_name, files }
         }).collect();
 
         FolderGroup {
@@ -180,5 +182,10 @@ pub async fn duplicate_folders_handler(
         }
     }).collect();
 
-    Ok(Json(DuplicateFoldersResponse { groups: response_groups }))
+    Ok(Json(DuplicateFoldersResponse {
+        groups: response_groups,
+        total_groups,
+        page: params.page,
+        per_page: params.per_page,
+    }))
 }
