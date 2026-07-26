@@ -56,8 +56,8 @@ fn index_full_tree_counts_all_entries() {
     let temp = create_test_data();
     let db = setup(&temp);
 
-    // 20 files + 11 directories = 31 entries
-    assert_eq!(count_all(&db), 31);
+    // 20 files + 12 directories (including root) = 32 entries
+    assert_eq!(count_all(&db), 32);
 
     cleanup(&db, &temp);
 }
@@ -67,7 +67,7 @@ fn index_full_tree_counts_directories() {
     let temp = create_test_data();
     let db = setup(&temp);
 
-    assert_eq!(count_dirs(&db), 11);
+    assert_eq!(count_dirs(&db), 12);
 
     cleanup(&db, &temp);
 }

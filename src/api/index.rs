@@ -46,32 +46,28 @@ pub fn count_entries(db_path: &str) -> usize {
 }
 
 pub fn ensure_indexed(db_path: &str, cwd: &str) {
-    if count_entries(db_path) == 0 {
-        logging::info(&format!("Database empty, indexing {}...", cwd));
-        match index_directory(db_path, cwd) {
-            Ok(()) => {
-                let count = count_entries(db_path);
-                logging::info(&format!("Indexed {} entries.", count));
-            }
-            Err(e) => logging::error(&format!("Auto-index failed: {}", e)),
+    logging::info(&format!("Indexing {}...", cwd));
+    match index_directory(db_path, cwd) {
+        Ok(()) => {
+            let count = count_entries(db_path);
+            logging::info(&format!("Indexed {} entries.", count));
         }
+        Err(e) => logging::error(&format!("Auto-index failed: {}", e)),
     }
 }
 
 pub async fn ensure_indexed_async(db_path: String, cwd: String) {
-    if count_entries(&db_path) == 0 {
-        logging::info(&format!("Database empty, indexing {} in background...", cwd));
-        progress::start(0);
-        tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd) {
-            Ok(()) => {
-                let count = count_entries(&db_path);
-                progress::finish();
-                logging::info(&format!("Indexed {} entries.", count));
-            }
-            Err(e) => {
-                progress::finish();
-                logging::error(&format!("Auto-index failed: {}", e));
-            }
-        });
-    }
+    logging::info(&format!("Indexing {} in background...", cwd));
+    progress::start(0);
+    tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd) {
+        Ok(()) => {
+            let count = count_entries(&db_path);
+            progress::finish();
+            logging::info(&format!("Indexed {} entries.", count));
+        }
+        Err(e) => {
+            progress::finish();
+            logging::error(&format!("Auto-index failed: {}", e));
+        }
+    });
 }

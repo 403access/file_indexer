@@ -122,9 +122,10 @@ fn insert_file_returns_id() {
         is_directory: false,
         is_file: true,
         is_symlink: false,
+        parent_path: None,
     };
 
-    let file_id = insert_file(&tx, &file, name_id).unwrap();
+    let file_id = insert_file(&tx, &file, name_id, None).unwrap();
     assert!(file_id > 0);
     tx.commit().unwrap();
 
@@ -150,10 +151,11 @@ fn insert_file_duplicate_path_returns_ok() {
         is_directory: false,
         is_file: true,
         is_symlink: false,
+        parent_path: None,
     };
 
-    let _ = insert_file(&tx, &file, name_id).unwrap();
-    let result = insert_file(&tx, &file, name_id);
+    let _ = insert_file(&tx, &file, name_id, None).unwrap();
+    let result = insert_file(&tx, &file, name_id, None);
     assert!(result.is_ok());
     assert_eq!(result.unwrap(), 0);
     tx.commit().unwrap();
@@ -180,9 +182,10 @@ fn insert_file_stores_correct_metadata() {
         is_directory: false,
         is_file: true,
         is_symlink: false,
+        parent_path: None,
     };
 
-    let _ = insert_file(&tx, &file, name_id).unwrap();
+    let _ = insert_file(&tx, &file, name_id, None).unwrap();
     tx.commit().unwrap();
 
     let conn2 = get_connection(temp.join("test.db").to_str().unwrap()).unwrap();
@@ -227,9 +230,10 @@ fn insert_directory_flags_are_stored() {
         is_directory: true,
         is_file: false,
         is_symlink: false,
+        parent_path: None,
     };
 
-    let _ = insert_file(&tx, &file, name_id).unwrap();
+    let _ = insert_file(&tx, &file, name_id, None).unwrap();
     tx.commit().unwrap();
 
     let conn2 = get_connection(temp.join("test.db").to_str().unwrap()).unwrap();

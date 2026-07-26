@@ -82,6 +82,7 @@ pub fn convert_from_dir(entry: fs::DirEntry) -> Result<FileEntry, std::io::Error
         name: entry.file_name().to_string_lossy().into_owned(),
         size: entry.metadata().map_or(0, |m| m.len()),
         hash,
+        parent_path: None,
     })
 }
 
@@ -93,12 +94,11 @@ pub fn convert_from_row(row: &rusqlite::Row) -> rusqlite::Result<FileEntry> {
         path: row.get("path")?,
         name: row.get("name")?,
         size: row.get("size")?,
-        created: None, // Set appropriately if you have this column
-        // modified: row.get("modified")?,
-        // get modified (timestamp) as REAL data type
+        created: None,
         modified: row.get::<_, Option<f64>>("modified")?.map(|ts| ts as u64),
-        accessed: None, // Set appropriately if you have this column
+        accessed: None,
         hash: row.get("hash")?,
+        parent_path: row.get("parent_path")?,
     })
 }
 

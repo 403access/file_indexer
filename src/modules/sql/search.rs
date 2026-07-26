@@ -20,7 +20,7 @@ pub fn search_file(
         "
     SELECT
         f.path, fn.name, f.size, f.modified, f.hash,
-        f.is_directory, f.is_file, f.is_symlink
+        f.is_directory, f.is_file, f.is_symlink, f.parent_path
      FROM
         files f
      JOIN

@@ -96,6 +96,7 @@ pub async fn duplicates_handler(
                 is_directory, is_file, is_symlink,
                 created: None,
                 accessed: None,
+                parent_path: None,
             });
         }
         drop(rows);

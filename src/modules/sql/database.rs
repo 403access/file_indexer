@@ -37,8 +37,11 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
             is_directory INTEGER,
             is_file INTEGER,
             is_symlink INTEGER,
+            parent_path TEXT,
+            traversed INTEGER DEFAULT 0,
 
-            FOREIGN KEY(file_name_id) REFERENCES file_names(id)
+            FOREIGN KEY(file_name_id) REFERENCES file_names(id),
+            FOREIGN KEY(parent_path) REFERENCES files(path)
         );",
         [],
     );
@@ -47,6 +50,10 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         logging::error(&format!("Failed to create 'files' table: {:?}", files_table_result));
         return Err(files_table_result.unwrap_err());
     }
+
+    // Migration: add columns to existing databases (errors ignored if already present)
+    let _ = tx.execute("ALTER TABLE files ADD COLUMN parent_path TEXT", []);
+    let _ = tx.execute("ALTER TABLE files ADD COLUMN traversed INTEGER DEFAULT 0", []);
 
     let hash_index_result = tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash);",
@@ -124,12 +131,24 @@ pub fn insert_file_name(tx: &Transaction, name: &str) -> rusqlite::Result<i64> {
     }
 }
 
+pub fn get_or_insert_file_name(tx: &Transaction, name: &str) -> rusqlite::Result<i64> {
+    tx.execute(
+        "INSERT OR IGNORE INTO file_names (name) VALUES (:name)",
+        named_params! { ":name": name },
+    )?;
+    tx.query_row(
+        "SELECT id FROM file_names WHERE name = :name",
+        named_params! { ":name": name },
+        |row| row.get(0),
+    )
+}
+
 /// We loop over the entries and insert them into the database in a transaction.
 /// rusqlite does not support bulk inserts directly, so we insert each file individually.
-pub fn insert_file(tx: &Transaction, file: &FileEntry, file_name_id: i64) -> rusqlite::Result<i64> {
+pub fn insert_file(tx: &Transaction, file: &FileEntry, file_name_id: i64, parent_path: Option<&str>) -> rusqlite::Result<i64> {
     let affected = tx.execute(
-        "INSERT OR IGNORE INTO files (path, file_name_id, size, modified, hash, is_directory, is_file, is_symlink)
-         VALUES (:path, :name_id, :size, :modified, :hash, :is_directory, :is_file, :is_symlink)",
+        "INSERT OR IGNORE INTO files (path, file_name_id, size, modified, hash, is_directory, is_file, is_symlink, parent_path)
+         VALUES (:path, :name_id, :size, :modified, :hash, :is_directory, :is_file, :is_symlink, :parent_path)",
         named_params! {
             ":path": &file.path,
             ":name_id": file_name_id,
@@ -139,6 +158,7 @@ pub fn insert_file(tx: &Transaction, file: &FileEntry, file_name_id: i64) -> rus
             ":is_directory": file.is_directory as i32,
             ":is_file": file.is_file as i32,
             ":is_symlink": file.is_symlink as i32,
+            ":parent_path": parent_path,
         },
     )?;
     if affected == 1 {
@@ -291,4 +311,35 @@ pub fn get_ignore_list(conn: &Connection) -> Vec<String> {
 pub fn set_ignore_list(conn: &Connection, folders: &[String]) -> rusqlite::Result<()> {
     let value = folders.join("\n");
     set_setting(conn, "ignore_folders", &value)
+}
+
+pub fn mark_directory_traversed(tx: &Transaction, path: &str) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE files SET traversed = 1 WHERE path = ?1",
+        [path],
+    )?;
+    Ok(())
+}
+
+pub fn is_directory_indexed(conn: &Connection, path: &str) -> bool {
+    let trimmed = path.trim_end_matches('/');
+    conn.query_row(
+        "SELECT traversed FROM files WHERE path = ?1 AND is_directory = 1",
+        [trimmed],
+        |row| row.get::<_, i32>(0),
+    )
+    .unwrap_or(0)
+        == 1
+}
+
+pub fn get_child_directories(conn: &Connection, parent_path: &str) -> rusqlite::Result<Vec<String>> {
+    let mut stmt = conn.prepare(
+        "SELECT path FROM files WHERE parent_path = ?1 AND is_directory = 1",
+    )?;
+    let rows = stmt.query_map([parent_path], |row| row.get(0))?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
 }

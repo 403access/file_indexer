@@ -59,6 +59,7 @@ pub async fn tree_handler(
             path, name, size, modified, hash: hash_val,
             is_directory, is_file, is_symlink,
             created: None, accessed: None,
+            parent_path: None,
         });
     }
     drop(rows);

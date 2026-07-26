@@ -26,8 +26,10 @@ fn setup_db_with_data(temp: &PathBuf) {
             is_directory: false,
             is_file: true,
             is_symlink: false,
+            parent_path: None,
         },
         name_id,
+        None,
     )
     .unwrap();
 
@@ -45,8 +47,10 @@ fn setup_db_with_data(temp: &PathBuf) {
             is_directory: false,
             is_file: true,
             is_symlink: false,
+            parent_path: None,
         },
         name_id,
+        None,
     )
     .unwrap();
 
@@ -64,8 +68,10 @@ fn setup_db_with_data(temp: &PathBuf) {
             is_directory: true,
             is_file: false,
             is_symlink: false,
+            parent_path: None,
         },
         name_id,
+        None,
     )
     .unwrap();
 

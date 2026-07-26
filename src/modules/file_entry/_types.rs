@@ -20,4 +20,7 @@ pub struct FileEntry {
 
     /// Hash: can be empty if not generated yet.
     pub hash: Option<String>,
+
+    /// Parent directory path (NULL for root).
+    pub parent_path: Option<String>,
 }

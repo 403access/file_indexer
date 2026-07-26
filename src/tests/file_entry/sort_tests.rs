@@ -13,6 +13,7 @@ fn make_entry(name: &str) -> FileEntry {
         is_directory: false,
         is_file: true,
         is_symlink: false,
+        parent_path: None,
     }
 }
 

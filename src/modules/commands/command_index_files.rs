@@ -8,7 +8,7 @@ use crate::{
         logging,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, get_ignore_list, init_db, insert_file, insert_file_name, insert_skipped_path},
+        sql::database::{get_connection, get_ignore_list, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed},
     },
     states::app_state,
 };
@@ -46,6 +46,49 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
         format!("{}/", root_dir)
     };
 
+    let root_trimmed = root.trim_end_matches('/').to_string();
+
+    // Insert root directory as a row (parent_path = NULL, traversed = 0)
+    {
+        let mut conn = get_connection(db_path).map_err(|e| {
+            logging::error(&format!("Failed to connect to database: {}", e));
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+        let tx = conn.transaction().map_err(|e| {
+            logging::error(&format!("Failed to start transaction: {}", e));
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+        let root_entry = FileEntry {
+            path: Some(root_trimmed.clone()),
+            name: root_trimmed
+                .rsplit('/')
+                .next()
+                .unwrap_or(&root_trimmed)
+                .to_string(),
+            size: 0,
+            created: None,
+            modified: None,
+            accessed: None,
+            hash: None,
+            is_directory: true,
+            is_file: false,
+            is_symlink: false,
+            parent_path: None,
+        };
+        let name_id = get_or_insert_file_name(&tx, &root_entry.name).map_err(|e| {
+            logging::error(&format!("Failed to insert root name: {}", e));
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+        let _ = insert_file(&tx, &root_entry, name_id, None).map_err(|e| {
+            logging::error(&format!("Failed to insert root: {}", e));
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+        tx.commit().map_err(|e| {
+            logging::error(&format!("Failed to commit transaction: {}", e));
+            io::Error::new(io::ErrorKind::Other, e.to_string())
+        })?;
+    }
+
     let ignore_list: Vec<String> = match get_connection(db_path) {
         Ok(conn) => get_ignore_list(&conn),
         Err(e) => {
@@ -60,6 +103,34 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
     loop {
         let mut new_paths: Vec<String> = Vec::new();
         for path in &paths {
+            // Check if this directory was already traversed
+            let already_traversed = {
+                let conn = get_connection(db_path).map_err(|e| {
+                    logging::error(&format!("Failed to connect to database: {}", e));
+                    io::Error::new(io::ErrorKind::Other, e.to_string())
+                })?;
+                is_directory_indexed(&conn, path)
+            };
+
+            if already_traversed {
+                // Directory already processed — queue its children from DB
+                let conn = get_connection(db_path).map_err(|e| {
+                    logging::error(&format!("Failed to connect to database: {}", e));
+                    io::Error::new(io::ErrorKind::Other, e.to_string())
+                })?;
+                let children = get_child_directories(&conn, path.trim_end_matches('/')).unwrap_or_default();
+                for child in children {
+                    let child_with_slash = format!("{}/", child);
+                    if !ignore_list.iter().any(|ignored| {
+                        child_with_slash.trim_start_matches(path.trim_end_matches('/')).trim_start_matches('/').trim_end_matches('/') == ignored
+                    }) {
+                        new_paths.push(child_with_slash);
+                    }
+                }
+                logging::debug(&format!("Resume: skipping already-traversed '{}'", path.trim_end_matches('/')));
+                continue;
+            }
+
             let result = {
                 let mut conn = get_connection(db_path).map_err(|e| {
                     logging::error(&format!("Failed to connect to database: {}", e));
@@ -93,6 +164,23 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
 
             match result {
                 Ok(r) => {
+                    // Mark this directory as traversed
+                    {
+                        let mut conn = get_connection(db_path).map_err(|e| {
+                            logging::error(&format!("Failed to connect to database: {}", e));
+                            io::Error::new(io::ErrorKind::Other, e.to_string())
+                        })?;
+                        let tx = conn.transaction().map_err(|e| {
+                            logging::error(&format!("Failed to start transaction: {}", e));
+                            io::Error::new(io::ErrorKind::Other, e.to_string())
+                        })?;
+                        let _ = mark_directory_traversed(&tx, path.trim_end_matches('/'));
+                        tx.commit().map_err(|e| {
+                            logging::error(&format!("Failed to commit transaction: {}", e));
+                            io::Error::new(io::ErrorKind::Other, e.to_string())
+                        })?;
+                    }
+
                     logging::info(&format!(
                         "Indexed '{}' — {} files, {} folders",
                         path.trim_end_matches('/'),
@@ -151,6 +239,7 @@ fn get_and_insert_entries(
         }
     };
 
+    let parent_path = Some(path.trim_end_matches('/'));
     let mut directories: Vec<FileEntry> = Vec::new();
     let mut file_count = 0usize;
     let mut folder_count = 0usize;
@@ -158,7 +247,7 @@ fn get_and_insert_entries(
     for entry in &entries {
         let file_name_id = get_file_id(transaction, names, &entry.name);
 
-        match insert_file(&transaction, &entry, file_name_id.unwrap()) {
+        match insert_file(&transaction, &entry, file_name_id.unwrap(), parent_path) {
             Ok(_) => {
                 if entry.is_directory {
                     folder_count += 1;
@@ -203,8 +292,15 @@ fn get_file_id(
 
     let inserted_id = match insert_file_name(&transaction, &file_name) {
         Ok(id) => id,
-        Err(e) => {
-            return Err(io::Error::new(io::ErrorKind::Other, e.to_string()));
+        Err(_) => {
+            // Name already exists — query the existing id
+            transaction
+                .query_row(
+                    "SELECT id FROM file_names WHERE name = ?1",
+                    [file_name],
+                    |row| row.get(0),
+                )
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?
         }
     };
     names.push((file_name.to_string(), inserted_id));
