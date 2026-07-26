@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ignored Folders - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .ignored-stats {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+        .ignored-stat {
+            background: #fff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 16px 24px;
+            text-align: center;
+            min-width: 160px;
+        }
+        .ignored-stat .value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .ignored-stat .label {
+            font-size: 13px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .ignored-stat.rules .value { color: #007bff; }
+        .ignored-stat.skipped .value { color: #dc3545; }
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 12px;
+            margin-top: 32px;
+        }
+        table th { text-align: left; }
+        .condition-tag {
+            display: inline-block;
+            background: #e8f4fd;
+            color: #0c5460;
+            border-radius: 4px;
+            padding: 2px 8px;
+            font-size: 12px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/search.html">Search</a>
+            <a href="/duplicates.html">Duplicates</a>
+            <a href="/duplicate-folders.html">Folders</a>
+            <a href="/explorer.html">Explorer</a>
+            <a href="/skipped.html">Skipped</a>
+            <a href="/logs.html">Logs</a>
+            <a href="/status.html">Status</a>
+            <a href="/settings.html">Settings</a>
+            <a href="/ignored.html" class="active">Ignored</a>
+            <span id="status-dot" class="status-dot idle" title="Idle"></span>
+        </nav>
+    </header>
+
+    <main>
+        <section class="ignored-stats">
+            <div class="ignored-stat rules">
+                <div class="value" id="stat-rules">-</div>
+                <div class="label">Ignore Rules</div>
+            </div>
+            <div class="ignored-stat skipped">
+                <div class="value" id="stat-skipped">-</div>
+                <div class="label">Skipped Paths</div>
+            </div>
+        </section>
+
+        <div class="section-title">Ignore Rules</div>
+        <section class="results">
+            <div id="no-rules" style="display:none;">No ignore rules configured</div>
+            <table id="rules-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Folder Name</th>
+                        <th>Condition File</th>
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody id="rules-body"></tbody>
+            </table>
+        </section>
+
+        <div class="section-title">Skipped Paths</div>
+        <section class="results">
+            <div id="no-skipped" style="display:none;">No skipped paths</div>
+            <table id="skipped-table" style="display:none;">
+                <thead>
+                    <tr>
+                        <th>Path</th>
+                        <th>Error</th>
+                    </tr>
+                </thead>
+                <tbody id="skipped-body"></tbody>
+            </table>
+        </section>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const noRules = document.getElementById('no-rules');
+            const rulesTable = document.getElementById('rules-table');
+            const rulesBody = document.getElementById('rules-body');
+            const noSkipped = document.getElementById('no-skipped');
+            const skippedTable = document.getElementById('skipped-table');
+            const skippedBody = document.getElementById('skipped-body');
+
+            // Load ignore rules
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                const rules = data.ignore_folders || [];
+
+                document.getElementById('stat-rules').textContent = rules.length;
+
+                if (rules.length === 0) {
+                    noRules.style.display = 'block';
+                } else {
+                    rulesTable.style.display = 'table';
+                    rules.forEach(r => {
+                        const tr = document.createElement('tr');
+                        const condition = r.condition
+                            ? `<span class="condition-tag">${escapeHtml(r.condition)}</span>`
+                            : '<span style="color:#999">—</span>';
+                        const desc = r.condition
+                            ? `Skip ${escapeHtml(r.name)} if ${escapeHtml(r.condition)} exists`
+                            : `Skip all ${escapeHtml(r.name)} folders`;
+                        tr.innerHTML = `
+                            <td><code>${escapeHtml(r.name)}</code></td>
+                            <td>${condition}</td>
+                            <td>${desc}</td>
+                        `;
+                        rulesBody.appendChild(tr);
+                    });
+                }
+            } catch (err) {
+                noRules.textContent = 'Failed to load ignore rules';
+                noRules.style.display = 'block';
+            }
+
+            // Load skipped paths
+            try {
+                const res = await fetch('/api/skipped');
+                const data = await res.json();
+
+                document.getElementById('stat-skipped').textContent = data.length;
+
+                if (data.length === 0) {
+                    noSkipped.style.display = 'block';
+                } else {
+                    skippedTable.style.display = 'table';
+                    data.forEach(item => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = `
+                            <td><code>${escapeHtml(item.path)}</code></td>
+                            <td>${escapeHtml(item.error)}</td>
+                        `;
+                        skippedBody.appendChild(tr);
+                    });
+                }
+            } catch (err) {
+                noSkipped.textContent = 'Failed to load skipped paths';
+                noSkipped.style.display = 'block';
+            }
+        });
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+    </script>
+    <script src="/js/status.js"></script>
+</body>
+</html>

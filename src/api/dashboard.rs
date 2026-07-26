@@ -2,7 +2,7 @@ use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::modules::sql::database::get_connection;
+use crate::modules::sql::database::{get_connection, get_ignore_rules};
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
@@ -22,6 +22,7 @@ pub struct DashboardResponse {
     pub duplicate_folder_groups: u64,
     pub duplicate_folders: u64,
     pub skipped_paths: u64,
+    pub ignore_rules_count: u64,
     pub timeline: Vec<TimelineBucket>,
 }
 
@@ -59,6 +60,8 @@ pub async fn dashboard_handler(
     let skipped_paths: u64 = conn
         .query_row("SELECT COUNT(*) FROM skipped_paths", [], |r| r.get(0))
         .unwrap_or(0);
+
+    let ignore_rules_count = get_ignore_rules(&conn).len() as u64;
 
     // Duplicate file stats from maintained table
     let duplicate_file_groups: u64 = conn
@@ -178,6 +181,7 @@ pub async fn dashboard_handler(
         duplicate_folder_groups,
         duplicate_folders,
         skipped_paths,
+        ignore_rules_count,
         timeline,
     }))
 }

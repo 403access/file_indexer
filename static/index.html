@@ -100,6 +100,7 @@
             <a href="/logs.html">Logs</a>
             <a href="/status.html">Status</a>
             <a href="/settings.html">Settings</a>
+            <a href="/ignored.html">Ignored</a>
             <span id="status-dot" class="status-dot idle" title="Idle"></span>
         </nav>
     </header>
@@ -116,6 +117,7 @@
             <div class="stat-card dup-folders"><div class="value" id="stat-dup-folder-groups">-</div><div class="label">Dup Folder Groups</div></div>
             <div class="stat-card wasted"><div class="value" id="stat-wasted">-</div><div class="label">Wasted Space</div></div>
             <div class="stat-card"><div class="value" id="stat-skipped">-</div><div class="label">Skipped Paths</div></div>
+            <div class="stat-card" style="cursor:pointer" onclick="location.href='/ignored.html'"><div class="value" id="stat-ignore-rules">-</div><div class="label">Ignore Rules</div></div>
         </section>
 
         <section class="chart-section">
@@ -172,6 +174,7 @@
                 document.getElementById('stat-dup-folder-groups').textContent = data.duplicate_folder_groups.toLocaleString();
                 document.getElementById('stat-wasted').textContent = formatSize(data.wasted_file_bytes);
                 document.getElementById('stat-skipped').textContent = data.skipped_paths.toLocaleString();
+                document.getElementById('stat-ignore-rules').textContent = data.ignore_rules_count.toLocaleString();
 
                 timelineData = data.timeline;
                 renderChart();
