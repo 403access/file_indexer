@@ -351,6 +351,30 @@
             flex: 1; padding: 0.4rem 0.6rem; border: 1px solid #ddd;
             border-radius: 4px; font-size: 0.85rem; font-family: monospace;
         }
+        .merge-summary-folders {
+            display: flex; flex-direction: column; gap: 0.4rem;
+        }
+        .merge-summary-folder {
+            display: flex; align-items: center; gap: 0.5rem;
+            padding: 0.4rem 0.6rem; background: white;
+            border: 1px solid #e0e0e0; border-radius: 4px;
+        }
+        .merge-summary-folder .folder-icon { font-size: 0.9rem; }
+        .merge-summary-folder .folder-name {
+            font-weight: 600; color: #333; min-width: 80px;
+        }
+        .merge-summary-folder .folder-path {
+            flex: 1; color: #999; font-family: monospace;
+            font-size: 0.75rem; overflow: hidden;
+            text-overflow: ellipsis; white-space: nowrap;
+        }
+        .merge-summary-folder .folder-stats {
+            display: flex; gap: 0.5rem; font-family: monospace;
+            font-size: 0.78rem;
+        }
+        .merge-summary-folder .stat-kept { color: #27ae60; }
+        .merge-summary-folder .stat-removed { color: #e74c3c; }
+        .merge-summary-folder .stat-total { color: #666; }
         .merge-body { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
         .merge-dir-group { margin-bottom: 1rem; }
         .merge-dir-label {
@@ -463,6 +487,7 @@
             <div class="merge-header">
                 <h2>Merge Duplicate Folders</h2>
                 <div class="merge-view-toggle">
+                    <button class="merge-view-btn" id="view-summary-btn" onclick="setMergeView('summary')">Summary</button>
                     <button class="merge-view-btn" id="view-list-btn" onclick="setMergeView('list')">List</button>
                     <button class="merge-view-btn active" id="view-tree-btn" onclick="setMergeView('tree')">Tree</button>
                 </div>
@@ -805,6 +830,7 @@
 
         function setMergeView(mode) {
             mergeViewMode = mode;
+            document.getElementById('view-summary-btn').classList.toggle('active', mode === 'summary');
             document.getElementById('view-list-btn').classList.toggle('active', mode === 'list');
             document.getElementById('view-tree-btn').classList.toggle('active', mode === 'tree');
             renderMergeBody();
@@ -865,12 +891,41 @@
                 updateMergeStats();
                 return;
             }
-            if (mergeViewMode === 'tree') {
+            if (mergeViewMode === 'summary') {
+                renderMergeSummaryTab(body);
+            } else if (mergeViewMode === 'tree') {
                 renderMergeTree(body);
             } else {
                 renderMergeList(body);
             }
             updateMergeStats();
+        }
+
+        function renderMergeSummaryTab(body) {
+            let html = '<div class="merge-summary-folders">';
+            mergeGroup.foldersWithFiles.forEach(({ path, name, files }) => {
+                let kept = 0, removed = 0, totalSize = 0;
+                files.forEach(file => {
+                    const key = path + '/' + file.name;
+                    totalSize += file.size;
+                    if (mergeSelections[key]) kept++;
+                    else removed++;
+                });
+                html += `
+                    <div class="merge-summary-folder">
+                        <span class="folder-icon">📁</span>
+                        <span class="folder-name">${name}</span>
+                        <span class="folder-path">${path}</span>
+                        <span class="folder-stats">
+                            <span class="stat-total">${files.length} files (${formatSize(totalSize)})</span>
+                            <span class="stat-kept">✓${kept}</span>
+                            <span class="stat-removed">✗${removed}</span>
+                        </span>
+                    </div>`;
+            });
+            html += '</div>';
+            body.innerHTML = html;
+            body.className = 'merge-body';
         }
 
         function renderMergeList(body) {
@@ -1014,6 +1069,7 @@
             mergeGroup = null;
             mergeSelections = {};
             mergeViewMode = 'tree';
+            document.getElementById('view-summary-btn').classList.remove('active');
             document.getElementById('view-list-btn').classList.remove('active');
             document.getElementById('view-tree-btn').classList.add('active');
         }
