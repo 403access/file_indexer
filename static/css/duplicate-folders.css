@@ -1,0 +1,438 @@
+.group-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+.group-header {
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eee;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.group-header .badge {
+    background: #e74c3c;
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: 10px;
+}
+.group-header .label {
+    color: #666;
+    font-size: 0.85rem;
+}
+.folders-row {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+}
+.folder-col {
+    flex: 1;
+    min-width: 250px;
+    border-right: 1px solid #eee;
+    display: flex;
+    flex-direction: column;
+}
+.folder-col:last-child {
+    border-right: none;
+}
+.folder-col-files {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+.folder-col-header {
+    padding: 0.6rem 1rem;
+    background: #f0f4f8;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #2c3e50;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.folder-col-header .full-path {
+    display: block;
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: #999;
+    font-family: monospace;
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mini-tree {
+    padding: 0.5rem 0.75rem;
+    font-family: monospace;
+    font-size: 0.75rem;
+    line-height: 1.4;
+    background: #fafbfc;
+    border-bottom: 1px solid #eee;
+    color: #666;
+    white-space: nowrap;
+    overflow: hidden;
+    flex: 1;
+}
+.mini-tree .tree-line {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.mini-tree .tree-line.current {
+    color: #2c3e50;
+    font-weight: 600;
+}
+.mini-tree .tree-prefix {
+    color: #ccc;
+    user-select: none;
+    flex-shrink: 0;
+}
+.folder-file {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid #f5f5f5;
+    font-size: 0.85rem;
+}
+.folder-file:hover {
+    background: #fafafa;
+}
+.folder-file.unique {
+    background: #f8f9fa;
+    opacity: 0.6;
+}
+.folder-file.unique:hover {
+    opacity: 1;
+}
+.show-all-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eee;
+    font-size: 0.8rem;
+    color: #666;
+    cursor: pointer;
+}
+.show-all-toggle:hover {
+    background: #f0f4f8;
+}
+.show-all-toggle input {
+    cursor: pointer;
+}
+.folder-file .file-icon {
+    font-size: 0.9rem;
+    width: 1.2rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+.folder-file .file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.folder-file .file-size {
+    color: #999;
+    font-family: monospace;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+.hash-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.aligned-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.aligned-table th {
+    padding: 0.5rem 0.75rem;
+    background: #f0f4f8;
+    border-bottom: 2px solid #ddd;
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #2c3e50;
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.aligned-table th .th-path {
+    display: block;
+    font-weight: 400;
+    font-size: 0.7rem;
+    color: #999;
+    font-family: monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.aligned-table td {
+    padding: 0.35rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.85rem;
+    vertical-align: middle;
+}
+.aligned-table tr:hover td {
+    background: #fafbfc;
+}
+.aligned-table .file-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+}
+.aligned-table .file-cell:hover {
+    color: #3498db;
+}
+.aligned-table .file-cell .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.aligned-table .file-cell .file-size {
+    color: #999;
+    font-family: monospace;
+    font-size: 0.78rem;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.aligned-table td.empty-cell {
+    color: #ddd;
+    font-style: italic;
+    font-size: 0.8rem;
+}
+.align-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: #666;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.align-toggle input {
+    cursor: pointer;
+}
+.empty-msg {
+    text-align: center;
+    padding: 3rem;
+    color: #999;
+}
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    padding: 1rem;
+}
+.pagination button {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: #333;
+}
+.pagination button:hover:not(:disabled) {
+    background: #f0f4f8;
+    border-color: #3498db;
+}
+.pagination button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.pagination button.active {
+    background: #3498db;
+    color: white;
+    border-color: #3498db;
+}
+.pagination .page-info {
+    font-size: 0.85rem;
+    color: #666;
+    margin: 0 0.5rem;
+}
+.summary {
+    color: #666;
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+}
+.filter-bar {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    background: white;
+    padding: 0.75rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.filter-bar input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.9rem;
+}
+.filter-bar label {
+    font-size: 0.85rem;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.merge-folders-btn {
+    padding: 0.3rem 0.75rem;
+    font-size: 0.8rem;
+    background: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: auto;
+}
+.merge-folders-btn:hover { background: #219a52; }
+.merge-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.3); z-index: 999;
+    opacity: 0; transition: opacity 0.2s;
+}
+.merge-overlay.open { opacity: 1; }
+.merge-panel {
+    position: fixed; top: 0; right: 0;
+    width: 50vw; max-width: 800px; min-width: 400px;
+    height: 100vh; background: white;
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    display: flex; flex-direction: column;
+    transform: translateX(100%); transition: transform 0.25s ease;
+}
+.merge-overlay.open .merge-panel { transform: translateX(0); }
+.merge-header {
+    display: flex; align-items: center; gap: 1rem;
+    padding: 1rem 1.5rem; border-bottom: 1px solid #eee;
+}
+.merge-header h2 { flex: 1; font-size: 1.1rem; }
+.merge-close {
+    background: none; border: none; font-size: 1.3rem;
+    cursor: pointer; color: #666; padding: 0.25rem;
+}
+.merge-close:hover { color: #333; }
+.merge-dest {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.75rem 1.5rem; border-bottom: 1px solid #eee;
+    background: #fafbfc;
+}
+.merge-dest label { font-size: 0.85rem; font-weight: 600; color: #555; }
+.merge-dest input {
+    flex: 1; padding: 0.4rem 0.6rem; border: 1px solid #ddd;
+    border-radius: 4px; font-size: 0.85rem; font-family: monospace;
+}
+.merge-summary-folders {
+    display: flex; flex-direction: column; gap: 0.4rem;
+}
+.merge-summary-folder {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.4rem 0.6rem; background: white;
+    border: 1px solid #e0e0e0; border-radius: 4px;
+}
+.merge-summary-folder .folder-icon { font-size: 0.9rem; }
+.merge-summary-folder .folder-name {
+    font-weight: 600; color: #333; min-width: 80px;
+}
+.merge-summary-folder .folder-path {
+    flex: 1; color: #999; font-family: monospace;
+    font-size: 0.75rem; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+}
+.merge-summary-folder .folder-stats {
+    display: flex; gap: 0.5rem; font-family: monospace;
+    font-size: 0.78rem;
+}
+.merge-summary-folder .stat-kept { color: #27ae60; }
+.merge-summary-folder .stat-removed { color: #e74c3c; }
+.merge-summary-folder .stat-total { color: #666; }
+.merge-body { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
+.merge-dir-group { margin-bottom: 1rem; }
+.merge-dir-label {
+    font-size: 0.75rem; font-weight: 600; color: #888;
+    text-transform: uppercase; letter-spacing: 0.03em;
+    margin-bottom: 0.4rem;
+}
+.merge-file-row {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.5rem 0.75rem; border-radius: 6px;
+    border: 1px solid transparent; margin-bottom: 0.3rem;
+    font-size: 0.85rem;
+}
+.merge-file-row.keep {
+    background: #eafaf1; border-color: #27ae60;
+}
+.merge-file-row.remove {
+    background: #fdf2f2; border-color: #e0e0e0; opacity: 0.6;
+}
+.merge-file-check {
+    width: 16px; height: 16px; cursor: pointer;
+    accent-color: #27ae60;
+}
+.merge-file-name { font-weight: 500; min-width: 120px; }
+.merge-file-path {
+    flex: 1; color: #666; font-family: monospace;
+    font-size: 0.78rem; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+}
+.merge-file-size { color: #999; font-family: monospace; font-size: 0.8rem; }
+.merge-file-hash {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.merge-footer {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0.75rem 1.5rem; border-top: 1px solid #eee;
+    background: #fafbfc;
+}
+.merge-stats { font-size: 0.8rem; color: #666; }
+.merge-apply { background: #27ae60; }
+.merge-apply:hover { background: #219a52; }
+.merge-apply:disabled { background: #bdc3c7; cursor: not-allowed; }
+.merge-view-toggle {
+    display: flex; gap: 0.25rem;
+}
+.merge-view-btn {
+    padding: 0.25rem 0.6rem; border: 1px solid #ddd;
+    border-radius: 4px; background: white; font-size: 0.75rem;
+    cursor: pointer; color: #666;
+}
+.merge-view-btn.active {
+    background: #3498db; color: white; border-color: #3498db;
+}
+.merge-view-btn:hover:not(.active) { background: #f0f0f0; }
+.merge-tree {
+    font-family: monospace; font-size: 0.8rem; line-height: 1.6;
+    padding: 1rem 1.5rem;
+}
+.merge-tree .tree-line {
+    display: flex; align-items: center; gap: 0.35rem;
+    white-space: nowrap;
+}
+.merge-tree .tree-prefix { color: #999; user-select: none; }
+.merge-tree .tree-icon { flex-shrink: 0; }
+.merge-tree .tree-name { }
+.merge-tree .tree-size { color: #999; font-size: 0.75rem; margin-left: 0.5rem; }
+.merge-tree .tree-hash-dot {
+    width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+}
