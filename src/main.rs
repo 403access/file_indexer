@@ -22,6 +22,37 @@ async fn main() {
 
     ensure_indexed_async(database_url.clone(), state.cwd.clone(), state.pause_indexer.clone()).await;
 
+    // Initial dashboard refresh
+    {
+        let conn = file_indexer::modules::sql::database::get_connection(&database_url).unwrap();
+        file_indexer::modules::sql::database::refresh_dashboard_stats(&conn);
+    }
+
+    // Spawn background task for periodic dashboard refresh
+    let refresh_db = database_url.clone();
+    tokio::spawn(async move {
+        loop {
+            // Read refresh interval from settings (default 60s)
+            let interval_secs = {
+                let conn = file_indexer::modules::sql::database::get_connection(&refresh_db);
+                conn.ok()
+                    .and_then(|c| {
+                        file_indexer::modules::sql::database::get_setting(&c, "dashboard_refresh_interval")
+                            .ok()
+                            .flatten()
+                    })
+                    .and_then(|v| v.parse::<u64>().ok())
+                    .unwrap_or(60)
+            };
+
+            tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+
+            if let Ok(conn) = file_indexer::modules::sql::database::get_connection(&refresh_db) {
+                file_indexer::modules::sql::database::recompute_dashboard_stats(&conn);
+            }
+        }
+    });
+
     tracing_subscriber::fmt::init();
 
     let api_router = create_router(state);

@@ -161,6 +161,18 @@
 
     <main>
         <div class="settings-card">
+            <h2>Dashboard Refresh Interval</h2>
+            <p class="desc">How often the dashboard stats are automatically refreshed (in seconds). Set to 0 to disable auto-refresh.</p>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.5rem;">
+                <input type="number" id="refresh-interval" min="0" max="3600" value="60"
+                       style="width:100px;padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:4px;font-size:0.9rem;">
+                <span style="color:#888;font-size:0.85rem;">seconds</span>
+                <button class="save-btn" id="save-interval-btn" onclick="saveRefreshInterval()">Save</button>
+                <span class="save-msg" id="save-interval-msg">Saved</span>
+            </div>
+        </div>
+
+        <div class="settings-card">
             <h2>Ignored Folders</h2>
             <p class="desc">Folders are skipped during indexing. Add a condition to only skip when a specific file exists in the parent directory.</p>
             <div class="ignore-list" id="ignore-list"></div>
@@ -301,6 +313,43 @@
         }
 
         loadSettings();
+        loadRefreshInterval();
+
+        async function loadRefreshInterval() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                const val = data.dashboard_refresh_interval;
+                if (val !== undefined && val !== null) {
+                    document.getElementById('refresh-interval').value = val;
+                }
+            } catch (e) {
+                console.error('Failed to load refresh interval', e);
+            }
+        }
+
+        async function saveRefreshInterval() {
+            const val = document.getElementById('refresh-interval').value;
+            const btn = document.getElementById('save-interval-btn');
+            const msg = document.getElementById('save-interval-msg');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dashboard_refresh_interval: parseInt(val) || 0 })
+                });
+                if (res.ok) {
+                    msg.classList.add('show');
+                    setTimeout(() => msg.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                alert('Failed to save refresh interval');
+            } finally {
+                btn.disabled = false;
+            }
+        }
     </script>
 </body>
 </html>

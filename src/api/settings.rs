@@ -1,8 +1,8 @@
-use axum::extract::{State};
+use axum::extract::State;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::modules::sql::database::{get_connection, get_ignore_rules, set_ignore_rules, IgnoreRule};
+use crate::modules::sql::database::{get_connection, get_ignore_rules, get_setting, set_ignore_rules, set_setting, IgnoreRule};
 use crate::states::app_state::AppState;
 
 #[derive(Serialize, Deserialize)]
@@ -30,11 +30,13 @@ impl IgnoreRuleJson {
 #[derive(Serialize)]
 pub struct SettingsResponse {
     pub ignore_folders: Vec<IgnoreRuleJson>,
+    pub dashboard_refresh_interval: u64,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateSettingsRequest {
     pub ignore_folders: Vec<IgnoreRuleJson>,
+    pub dashboard_refresh_interval: Option<u64>,
 }
 
 pub async fn get_settings_handler(
@@ -46,7 +48,16 @@ pub async fn get_settings_handler(
     let rules = get_ignore_rules(&conn);
     let folders: Vec<IgnoreRuleJson> = rules.iter().map(IgnoreRuleJson::from_rule).collect();
 
-    Ok(Json(SettingsResponse { ignore_folders: folders }))
+    let dashboard_refresh_interval = get_setting(&conn, "dashboard_refresh_interval")
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(60);
+
+    Ok(Json(SettingsResponse {
+        ignore_folders: folders,
+        dashboard_refresh_interval,
+    }))
 }
 
 pub async fn update_settings_handler(
@@ -60,7 +71,19 @@ pub async fn update_settings_handler(
     set_ignore_rules(&conn, &rules)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
+    if let Some(interval) = payload.dashboard_refresh_interval {
+        set_setting(&conn, "dashboard_refresh_interval", &interval.to_string())
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    let dashboard_refresh_interval = get_setting(&conn, "dashboard_refresh_interval")
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(60);
+
     Ok(Json(SettingsResponse {
         ignore_folders: payload.ignore_folders,
+        dashboard_refresh_interval,
     }))
 }

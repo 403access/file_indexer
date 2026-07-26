@@ -2,7 +2,7 @@ use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::modules::sql::database::{get_connection, get_ignore_rules};
+use crate::modules::sql::database::{get_connection, get_setting, refresh_dashboard_stats};
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
@@ -23,6 +23,10 @@ pub struct DashboardResponse {
     pub duplicate_folders: u64,
     pub skipped_paths: u64,
     pub ignore_rules_count: u64,
+    pub last_refreshed: Option<f64>,
+    pub entries_at_refresh: u64,
+    pub entries_behind: u64,
+    pub next_refresh: Option<f64>,
     pub timeline: Vec<TimelineBucket>,
 }
 
@@ -42,113 +46,52 @@ pub async fn dashboard_handler(
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Single pass for basic counts
-    let (total_files, total_folders, total_size): (u64, u64, u64) = conn
-        .query_row(
-            "SELECT
-                COALESCE(SUM(CASE WHEN is_file = 1 THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN is_directory = 1 THEN 1 ELSE 0 END), 0),
-                COALESCE(SUM(CASE WHEN is_file = 1 THEN size ELSE 0 END), 0)
-             FROM files",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    // Read from materialized stats table
+    let get_stat = |key: &str| -> u64 {
+        conn.query_row(
+            "SELECT value FROM dashboard_stats WHERE key = ?1",
+            [key],
+            |row| row.get::<_, String>(0),
         )
-        .unwrap_or((0, 0, 0));
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0)
+    };
+
+    let total_files = get_stat("total_files");
+    let total_folders = get_stat("total_folders");
+    let total_size = get_stat("total_size");
+    let skipped_paths = get_stat("skipped_paths");
+    let ignore_rules_count = get_stat("ignore_rules_count");
+    let duplicate_file_groups = get_stat("duplicate_file_groups");
+    let duplicate_files = get_stat("duplicate_files");
+    let wasted_file_bytes = get_stat("wasted_file_bytes");
+    let duplicate_folder_groups = get_stat("duplicate_folder_groups");
+    let duplicate_folders = get_stat("duplicate_folders");
+
+    let last_refreshed: Option<f64> = conn
+        .query_row(
+            "SELECT value FROM dashboard_stats WHERE key = 'last_refreshed'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|v| v.parse().ok());
 
     let db_size = std::fs::metadata(&state.db).map(|m| m.len()).unwrap_or(0);
 
-    let skipped_paths: u64 = conn
-        .query_row("SELECT COUNT(*) FROM skipped_paths", [], |r| r.get(0))
-        .unwrap_or(0);
-
-    let ignore_rules_count = get_ignore_rules(&conn).len() as u64;
-
-    // Duplicate file stats from maintained table
-    let duplicate_file_groups: u64 = conn
-        .query_row("SELECT COUNT(*) FROM duplicate_hashes", [], |r| r.get(0))
-        .unwrap_or(0);
-
-    let (duplicate_files, wasted_file_bytes): (u64, u64) = if duplicate_file_groups > 0 {
-        conn.query_row(
-            "SELECT COALESCE(SUM(cnt), 0), COALESCE(SUM((cnt - 1) * size), 0)
-             FROM (
-                SELECT COUNT(*) as cnt, MIN(f.size) as size
-                FROM files f
-                JOIN duplicate_hashes d ON f.hash = d.hash
-                WHERE f.is_file = 1
-                GROUP BY f.hash
-             )",
-            [],
-            |r| Ok((r.get(0)?, r.get(1)?)),
-        )
-        .unwrap_or((0, 0))
-    } else {
-        (0, 0)
-    };
-
-    // Duplicate folder stats from maintained table
-    let duplicate_folders: u64 = if duplicate_file_groups > 0 {
-        conn.query_row(
-            "SELECT COALESCE(SUM(cnt), 0)
-             FROM (
-                SELECT COUNT(*) as cnt
-                FROM files f
-                JOIN duplicate_hashes d ON f.hash = d.hash
-                WHERE f.is_directory = 1
-                GROUP BY f.hash
-             )",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0)
-    } else {
-        0
-    };
-
-    let duplicate_folder_groups: u64 = if duplicate_folders > 0 {
-        conn.query_row(
-            "SELECT COUNT(*)
-             FROM (
-                SELECT f.hash
-                FROM files f
-                JOIN duplicate_hashes d ON f.hash = d.hash
-                WHERE f.is_directory = 1
-                GROUP BY f.hash
-                HAVING COUNT(*) > 1
-             )",
-            [],
-            |r| r.get(0),
-        )
-        .unwrap_or(0)
-    } else {
-        0
-    };
-
-    // Timeline
+    // Read from materialized timeline
     let interval = params.interval.as_deref().unwrap_or("month");
-    let group_sql = match interval {
-        "day" => "strftime('%Y-%m-%d', modified, 'unixepoch')",
-        "week" => "strftime('%Y-W%W', modified, 'unixepoch')",
-        "year" => "strftime('%Y', modified, 'unixepoch')",
-        _ => "strftime('%Y-%m', modified, 'unixepoch')",
-    };
-
-    let sql = format!(
-        "SELECT {group_sql} as bucket,
-                SUM(CASE WHEN is_file = 1 THEN 1 ELSE 0 END) as files,
-                SUM(CASE WHEN is_directory = 1 THEN 1 ELSE 0 END) as folders,
-                COALESCE(SUM(CASE WHEN is_file = 1 THEN size ELSE 0 END), 0) as size
-         FROM files
-         WHERE modified IS NOT NULL
-         GROUP BY bucket
-         ORDER BY bucket ASC"
-    );
-
     let mut stmt = conn
-        .prepare(&sql)
+        .prepare(
+            "SELECT label, files, folders, size
+             FROM dashboard_timeline
+             WHERE interval_type = ?1
+             ORDER BY label ASC",
+        )
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let rows = stmt
-        .query_map([], |row| {
+        .query_map([interval], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, u64>(1)?,
@@ -170,6 +113,27 @@ pub async fn dashboard_handler(
         });
     }
 
+    // Compute snapshot lag info
+    let entries_at_refresh = get_stat("entries_at_refresh");
+    let last_entry_id: u64 = get_stat("last_entry_id");
+    let current_max_id: u64 = conn
+        .query_row("SELECT COALESCE(MAX(id), 0) FROM files", [], |r| r.get(0))
+        .unwrap_or(0);
+    let entries_behind = current_max_id.saturating_sub(last_entry_id);
+
+    let next_refresh: Option<f64> = last_refreshed.and_then(|lr| {
+        let interval_secs = get_setting(&conn, "dashboard_refresh_interval")
+            .ok()
+            .flatten()
+            .and_then(|v| v.parse::<f64>().ok())
+            .unwrap_or(60.0);
+        if interval_secs > 0.0 {
+            Some(lr + interval_secs)
+        } else {
+            None
+        }
+    });
+
     Ok(Json(DashboardResponse {
         total_files,
         total_folders,
@@ -182,6 +146,34 @@ pub async fn dashboard_handler(
         duplicate_folders,
         skipped_paths,
         ignore_rules_count,
+        last_refreshed,
+        entries_at_refresh,
+        entries_behind,
+        next_refresh,
         timeline,
     }))
+}
+
+pub async fn refresh_handler(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let conn = get_connection(&state.db)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    refresh_dashboard_stats(&conn);
+
+    let last_refreshed: f64 = conn
+        .query_row(
+            "SELECT value FROM dashboard_stats WHERE key = 'last_refreshed'",
+            [],
+            |row| row.get::<_, String>(0),
+        )
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(0.0);
+
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "last_refreshed": last_refreshed,
+    })))
 }

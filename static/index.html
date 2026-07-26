@@ -106,6 +106,21 @@
     </header>
 
     <main>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+            <h2 style="margin:0;font-size:1.1rem;color:#555;">Dashboard</h2>
+            <div style="display:flex;align-items:center;gap:12px;">
+                <button id="refresh-btn" onclick="refreshDashboard()" style="padding:6px 14px;border:1px solid #ddd;background:#fff;border-radius:4px;cursor:pointer;font-size:0.85rem;color:#555;">
+                    Refresh
+                </button>
+            </div>
+        </div>
+
+        <div id="snapshot-info" style="display:flex;gap:16px;margin-bottom:20px;padding:10px 16px;background:#f8f9fa;border-radius:6px;font-size:0.82rem;color:#666;flex-wrap:wrap;">
+            <span>Last snapshot: <strong id="snap-last">—</strong></span>
+            <span>Behind: <strong id="snap-behind">—</strong> entries</span>
+            <span>Next snapshot: <strong id="snap-next">—</strong></span>
+        </div>
+
         <section class="stats-grid" id="stats-grid">
             <div class="stat-card"><div class="value" id="stat-files">-</div><div class="label">Files</div></div>
             <div class="stat-card"><div class="value" id="stat-folders">-</div><div class="label">Folders</div></div>
@@ -175,6 +190,26 @@
                 document.getElementById('stat-wasted').textContent = formatSize(data.wasted_file_bytes);
                 document.getElementById('stat-skipped').textContent = data.skipped_paths.toLocaleString();
                 document.getElementById('stat-ignore-rules').textContent = data.ignore_rules_count.toLocaleString();
+
+                // Snapshot info
+                if (data.last_refreshed) {
+                    const date = new Date(data.last_refreshed * 1000);
+                    document.getElementById('snap-last').textContent = date.toLocaleTimeString();
+                } else {
+                    document.getElementById('snap-last').textContent = 'Never';
+                }
+
+                const behind = data.entries_behind || 0;
+                const behindEl = document.getElementById('snap-behind');
+                behindEl.textContent = behind.toLocaleString();
+                behindEl.style.color = behind > 0 ? '#dc3545' : '#28a745';
+
+                if (data.next_refresh) {
+                    const next = new Date(data.next_refresh * 1000);
+                    document.getElementById('snap-next').textContent = next.toLocaleTimeString();
+                } else {
+                    document.getElementById('snap-next').textContent = 'Auto-refresh off';
+                }
 
                 timelineData = data.timeline;
                 renderChart();
@@ -305,6 +340,22 @@
             const units = ['B', 'KB', 'MB', 'GB', 'TB'];
             const i = Math.floor(Math.log(bytes) / Math.log(1024));
             return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+        }
+
+        async function refreshDashboard() {
+            const btn = document.getElementById('refresh-btn');
+            btn.disabled = true;
+            btn.textContent = 'Refreshing...';
+
+            try {
+                await fetch('/api/dashboard/refresh', { method: 'POST' });
+                await fetchDashboard();
+            } catch (err) {
+                console.error('Failed to refresh dashboard:', err);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Refresh';
+            }
         }
     </script>
     <script src="/js/status.js"></script>
