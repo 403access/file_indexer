@@ -26,12 +26,15 @@
         .ignore-list {
             display: flex;
             flex-direction: column;
-            gap: 0.4rem;
+            gap: 0.5rem;
         }
         .ignore-item {
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            padding: 0.5rem;
+            background: #f9fafb;
+            border-radius: 4px;
         }
         .ignore-item input {
             flex: 1;
@@ -44,6 +47,15 @@
         .ignore-item input:focus {
             outline: none;
             border-color: #3498db;
+        }
+        .ignore-item input.condition-input {
+            flex: 0.8;
+            background: #fff;
+            border-style: dashed;
+        }
+        .ignore-item .condition-input::placeholder {
+            color: #bbb;
+            font-style: italic;
         }
         .ignore-item .remove-btn {
             background: none;
@@ -119,6 +131,15 @@
             border-color: #3498db;
             color: #2980b9;
         }
+        .condition-hint {
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 0.75rem;
+            padding: 0.5rem;
+            background: #f5f7fa;
+            border-radius: 4px;
+            border-left: 3px solid #3498db;
+        }
     </style>
 </head>
 <body>
@@ -141,9 +162,12 @@
     <main>
         <div class="settings-card">
             <h2>Ignored Folders</h2>
-            <p class="desc">These folder names are skipped during indexing. They will not appear in search, duplicates, or the explorer. Re-index after changing.</p>
+            <p class="desc">Folders are skipped during indexing. Add a condition to only skip when a specific file exists in the parent directory.</p>
             <div class="ignore-list" id="ignore-list"></div>
             <button class="add-btn" onclick="addIgnoreItem()">+ Add folder</button>
+            <div class="condition-hint">
+                <strong>Conditional skip:</strong> Leave the condition empty to always skip, or enter a filename (e.g. <code>package.json</code>) to only skip when that file exists in the parent directory.
+            </div>
             <div class="save-bar">
                 <button class="save-btn" id="save-btn" onclick="saveSettings()">Save</button>
                 <span class="save-msg" id="save-msg">Saved</span>
@@ -168,13 +192,16 @@
             '.DS_Store', 'Thumbs.db', '.idea', '.vscode'
         ];
 
-        let currentList = [];
+        let currentRules = [];
 
         async function loadSettings() {
             try {
                 const res = await fetch('/api/settings');
                 const data = await res.json();
-                currentList = data.ignore_folders || [];
+                currentRules = (data.ignore_folders || []).map(r => ({
+                    name: r.name || r,
+                    condition: r.condition || null
+                }));
                 renderList();
                 renderPresets();
             } catch (e) {
@@ -184,13 +211,20 @@
 
         function renderList() {
             const container = document.getElementById('ignore-list');
-            if (currentList.length === 0) {
+            if (currentRules.length === 0) {
                 container.innerHTML = '<div style="color:#999;font-size:0.85rem;padding:0.5rem 0;">No folders ignored</div>';
                 return;
             }
-            container.innerHTML = currentList.map((item, i) => `
+            container.innerHTML = currentRules.map((rule, i) => `
                 <div class="ignore-item">
-                    <input type="text" value="${escapeAttr(item)}" onchange="updateItem(${i}, this.value)" onkeydown="if(event.key==='Enter')saveSettings()">
+                    <input type="text" value="${escapeAttr(rule.name)}" placeholder="Folder name"
+                           onchange="updateItemName(${i}, this.value)"
+                           onkeydown="if(event.key==='Enter')saveSettings()">
+                    <span style="color:#999;font-size:0.8rem;">if</span>
+                    <input type="text" class="condition-input" value="${escapeAttr(rule.condition || '')}"
+                           placeholder="No condition (always skip)"
+                           onchange="updateItemCondition(${i}, this.value)"
+                           onkeydown="if(event.key==='Enter')saveSettings()">
                     <button class="remove-btn" onclick="removeItem(${i})" title="Remove">&times;</button>
                 </div>
             `).join('');
@@ -198,39 +232,45 @@
 
         function renderPresets() {
             const container = document.getElementById('preset-tags');
+            const existingNames = currentRules.map(r => r.name);
             container.innerHTML = PRESETS
-                .filter(p => !currentList.includes(p))
+                .filter(p => !existingNames.includes(p))
                 .map(p => `<span class="preset-tag" onclick="addPreset('${p}')">${p}</span>`)
                 .join('');
         }
 
         function addIgnoreItem() {
-            currentList.push('');
+            currentRules.push({ name: '', condition: null });
             renderList();
             const inputs = document.querySelectorAll('.ignore-item input');
-            inputs[inputs.length - 1].focus();
+            inputs[inputs.length - 2].focus();
         }
 
-        function updateItem(idx, value) {
-            currentList[idx] = value.trim();
+        function updateItemName(idx, value) {
+            currentRules[idx].name = value.trim();
+        }
+
+        function updateItemCondition(idx, value) {
+            const v = value.trim();
+            currentRules[idx].condition = v === '' ? null : v;
         }
 
         function removeItem(idx) {
-            currentList.splice(idx, 1);
+            currentRules.splice(idx, 1);
             renderList();
             renderPresets();
         }
 
         function addPreset(name) {
-            if (!currentList.includes(name)) {
-                currentList.push(name);
+            if (!currentRules.some(r => r.name === name)) {
+                currentRules.push({ name, condition: null });
                 renderList();
                 renderPresets();
             }
         }
 
         async function saveSettings() {
-            const cleaned = currentList.filter(s => s.trim() !== '');
+            const cleaned = currentRules.filter(r => r.name.trim() !== '');
             const btn = document.getElementById('save-btn');
             const msg = document.getElementById('save-msg');
             btn.disabled = true;
@@ -242,7 +282,7 @@
                     body: JSON.stringify({ ignore_folders: cleaned })
                 });
                 if (res.ok) {
-                    currentList = cleaned;
+                    currentRules = cleaned;
                     renderList();
                     renderPresets();
                     msg.classList.add('show');
@@ -256,7 +296,7 @@
         }
 
         function escapeAttr(s) {
-            return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
         }
 
         loadSettings();

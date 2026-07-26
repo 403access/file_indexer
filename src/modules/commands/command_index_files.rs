@@ -8,7 +8,7 @@ use crate::{
         logging,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, get_ignore_list, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed},
+        sql::database::{get_connection, get_ignore_rules, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed, IgnoreRule},
     },
     states::app_state,
 };
@@ -89,10 +89,10 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
         })?;
     }
 
-    let ignore_list: Vec<String> = match get_connection(db_path) {
-        Ok(conn) => get_ignore_list(&conn),
+    let ignore_rules: Vec<IgnoreRule> = match get_connection(db_path) {
+        Ok(conn) => get_ignore_rules(&conn),
         Err(e) => {
-            logging::warn(&format!("Could not load ignore list: {}", e));
+            logging::warn(&format!("Could not load ignore rules: {}", e));
             Vec::new()
         }
     };
@@ -121,9 +121,12 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
                 let children = get_child_directories(&conn, path.trim_end_matches('/')).unwrap_or_default();
                 for child in children {
                     let child_with_slash = format!("{}/", child);
-                    if !ignore_list.iter().any(|ignored| {
-                        child_with_slash.trim_start_matches(path.trim_end_matches('/')).trim_start_matches('/').trim_end_matches('/') == ignored
-                    }) {
+                    let child_name = child_with_slash.trim_start_matches(path.trim_end_matches('/')).trim_start_matches('/').trim_end_matches('/');
+                    let parent_path = std::path::Path::new(path.trim_end_matches('/'));
+                    let should_skip = ignore_rules.iter().any(|rule| {
+                        rule.name == child_name && rule.should_skip(parent_path)
+                    });
+                    if !should_skip {
                         new_paths.push(child_with_slash);
                     }
                 }
@@ -189,7 +192,11 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
                     ));
                     total_entries += r.file_count + r.folder_count;
                     for d in &r.directories {
-                        if ignore_list.iter().any(|ignored| ignored == &d.name) {
+                        let parent_path = std::path::Path::new(path.trim_end_matches('/'));
+                        let should_skip = ignore_rules.iter().any(|rule| {
+                            rule.name == d.name && rule.should_skip(parent_path)
+                        });
+                        if should_skip {
                             logging::debug(&format!("Ignoring folder '{}'", d.name));
                             continue;
                         }
