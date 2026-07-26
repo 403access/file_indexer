@@ -15,7 +15,7 @@ fn create_identical_file(dir: &PathBuf, name: &str, content: &[u8]) {
 
 fn setup_and_index(temp: &PathBuf) {
     let db_path = temp.join("file_index.db");
-    index_directory(db_path.to_str().unwrap(), temp.to_str().unwrap()).unwrap();
+    index_directory(db_path.to_str().unwrap(), temp.to_str().unwrap(), None).unwrap();
 }
 
 fn count_duplicates(temp: &PathBuf) -> usize {

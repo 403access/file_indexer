@@ -17,9 +17,10 @@ async fn main() {
     let state = AppState {
         cwd: app_state::get_cwd(),
         db: database_url.clone(),
+        pause_indexer: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
 
-    ensure_indexed_async(database_url.clone(), state.cwd.clone()).await;
+    ensure_indexed_async(database_url.clone(), state.cwd.clone(), state.pause_indexer.clone()).await;
 
     tracing_subscriber::fmt::init();
 

@@ -3,7 +3,7 @@ use axum::Json;
 use serde::Serialize;
 
 use crate::modules::sql::database::get_connection;
-use crate::states::app_state::AppState;
+use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Serialize)]
 pub struct FolderFile {
@@ -35,6 +35,7 @@ pub struct DuplicateFoldersResponse {
 pub async fn duplicate_folders_handler(
     State(state): State<AppState>,
 ) -> Result<Json<DuplicateFoldersResponse>, (axum::http::StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

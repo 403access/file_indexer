@@ -3,7 +3,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::modules::sql::database::{get_connection, get_logs};
-use crate::states::app_state::AppState;
+use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
 pub struct LogsParams {
@@ -32,6 +32,7 @@ pub async fn logs_handler(
     State(state): State<AppState>,
     Query(params): Query<LogsParams>,
 ) -> Json<Vec<LogEntry>> {
+    let _guard = IndexerPauseGuard::new(&state);
     let limit = params.limit.unwrap_or(1000);
     let level = params.level.as_deref().filter(|l| *l != "all");
     let search = params.search.as_deref().filter(|s| !s.is_empty());

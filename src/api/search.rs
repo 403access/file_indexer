@@ -6,7 +6,7 @@ use crate::modules::commands::command_search_file::{OrderKind, PatternKind, Targ
 use crate::modules::file_entry::_types::FileEntry;
 use crate::modules::sql::database::get_connection;
 use crate::modules::sql::search::search_file;
-use crate::states::app_state::AppState;
+use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
 pub struct SearchParams {
@@ -44,6 +44,8 @@ pub async fn search_handler(
     State(state): State<AppState>,
     Query(params): Query<SearchParams>,
 ) -> Result<Json<SearchResponse>, (axum::http::StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
+
     let name = params.name.unwrap_or_default();
     let target_kind = match params.r#type.as_str() {
         "files" => TargetKind::Files,

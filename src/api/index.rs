@@ -21,7 +21,7 @@ pub async fn index_handler(
     let db = &state.db;
 
     crate::modules::progress::start(0);
-    let result = index_directory(db, cwd);
+    let result = index_directory(db, cwd, Some(state.pause_indexer.clone()));
     crate::modules::progress::finish();
 
     match result {
@@ -47,7 +47,7 @@ pub fn count_entries(db_path: &str) -> usize {
 
 pub fn ensure_indexed(db_path: &str, cwd: &str) {
     logging::info(&format!("Indexing {}...", cwd));
-    match index_directory(db_path, cwd) {
+    match index_directory(db_path, cwd, None) {
         Ok(()) => {
             let count = count_entries(db_path);
             logging::info(&format!("Indexed {} entries.", count));
@@ -56,10 +56,10 @@ pub fn ensure_indexed(db_path: &str, cwd: &str) {
     }
 }
 
-pub async fn ensure_indexed_async(db_path: String, cwd: String) {
+pub async fn ensure_indexed_async(db_path: String, cwd: String, pause_flag: std::sync::Arc<std::sync::atomic::AtomicBool>) {
     logging::info(&format!("Indexing {} in background...", cwd));
     progress::start(0);
-    tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd) {
+    tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd, Some(pause_flag)) {
         Ok(()) => {
             let count = count_entries(&db_path);
             progress::finish();

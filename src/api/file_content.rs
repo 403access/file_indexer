@@ -4,7 +4,7 @@ use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Deserialize;
 
-use crate::states::app_state::AppState;
+use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
 pub struct FileContentParams {
@@ -48,6 +48,7 @@ pub async fn file_content_handler(
     State(state): State<AppState>,
     Query(params): Query<FileContentParams>,
 ) -> Result<Response, (StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
     let raw_path = params.path.replace("//", "/");
     let cwd = state.cwd.trim_end_matches('/');
 

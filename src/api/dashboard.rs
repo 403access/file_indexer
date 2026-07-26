@@ -3,7 +3,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 
 use crate::modules::sql::database::get_connection;
-use crate::states::app_state::AppState;
+use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
 pub struct DashboardParams {
@@ -37,6 +37,7 @@ pub async fn dashboard_handler(
     State(state): State<AppState>,
     Query(params): Query<DashboardParams>,
 ) -> Result<Json<DashboardResponse>, (axum::http::StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 

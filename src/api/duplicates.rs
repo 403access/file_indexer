@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::modules::file_entry::_types::FileEntry;
 use crate::modules::sql::database::{get_connection, reset_duplicates_table};
-use crate::states::app_state::AppState;
+use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
 pub struct DuplicatesParams {
@@ -36,6 +36,7 @@ pub async fn duplicates_handler(
     State(state): State<AppState>,
     Query(params): Query<DuplicatesParams>,
 ) -> Result<Json<DuplicatesResponse>, (axum::http::StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
     {
         let mut conn = get_connection(&state.db)
             .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;

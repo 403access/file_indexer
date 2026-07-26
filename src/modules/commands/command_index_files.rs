@@ -1,4 +1,6 @@
 use std::io;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use indicatif::ProgressBar;
 
@@ -20,7 +22,7 @@ struct InsertResult {
     skipped: Option<(String, String)>,
 }
 
-pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
+pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<AtomicBool>>) -> io::Result<()> {
     {
         let mut conn = get_connection(db_path).map_err(|e| {
             logging::error(&format!("Failed to connect to database: {}", e));
@@ -103,6 +105,13 @@ pub fn index_directory(db_path: &str, root_dir: &str) -> io::Result<()> {
     loop {
         let mut new_paths: Vec<String> = Vec::new();
         for path in &paths {
+            // Pause if web requests are waiting
+            if let Some(ref flag) = pause_flag {
+                while flag.load(Ordering::SeqCst) {
+                    std::thread::sleep(std::time::Duration::from_millis(50));
+                }
+            }
+
             // Check if this directory was already traversed
             let already_traversed = {
                 let conn = get_connection(db_path).map_err(|e| {
@@ -227,7 +236,7 @@ pub fn command_index_files(_pb: &ProgressBar) -> io::Result<bool> {
     let cwd = app_state::get_cwd();
     let db_path = "file_index.db";
 
-    index_directory(db_path, &cwd)?;
+    index_directory(db_path, &cwd, None)?;
 
     logging::info("Indexing complete.");
     progress::finish();

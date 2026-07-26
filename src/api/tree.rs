@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::modules::file_entry::_types::FileEntry;
 use crate::modules::sql::database::get_connection;
-use crate::states::app_state::AppState;
+use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
 pub struct TreeParams {
@@ -26,6 +26,7 @@ pub async fn tree_handler(
     State(state): State<AppState>,
     Query(params): Query<TreeParams>,
 ) -> Result<Json<TreeResponse>, (axum::http::StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
