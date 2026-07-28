@@ -266,6 +266,7 @@ pub fn reset_duplicates_table(tx: &Transaction) -> rusqlite::Result<()> {
 
 /// Refresh the duplicate_hashes table (drop + recreate). Call after folder commits.
 pub fn refresh_duplicate_hashes(conn: &Connection) {
+    logging::info("Refreshing duplicate_hashes table...");
     let _ = conn.execute("DROP TABLE IF EXISTS duplicate_hashes", []);
     let _ = conn.execute(
         "CREATE TABLE duplicate_hashes AS
@@ -274,6 +275,10 @@ pub fn refresh_duplicate_hashes(conn: &Connection) {
          GROUP BY hash HAVING COUNT(*) > 1",
         [],
     );
+    let count: u64 = conn
+        .query_row("SELECT COUNT(*) FROM duplicate_hashes", [], |r| r.get(0))
+        .unwrap_or(0);
+    logging::info(&format!("Duplicate hashes refreshed: {} duplicate groups", count));
 }
 
 /// Incrementally update duplicate_hashes for only the given hashes.
@@ -288,6 +293,8 @@ pub fn update_duplicate_hashes_incremental(conn: &Connection, hashes: &[String])
         "CREATE TABLE IF NOT EXISTS duplicate_hashes (hash TEXT PRIMARY KEY)",
         [],
     );
+
+    let mut new_duplicates = 0u64;
 
     for hash in hashes {
         // Check if this hash already exists in duplicate_hashes
@@ -317,7 +324,12 @@ pub fn update_duplicate_hashes_incremental(conn: &Connection, hashes: &[String])
                 "INSERT OR IGNORE INTO duplicate_hashes (hash) VALUES (?1)",
                 [hash],
             );
+            new_duplicates += 1;
         }
+    }
+
+    if new_duplicates > 0 {
+        logging::info(&format!("Incremental duplicate update: {} new duplicate group(s) found from {} hash(es)", new_duplicates, hashes.len()));
     }
 }
 
@@ -534,6 +546,7 @@ pub fn get_child_directories(conn: &Connection, parent_path: &str) -> rusqlite::
 
 /// Refresh the materialized dashboard stats and timeline tables.
 pub fn refresh_dashboard_stats(conn: &Connection) {
+    logging::info("Refreshing dashboard stats snapshot...");
     let now = chrono::Utc::now().timestamp() as f64;
 
     // Scalar stats
@@ -675,11 +688,13 @@ pub fn refresh_dashboard_stats(conn: &Connection) {
         "INSERT OR REPLACE INTO dashboard_stats (key, value, updated_at) VALUES ('last_refreshed', :value, :updated_at)",
         named_params! { ":value": now.to_string(), ":updated_at": now },
     );
+    logging::info(&format!("Dashboard snapshot refreshed: {} files, {} folders", total_files, total_folders));
 }
 
 /// Recompute dashboard stats WITHOUT updating the snapshot timestamp or entries_at_refresh.
 /// Used by the periodic timer so the "behind" count keeps growing between manual refreshes.
 pub fn recompute_dashboard_stats(conn: &Connection) {
+    logging::info("Recomputing dashboard stats...");
     let now = chrono::Utc::now().timestamp() as f64;
 
     let (total_files, total_folders, total_size): (u64, u64, u64) = conn
@@ -804,4 +819,5 @@ pub fn recompute_dashboard_stats(conn: &Connection) {
         );
         let _ = conn.execute(&sql, [interval]);
     }
+    logging::info(&format!("Dashboard stats recomputed: {} files, {} folders", total_files, total_folders));
 }
