@@ -1,4 +1,10 @@
+pub mod connection;
+pub mod dashboard;
 pub mod database;
-// pub mod insert_file;
-pub mod search;
 pub mod duplicates;
+pub mod files;
+pub mod logs;
+pub mod schema;
+pub mod search;
+pub mod settings;
+pub mod skipped;
