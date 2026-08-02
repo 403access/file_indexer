@@ -54,3 +54,14 @@ pub fn get_database_url() -> String {
 pub fn get_cwd() -> String {
     ENV_VARS.with(|vars| vars.borrow().cwd.clone())
 }
+
+/// Get the server port to bind the HTTP API to (default: 3000)
+///
+/// Reads the `PORT` environment variable. Falls back to `3000` when the
+/// variable is unset or not a valid port number.
+pub fn get_server_port() -> u16 {
+    env::var("PORT")
+        .ok()
+        .and_then(|v| v.parse::<u16>().ok())
+        .unwrap_or(3000)
+}

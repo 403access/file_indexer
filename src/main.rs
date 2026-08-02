@@ -61,7 +61,16 @@ async fn main() {
         .fallback_service(ServeDir::new("static"))
         .merge(api_router);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Server running on http://localhost:3000");
+    let port = file_indexer::modules::environment::env_vars::get_server_port();
+    let addr = format!("0.0.0.0:{}", port);
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            eprintln!("❌ Failed to bind API server to {}: {}", addr, e);
+            eprintln!("   Is another process already using port {}?", port);
+            std::process::exit(1);
+        }
+    };
+    println!("Server running on http://localhost:{}", port);
     axum::serve(listener, app).await.unwrap();
 }
