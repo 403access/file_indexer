@@ -40,6 +40,7 @@
                 <option value="5">5+ folders</option>
                 <option value="10">10+ folders</option>
             </select>
+            <input type="text" id="file-types-input" class="ft-input" placeholder="File types (e.g. jpg, png)" onkeydown="if(event.key==='Enter')applyFilter()" title="Only show groups that contain duplicate files of these types (comma separated)">
             <select id="sort-select" onchange="applyFilter()">
                 <option value="shared">Sort: shared count</option>
                 <option value="folders">Sort: folder count</option>

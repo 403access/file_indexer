@@ -17,6 +17,8 @@ pub struct DuplicateFoldersParams {
     pub min_shared: Option<u32>,
     #[serde(default)]
     pub min_folders: Option<u32>,
+    #[serde(default)]
+    pub file_types: Option<String>,
     #[serde(default = "default_sort")]
     pub sort: String,
     #[serde(default = "default_order")]
@@ -84,6 +86,7 @@ pub async fn duplicate_folders_handler(
         std::collections::HashMap::new();
     let mut folder_names: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     let mut folder_file_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+    let mut hash_extension: std::collections::HashMap<String, String> = std::collections::HashMap::new();
 
     let rows = stmt.query_map([], |row| {
         Ok((
@@ -94,8 +97,11 @@ pub async fn duplicate_folders_handler(
     }).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     for row in rows {
-        let (path, _name, hash) = row.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let (path, name, hash) = row.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         let normalized = path.replace("//", "/");
+        // Remember the extension of this duplicate file (for file-type filtering)
+        let ext = name.rsplit_once('.').map(|(_, e)| e.to_lowercase()).unwrap_or_default();
+        hash_extension.entry(hash.clone()).or_insert(ext);
         if let Some(parent) = normalized.rsplit_once('/') {
             let folder = parent.0.to_string();
             folder_hashes.entry(folder.clone()).or_default().insert(hash.clone());
@@ -150,6 +156,11 @@ pub async fn duplicate_folders_handler(
     let min_shared = params.min_shared.unwrap_or(0) as usize;
     let min_folders = params.min_folders.unwrap_or(0) as usize;
 
+    // Parsed list of requested file extensions for filtering (lowercased)
+    let file_types: std::collections::HashSet<String> = params.file_types.as_ref()
+        .map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect())
+        .unwrap_or_default();
+
     let mut metas: Vec<GroupMeta> = Vec::new();
     for (gi, group) in groups.iter().enumerate() {
         // Number of hashes shared across every folder in the group
@@ -177,6 +188,17 @@ pub async fn duplicate_folders_handler(
                 nm.contains(q) || p.contains(q)
             });
             if !matched {
+                continue;
+            }
+        }
+
+        // File-type filter: at least one duplicate file in the group must match
+        // one of the requested extensions
+        if !file_types.is_empty() {
+            let has_match = group.iter().any(|(_, hashes)| hashes.iter().any(|h| {
+                hash_extension.get(h).map(|e| file_types.contains(e)).unwrap_or(false)
+            }));
+            if !has_match {
                 continue;
             }
         }
