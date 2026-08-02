@@ -306,30 +306,56 @@ function setMergeView(mode) {
     renderMergeBody();
 }
 
+function parseCustomFolders() {
+    const raw = document.getElementById('custom-folders-input').value || '';
+    return raw.split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(p => p.replace(/\/+$/, ''));
+}
+
+async function checkCustomFolders() {
+    const paths = parseCustomFolders();
+    if (paths.length < 2) {
+        alert('Please provide at least two folder paths (one per line).');
+        return;
+    }
+    const folders = paths.map(p => {
+        const name = p.split('/').filter(Boolean).pop() || p;
+        return { path: p, name, file_count: 0 };
+    });
+    await openMergeForFolders(folders);
+}
+
 async function openMergeFolders(groupIdx) {
     const group = groupsData.groups[groupIdx];
     if (!group || group.folders.length < 2) return;
-    mergeGroup = group;
+    await openMergeForFolders(group.folders);
+}
 
+async function openMergeForFolders(folders) {
+    mergeGroup = { folders };
     mergeSelections = {};
-    document.getElementById('merge-dest-path').value = (group.folders[0]?.path || '').replace(/\/[^/]+$/, '') + '/merged';
+    document.getElementById('merge-dest-path').value = (folders[0]?.path || '').replace(/\/[^/]+$/, '') + '/merged';
     renderMergeBody();
     const overlay = document.getElementById('merge-overlay');
     overlay.style.display = 'block';
     requestAnimationFrame(() => overlay.classList.add('open'));
 
     try {
-        const allFiles = await Promise.all(group.folders.map(async (folder) => {
+        const allFiles = await Promise.all(folders.map(async (folder) => {
             const res = await fetch(`/api/duplicate-folders/files?path=${encodeURIComponent(folder.path)}`);
             if (!res.ok) return { path: folder.path, name: folder.name, files: [] };
             const data = await res.json();
             return { path: folder.path, name: folder.name, files: data.files };
         }));
 
-        mergeGroup.foldersWithFiles = allFiles;
+        // Only consider folders that have indexed files
+        const nonEmpty = allFiles.filter(f => f.files.length > 0);
+        mergeGroup.foldersWithFiles = nonEmpty;
 
         const byHash = {};
-        allFiles.forEach(({ path, name, files }) => {
+        nonEmpty.forEach(({ path, name, files }) => {
             files.forEach(file => {
                 if (!byHash[file.hash]) byHash[file.hash] = [];
                 byHash[file.hash].push({ ...file, folderPath: path, folderName: name });

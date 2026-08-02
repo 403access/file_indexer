@@ -38,6 +38,16 @@
             </label>
             <button class="merge-folders-btn" onclick="applyFilter()" style="background:#3498db">Search</button>
         </div>
+        <div class="custom-folders-panel">
+            <div class="custom-folders-head">
+                <strong>Check &amp; merge custom folders</strong>
+                <span>Paste folder paths (one per line) to compare them for duplicate content and merge.</span>
+            </div>
+            <textarea id="custom-folders-input" rows="3" placeholder="/path/to/folder-one&#10;/path/to/folder-two&#10;/path/to/folder-three"></textarea>
+            <div class="custom-folders-actions">
+                <button class="merge-folders-btn" onclick="checkCustomFolders()" style="background:#8e44ad">Check &amp; Merge</button>
+            </div>
+        </div>
         <div class="summary" id="summary"></div>
         <div id="groups"></div>
         <div class="pagination" id="pagination"></div>

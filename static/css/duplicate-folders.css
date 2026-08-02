@@ -436,3 +436,41 @@
 .merge-tree .tree-hash-dot {
     width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
 }
+.custom-folders-panel {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.custom-folders-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+}
+.custom-folders-head strong { font-size: 0.95rem; color: #2c3e50; }
+.custom-folders-head span { font-size: 0.8rem; color: #888; }
+.custom-folders-panel textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    resize: vertical;
+    min-height: 64px;
+}
+.custom-folders-panel textarea:focus {
+    outline: none;
+    border-color: #8e44ad;
+    box-shadow: 0 0 0 2px rgba(142,68,173,0.15);
+}
+.custom-folders-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
