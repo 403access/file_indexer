@@ -41,9 +41,29 @@
         <div class="custom-folders-panel">
             <div class="custom-folders-head">
                 <strong>Check &amp; merge custom folders</strong>
-                <span>Paste folder paths (one per line) to compare them for duplicate content and merge.</span>
+                <span>Enter folder paths to compare them for duplicate content and merge.</span>
             </div>
-            <textarea id="custom-folders-input" rows="3" placeholder="/path/to/folder-one&#10;/path/to/folder-two&#10;/path/to/folder-three"></textarea>
+
+            <div class="custom-folders-mode">
+                <span class="mode-label">Input mode</span>
+                <label class="toggle">
+                    <input type="checkbox" id="custom-folders-mode-toggle" onchange="toggleFolderInputMode()">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-text" id="custom-folders-mode-text">Paste list</span>
+                </label>
+            </div>
+
+            <div id="custom-folders-paste-mode">
+                <textarea id="custom-folders-input" rows="3" placeholder="/path/to/folder-one&#10;/path/to/folder-two&#10;/path/to/folder-three"></textarea>
+                <div class="custom-folders-hint">Paste folder paths, one per line.</div>
+            </div>
+
+            <div id="custom-folders-list-mode" style="display:none;">
+                <div id="custom-folder-rows"></div>
+                <button type="button" class="merge-folders-btn add-folder-btn" onclick="addFolderRow()">+ Add folder</button>
+                <div class="custom-folders-hint">Each row is one folder path.</div>
+            </div>
+
             <div class="custom-folders-actions">
                 <button class="merge-folders-btn" onclick="checkCustomFolders()" style="background:#8e44ad">Check &amp; Merge</button>
             </div>

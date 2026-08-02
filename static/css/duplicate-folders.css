@@ -474,6 +474,107 @@
     align-items: center;
     gap: 0.75rem;
 }
+.custom-folders-mode {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.custom-folders-mode .mode-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #555;
+}
+.toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+}
+.toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    background: #ddd;
+    border-radius: 20px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    top: 2px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.toggle input:checked + .toggle-slider {
+    background: #8e44ad;
+}
+.toggle input:checked + .toggle-slider::before {
+    transform: translateX(14px);
+}
+.toggle-text {
+    font-size: 0.85rem;
+    color: #333;
+}
+.custom-folders-hint {
+    font-size: 0.75rem;
+    color: #999;
+    margin-top: 0.25rem;
+}
+.custom-folder-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+.custom-folder-row input {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.85rem;
+    box-sizing: border-box;
+}
+.custom-folder-row input:focus {
+    outline: none;
+    border-color: #8e44ad;
+    box-shadow: 0 0 0 2px rgba(142,68,173,0.15);
+}
+.custom-folder-remove {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.custom-folder-remove:hover {
+    background: #c0392b;
+}
+.add-folder-btn {
+    background: #7f8c8d;
+}
+.add-folder-btn:hover {
+    background: #6c7a7a;
+}
 .merge-error {
     display: flex;
     flex-direction: column;
