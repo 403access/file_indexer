@@ -228,3 +228,54 @@ pub async fn folder_files_handler(
 pub struct FolderFilesParams {
     pub path: String,
 }
+
+#[derive(Deserialize)]
+pub struct CheckFoldersRequest {
+    pub paths: Vec<String>,
+}
+
+#[derive(Serialize)]
+pub struct FolderCheckResult {
+    pub path: String,
+    pub resolved: String,
+    pub exists: bool,
+    pub is_dir: bool,
+}
+
+#[derive(Serialize)]
+pub struct CheckFoldersResponse {
+    pub results: Vec<FolderCheckResult>,
+}
+
+/// Check whether the given folder paths exist on disk.
+/// Relative paths are resolved against the working directory (matching the
+/// behaviour used by the merge handler).
+pub async fn check_folders_handler(
+    State(state): State<AppState>,
+    Json(req): Json<CheckFoldersRequest>,
+) -> Result<Json<CheckFoldersResponse>, (axum::http::StatusCode, String)> {
+    let cwd = state.cwd.trim_end_matches('/');
+
+    let results: Vec<FolderCheckResult> = req
+        .paths
+        .iter()
+        .map(|raw| {
+            let normalized = raw.replace("//", "/");
+            let resolved = if normalized.starts_with('/') {
+                normalized
+            } else {
+                format!("{}/{}", cwd, normalized.trim_start_matches('/'))
+            };
+            let exists = std::path::Path::new(&resolved).exists();
+            let is_dir = std::path::Path::new(&resolved).is_dir();
+            FolderCheckResult {
+                path: raw.clone(),
+                resolved,
+                exists,
+                is_dir,
+            }
+        })
+        .collect();
+
+    Ok(Json(CheckFoldersResponse { results }))
+}

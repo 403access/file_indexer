@@ -320,9 +320,35 @@ async function checkCustomFolders() {
         alert('Please provide at least two folder paths (one per line).');
         return;
     }
-    const folders = paths.map(p => {
-        const name = p.split('/').filter(Boolean).pop() || p;
-        return { path: p, name, file_count: 0 };
+
+    // Check which provided folders actually exist on disk
+    let results = paths.map(p => ({ path: p, resolved: p, exists: true, is_dir: true }));
+    try {
+        const res = await fetch('/api/folders/check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths })
+        });
+        if (res.ok) {
+            const data = await res.json();
+            results = data.results || results;
+        }
+    } catch (e) {
+        console.error('Failed to check folders:', e);
+    }
+
+    const missing = results.filter(r => !r.exists || !r.is_dir);
+    if (missing.length > 0) {
+        const list = missing.map(r => r.path).join('\n');
+        alert('The following folder(s) do not exist or are not directories:\n\n' + list +
+            '\n\nPlease fix the paths and try again.');
+        return;
+    }
+
+    const folders = results.map(r => {
+        const normalized = r.resolved.replace(/\/+$/, '');
+        const name = normalized.split('/').filter(Boolean).pop() || r.path;
+        return { path: normalized, name, file_count: 0 };
     });
     await openMergeForFolders(folders);
 }
