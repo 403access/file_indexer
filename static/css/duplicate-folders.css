@@ -297,6 +297,21 @@
     color: #333;
     cursor: pointer;
 }
+.filter-bar .filter-number {
+    font-size: 0.85rem;
+    color: #666;
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+}
+.filter-bar .filter-number input {
+    flex: 0 0 64px;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
 .filter-bar label {
     font-size: 0.85rem;
     color: #666;

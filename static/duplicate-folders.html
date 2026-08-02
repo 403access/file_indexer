@@ -28,9 +28,9 @@
     <main>
         <div class="filter-bar">
             <input type="text" id="filter-input" placeholder="Filter by folder or file name..." onkeydown="if(event.key==='Enter')applyFilter()">
-            <label>
-                <input type="checkbox" id="min-shared" onchange="applyFilter()">
-                Min 2 shared
+            <label class="filter-number">
+                Min shared files:
+                <input type="number" id="min-shared-input" min="0" value="0" onchange="applyFilter()" title="Only show groups that share at least this many duplicate files">
             </label>
             <select id="min-folders" onchange="applyFilter()">
                 <option value="0">Any folder count</option>

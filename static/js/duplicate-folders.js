@@ -78,7 +78,7 @@ function applyFilter() {
 
 async function loadGroups() {
     const q = (document.getElementById('filter-input').value || '').trim();
-    const minShared = document.getElementById('min-shared').checked ? 2 : 0;
+    const minShared = parseInt(document.getElementById('min-shared-input').value || '0', 10) || 0;
     const minFolders = parseInt(document.getElementById('min-folders').value || '0', 10) || 0;
     const sort = document.getElementById('sort-select').value || 'shared';
     const order = document.getElementById('sort-dir').value || 'desc';
