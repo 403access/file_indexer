@@ -314,10 +314,25 @@ function parseCustomFolders() {
         .map(p => p.replace(/\/+$/, ''));
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function openMergeOverlay() {
+    const overlay = document.getElementById('merge-overlay');
+    overlay.style.display = 'block';
+    requestAnimationFrame(() => overlay.classList.add('open'));
+}
+
 async function checkCustomFolders() {
     const paths = parseCustomFolders();
     if (paths.length < 2) {
-        alert('Please provide at least two folder paths (one per line).');
+        showMergeError('Please provide at least two folder paths (one per line).', []);
         return;
     }
 
@@ -339,9 +354,10 @@ async function checkCustomFolders() {
 
     const missing = results.filter(r => !r.exists || !r.is_dir);
     if (missing.length > 0) {
-        const list = missing.map(r => r.path).join('\n');
-        alert('The following folder(s) do not exist or are not directories:\n\n' + list +
-            '\n\nPlease fix the paths and try again.');
+        showMergeError(
+            'The following folder(s) do not exist or are not directories.',
+            missing.map(r => r.path)
+        );
         return;
     }
 
@@ -351,6 +367,34 @@ async function checkCustomFolders() {
         return { path: normalized, name, file_count: 0 };
     });
     await openMergeForFolders(folders);
+}
+
+function showMergeError(title, paths) {
+    mergeGroup = null;
+    mergeSelections = {};
+
+    const body = document.getElementById('merge-body');
+    body.className = 'merge-body';
+    body.innerHTML = `
+        <div class="merge-error">
+            <div class="merge-error-title">${escapeHtml(title)}</div>
+            ${paths.length
+                ? `<div class="merge-error-list">${paths.map(p =>
+                    `<div class="merge-error-item">${escapeHtml(p)}</div>`).join('')}</div>`
+                : ''}
+            <div class="merge-error-hint">Fix the paths in the text box (one per line) and click Check &amp; Merge again.</div>
+        </div>`;
+
+    const stats = document.getElementById('merge-stats');
+    stats.textContent = paths.length
+        ? `${paths.length} invalid folder${paths.length !== 1 ? 's' : ''}`
+        : '';
+
+    const btn = document.getElementById('merge-apply');
+    btn.disabled = true;
+    btn.textContent = 'Fix paths';
+
+    openMergeOverlay();
 }
 
 async function openMergeFolders(groupIdx) {
@@ -364,9 +408,7 @@ async function openMergeForFolders(folders) {
     mergeSelections = {};
     document.getElementById('merge-dest-path').value = (folders[0]?.path || '').replace(/\/[^/]+$/, '') + '/merged';
     renderMergeBody();
-    const overlay = document.getElementById('merge-overlay');
-    overlay.style.display = 'block';
-    requestAnimationFrame(() => overlay.classList.add('open'));
+    openMergeOverlay();
 
     try {
         const allFiles = await Promise.all(folders.map(async (folder) => {
@@ -590,6 +632,9 @@ function closeMerge() {
     document.getElementById('view-summary-btn').classList.remove('active');
     document.getElementById('view-list-btn').classList.remove('active');
     document.getElementById('view-tree-btn').classList.add('active');
+    const btn = document.getElementById('merge-apply');
+    btn.disabled = false;
+    btn.textContent = 'Apply Merge';
 }
 
 async function applyMerge() {

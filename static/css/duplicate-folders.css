@@ -474,3 +474,35 @@
     align-items: center;
     gap: 0.75rem;
 }
+.merge-error {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 0.25rem 0;
+}
+.merge-error-title {
+    font-weight: 600;
+    color: #c0392b;
+    font-size: 0.9rem;
+}
+.merge-error-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+}
+.merge-error-item {
+    padding: 0.45rem 0.6rem;
+    background: #fdf2f2;
+    border: 1px solid #e74c3c;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    color: #c0392b;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.merge-error-hint {
+    font-size: 0.8rem;
+    color: #888;
+}
