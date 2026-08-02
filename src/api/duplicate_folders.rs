@@ -11,10 +11,22 @@ pub struct DuplicateFoldersParams {
     pub page: u32,
     #[serde(default = "default_per_page")]
     pub per_page: u32,
+    #[serde(default)]
+    pub q: Option<String>,
+    #[serde(default)]
+    pub min_shared: Option<u32>,
+    #[serde(default)]
+    pub min_folders: Option<u32>,
+    #[serde(default = "default_sort")]
+    pub sort: String,
+    #[serde(default = "default_order")]
+    pub order: String,
 }
 
 fn default_page() -> u32 { 1 }
 fn default_per_page() -> u32 { 20 }
+fn default_sort() -> String { "shared".to_string() }
+fn default_order() -> String { "desc".to_string() }
 
 #[derive(Serialize)]
 pub struct FolderInfo {
@@ -125,29 +137,78 @@ pub async fn duplicate_folders_handler(
         }
     }
 
-    // Sort groups by total shared count descending
-    groups.sort_by(|a, b| {
-        let a_count: usize = a.iter().map(|f| f.1.len()).sum();
-        let b_count: usize = b.iter().map(|f| f.1.len()).sum();
-        b_count.cmp(&a_count)
-    });
+    // Build metadata for every group so we can filter and sort before paginating
+    struct GroupMeta {
+        idx: usize,
+        shared_count: usize,
+        folder_count: usize,
+        name: String,
+        file_count: usize,
+    }
 
-    let total_groups = groups.len();
+    let q = params.q.as_ref().map(|s| s.to_lowercase());
+    let min_shared = params.min_shared.unwrap_or(0) as usize;
+    let min_folders = params.min_folders.unwrap_or(0) as usize;
 
-    // Phase 4: Paginate - only build full details for current page
-    let start = ((params.page - 1) * params.per_page) as usize;
-    let end = (start + params.per_page as usize).min(total_groups);
-    let page_groups = if start < total_groups { &groups[start..end] } else { &[] };
-
-    let response_groups: Vec<FolderGroup> = page_groups.iter().map(|group| {
-        let shared_hashes: std::collections::HashSet<String> = if let Some(first) = group.first() {
+    let mut metas: Vec<GroupMeta> = Vec::new();
+    for (gi, group) in groups.iter().enumerate() {
+        // Number of hashes shared across every folder in the group
+        let shared_count = if let Some(first) = group.first() {
             group.iter().skip(1).fold(first.1.clone(), |acc, f| {
                 acc.intersection(&f.1).cloned().collect()
-            })
+            }).len()
         } else {
-            std::collections::HashSet::new()
+            0
         };
+        let folder_count = group.len();
+        let file_count: usize = group.iter()
+            .map(|(path, _)| folder_file_counts.get(path).copied().unwrap_or(0))
+            .sum();
+        let name = group.get(0)
+            .and_then(|(path, _)| folder_names.get(path))
+            .cloned()
+            .unwrap_or_default();
 
+        // Text filter: any folder name or path must contain the query
+        if let Some(q) = &q {
+            let matched = group.iter().any(|(path, _)| {
+                let nm = folder_names.get(path).map(|s| s.to_lowercase()).unwrap_or_default();
+                let p = path.to_lowercase();
+                nm.contains(q) || p.contains(q)
+            });
+            if !matched {
+                continue;
+            }
+        }
+
+        if shared_count < min_shared || folder_count < min_folders {
+            continue;
+        }
+
+        metas.push(GroupMeta { idx: gi, shared_count, folder_count, name, file_count });
+    }
+
+    // Sort
+    let ascending = params.order == "asc";
+    metas.sort_by(|a, b| {
+        let ord = match params.sort.as_str() {
+            "folders" => a.folder_count.cmp(&b.folder_count),
+            "name" => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+            "files" => a.file_count.cmp(&b.file_count),
+            _ => a.shared_count.cmp(&b.shared_count),
+        };
+        if ascending { ord } else { ord.reverse() }
+    });
+
+    let total_groups = metas.len();
+
+    // Phase 4: Paginate over the filtered/sorted groups - only build full details for current page
+    let start = ((params.page - 1) * params.per_page) as usize;
+    let end = (start + params.per_page as usize).min(total_groups);
+    let page_metas = if start < total_groups { &metas[start..end] } else { &[] };
+
+    let response_groups: Vec<FolderGroup> = page_metas.iter().map(|m| {
+        let group = &groups[m.idx];
         let folders: Vec<FolderInfo> = group.iter().map(|(path, _hashes)| {
             let display_name = folder_names.get(path).cloned().unwrap_or_else(|| {
                 path.rsplit_once('/').map(|s| s.1.to_string()).unwrap_or_default()
@@ -158,7 +219,7 @@ pub async fn duplicate_folders_handler(
         }).collect();
 
         FolderGroup {
-            shared_count: shared_hashes.len(),
+            shared_count: m.shared_count,
             folders,
         }
     }).collect();

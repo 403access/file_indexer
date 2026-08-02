@@ -77,7 +77,22 @@ function applyFilter() {
 }
 
 async function loadGroups() {
-    const res = await fetch(`/api/duplicate-folders?page=${currentPage}&per_page=${perPage}`);
+    const q = (document.getElementById('filter-input').value || '').trim();
+    const minShared = document.getElementById('min-shared').checked ? 2 : 0;
+    const minFolders = parseInt(document.getElementById('min-folders').value || '0', 10) || 0;
+    const sort = document.getElementById('sort-select').value || 'shared';
+    const order = document.getElementById('sort-dir').value || 'desc';
+
+    const params = new URLSearchParams();
+    params.set('page', currentPage);
+    params.set('per_page', perPage);
+    if (q) params.set('q', q);
+    if (minShared) params.set('min_shared', minShared);
+    if (minFolders) params.set('min_folders', minFolders);
+    if (sort !== 'shared') params.set('sort', sort);
+    if (order !== 'desc') params.set('order', order);
+
+    const res = await fetch(`/api/duplicate-folders?${params.toString()}`);
     if (!res.ok) return;
     groupsData = await res.json();
     renderGroups(groupsData);

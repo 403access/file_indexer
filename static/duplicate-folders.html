@@ -32,6 +32,24 @@
                 <input type="checkbox" id="min-shared" onchange="applyFilter()">
                 Min 2 shared
             </label>
+            <select id="min-folders" onchange="applyFilter()">
+                <option value="0">Any folder count</option>
+                <option value="2">2+ folders</option>
+                <option value="3">3+ folders</option>
+                <option value="4">4+ folders</option>
+                <option value="5">5+ folders</option>
+                <option value="10">10+ folders</option>
+            </select>
+            <select id="sort-select" onchange="applyFilter()">
+                <option value="shared">Sort: shared count</option>
+                <option value="folders">Sort: folder count</option>
+                <option value="name">Sort: folder name</option>
+                <option value="files">Sort: file count</option>
+            </select>
+            <select id="sort-dir" onchange="applyFilter()">
+                <option value="desc">High to low</option>
+                <option value="asc">Low to high</option>
+            </select>
             <label class="align-toggle">
                 <input type="checkbox" id="align-files" onchange="applyFilter()">
                 Align shared files
