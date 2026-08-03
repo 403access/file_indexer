@@ -21,11 +21,14 @@ pub struct Process {
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
 pub enum ProcessStatus {
+    #[serde(rename = "active")]
     Running,
+    #[serde(rename = "completed")]
     Completed,
+    #[serde(rename = "failed")]
     Failed,
+    #[serde(rename = "pending")]
     Pending,
 }
 

@@ -15,21 +15,21 @@ function renderProcesses(processes) {
     const summary = document.getElementById('processes-summary');
     const cardsContainer = document.getElementById('process-cards');
 
-    const running = processes.filter(p => p.status === 'running').length;
+    const running = processes.filter(p => p.status === 'active').length;
     const pending = processes.filter(p => p.status === 'pending').length;
     const completed = processes.filter(p => p.status === 'completed').length;
     const failed = processes.filter(p => p.status === 'failed').length;
 
     summary.textContent = `${processes.length} total • ${running} running • ${pending} upcoming • ${completed} completed • ${failed} failed`;
 
-    const active = processes.filter(p => p.status === 'running' || p.status === 'pending');
+    const active = processes.filter(p => p.status === 'active' || p.status === 'pending');
 
     if (active.length === 0) {
         cardsContainer.innerHTML = '';
     } else {
         cardsContainer.innerHTML = active.map(p => {
             const progressHtml = p.progress !== null && p.progress !== undefined
-                ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'running' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
+                ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
                 : '<span class="process-mono">—</span>';
 
             return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}">
@@ -68,7 +68,7 @@ function renderProcesses(processes) {
 
     tbody.innerHTML = processes.map(p => {
         const progressHtml = p.progress !== null && p.progress !== undefined
-            ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'running' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
+            ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
             : '<span class="process-mono">—</span>';
 
         return `<tr>
