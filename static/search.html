@@ -97,23 +97,45 @@
     </style>
 </head>
 <body>
-    <header>
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
         <h1>File Indexer</h1>
-        <nav>
-            <a href="/">Dashboard</a>
-            <a href="/search.html" class="active">Search</a>
-            <a href="/duplicates.html">Duplicates</a>
-            <a href="/duplicate-folders.html">Folders</a>
-            <a href="/explorer.html">Explorer</a>
-            <a href="/skipped.html">Skipped</a>
-            <a href="/logs.html">Logs</a>
-            <a href="/status.html">Status</a>
-            <a href="/processes.html">Processes</a>
-            <a href="/settings.html">Settings</a>
-            <a href="/ignored.html">Ignored</a>
-            <span id="status-dot" class="status-dot idle" title="Idle"></span>
-        </nav>
-    </header>
+        <button class="sidebar-toggle" onclick="toggleSidebar()" aria-label="Toggle menu">☰</button>
+      </div>
+      <nav class="sidebar-nav">
+        <div class="nav-section">
+          <div class="nav-section-title">Browse</div>
+          <a href="/" class="nav-item">Dashboard</a>
+          <a href="/search.html" class="nav-item active">Search</a>
+          <a href="/explorer.html" class="nav-item">Explorer</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Duplicates</div>
+          <a href="/duplicates.html" class="nav-item">Duplicates</a>
+          <a href="/duplicate-folders.html" class="nav-item">Folders</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Data</div>
+          <a href="/skipped.html" class="nav-item">Skipped</a>
+          <a href="/ignored.html" class="nav-item">Ignored</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">System</div>
+          <a href="/status.html" class="nav-item">Status</a>
+          <a href="/processes.html" class="nav-item">Processes</a>
+          <a href="/logs.html" class="nav-item">Logs</a>
+        </div>
+        <div class="nav-section">
+          <div class="nav-section-title">Config</div>
+          <a href="/settings.html" class="nav-item">Settings</a>
+        </div>
+      </nav>
+      <div class="sidebar-footer">
+        <span class="sidebar-footer-text">Indexer</span>
+        <span id="status-dot" class="status-dot idle" title="Idle"></span>
+      </div>
+    </aside>
+    <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
     <main>
         <section class="search-controls">

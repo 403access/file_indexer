@@ -1,6 +1,20 @@
 let statusPollTimeout = null;
 let statusPolling = false;
 
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    if (!sidebar) return;
+    const isOpen = sidebar.classList.contains('open');
+    if (isOpen) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('open');
+    } else {
+        sidebar.classList.add('open');
+        if (overlay) overlay.classList.add('open');
+    }
+}
+
 async function pollStatus() {
     if (statusPolling) return;
     statusPolling = true;
