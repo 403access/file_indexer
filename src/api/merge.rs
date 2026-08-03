@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 use crate::modules::logging;
+use crate::modules::processes;
 use crate::states::app_state::AppState;
 
 #[derive(Deserialize)]
@@ -24,22 +25,25 @@ pub async fn merge_handler(
     Json(req): Json<MergeRequest>,
 ) -> Result<Json<MergeResponse>, (axum::http::StatusCode, String)> {
     let cwd = state.cwd.trim_end_matches('/');
-
-    // Normalize destination
     let dest = if req.destination.starts_with('/') {
         req.destination.clone()
     } else {
         format!("{}/{}", cwd, req.destination)
     };
 
-    // Create destination directory
+    let process_id = processes::register("Merge duplicate folders", "merge", Some(&dest));
+    let total_ops = req.keep.len() + req.remove.len();
+
     tokio::fs::create_dir_all(&dest).await
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create destination: {}", e)))?;
+        .map_err(|e| {
+            processes::fail(process_id, &format!("Failed to create destination: {}", e));
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create destination: {}", e))
+        })?;
 
     let mut copied = 0;
     let mut removed = 0;
+    let mut ops_done = 0;
 
-    // Copy kept files to destination
     for src_path in &req.keep {
         let normalized = src_path.replace("//", "/");
         let full_path = if normalized.starts_with('/') {
@@ -48,8 +52,8 @@ pub async fn merge_handler(
             format!("{}/{}", cwd, normalized)
         };
 
-        // Validate path is under CWD
         if !full_path.starts_with(cwd) {
+            ops_done += 1;
             continue;
         }
 
@@ -60,7 +64,6 @@ pub async fn merge_handler(
 
         let dest_file = format!("{}/{}", dest, file_name);
 
-        // Only copy if source and destination are different
         if full_path != dest_file {
             match tokio::fs::copy(&full_path, &dest_file).await {
                 Ok(_) => copied += 1,
@@ -69,9 +72,13 @@ pub async fn merge_handler(
         } else {
             copied += 1;
         }
+
+        ops_done += 1;
+        if total_ops > 0 {
+            processes::update(process_id, Some((ops_done as f64 / total_ops as f64) * 100.0), Some(&format!("Copying {}...", file_name)));
+        }
     }
 
-    // Remove unselected files
     for rm_path in &req.remove {
         let normalized = rm_path.replace("//", "/");
         let full_path = if normalized.starts_with('/') {
@@ -80,13 +87,13 @@ pub async fn merge_handler(
             format!("{}/{}", cwd, normalized)
         };
 
-        // Validate path is under CWD
         if !full_path.starts_with(cwd) {
+            ops_done += 1;
             continue;
         }
 
-        // Safety: don't delete the destination directory itself
         if full_path == dest || full_path.starts_with(&format!("{}/", dest)) {
+            ops_done += 1;
             continue;
         }
 
@@ -94,7 +101,13 @@ pub async fn merge_handler(
             Ok(_) => removed += 1,
             Err(e) => logging::error(&format!("Failed to remove {}: {}", full_path, e)),
         }
+
+        ops_done += 1;
+        if total_ops > 0 {
+            processes::update(process_id, Some((ops_done as f64 / total_ops as f64) * 100.0), Some(&format!("Removing {}...", Path::new(&full_path).file_name().and_then(|n| n.to_str()).unwrap_or("file"))));
+        }
     }
 
+    processes::complete(process_id, Some(&format!("Copied {}, removed {}", copied, removed)));
     Ok(Json(MergeResponse { copied, removed }))
 }

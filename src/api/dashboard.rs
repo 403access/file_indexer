@@ -2,6 +2,7 @@ use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
+use crate::modules::processes;
 use crate::modules::sql::database::{get_connection, get_setting, refresh_dashboard_stats};
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
@@ -157,8 +158,12 @@ pub async fn dashboard_handler(
 pub async fn refresh_handler(
     State(state): State<AppState>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
+    let process_id = processes::register("Manual dashboard refresh", "dashboard", None);
     let conn = get_connection(&state.db)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            processes::fail(process_id, &e.to_string());
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     refresh_dashboard_stats(&conn);
 
@@ -172,6 +177,7 @@ pub async fn refresh_handler(
         .and_then(|v| v.parse().ok())
         .unwrap_or(0.0);
 
+    processes::complete(process_id, Some("Dashboard stats refreshed"));
     Ok(Json(serde_json::json!({
         "ok": true,
         "last_refreshed": last_refreshed,

@@ -44,6 +44,15 @@ function truncatePath(path) {
     return '.../' + parts.slice(-2).join('/');
 }
 
+function escapeHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Folder Sidebar
 let folderSidebar = null;
 

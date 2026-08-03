@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processes - File Indexer</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/processes.css">
+</head>
+<body>
+    <header>
+        <h1>File Indexer</h1>
+        <nav>
+            <a href="/">Dashboard</a>
+            <a href="/search.html">Search</a>
+            <a href="/duplicates.html">Duplicates</a>
+            <a href="/duplicate-folders.html">Folders</a>
+            <a href="/explorer.html">Explorer</a>
+            <a href="/skipped.html">Skipped</a>
+            <a href="/logs.html">Logs</a>
+            <a href="/status.html">Status</a>
+            <a href="/processes.html" class="active">Processes</a>
+            <a href="/settings.html">Settings</a>
+            <a href="/ignored.html">Ignored</a>
+            <span id="status-dot" class="status-dot idle" title="Idle"></span>
+        </nav>
+    </header>
+
+    <main>
+        <div class="processes-header">
+            <h2>Background Processes</h2>
+            <div class="processes-actions">
+                <button class="processes-btn" onclick="clearCompleted()" style="background:#95a5a6">Clear completed</button>
+                <button class="processes-btn" onclick="refreshProcesses()" style="background:#3498db">Refresh</button>
+            </div>
+        </div>
+        <div class="processes-summary" id="processes-summary"></div>
+        <div class="processes-table-wrapper">
+            <table class="processes-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Category</th>
+                        <th>Status</th>
+                        <th>Progress</th>
+                        <th>Message</th>
+                        <th>Started</th>
+                        <th>Finished</th>
+                    </tr>
+                </thead>
+                <tbody id="processes-tbody">
+                    <tr><td colspan="8" class="empty-msg">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <script src="/js/app.js"></script>
+    <script src="/js/processes.js"></script>
+    <script src="/js/status.js"></script>
+</body>
+</html>

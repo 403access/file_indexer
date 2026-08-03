@@ -3,6 +3,7 @@ use tower_http::services::ServeDir;
 
 use file_indexer::api::{create_router, index::ensure_indexed_async};
 use file_indexer::modules::environment::check_vars::check_vars;
+use file_indexer::modules::processes;
 use file_indexer::states::app_state::{self, AppState};
 
 #[tokio::main]
@@ -24,14 +25,17 @@ async fn main() {
 
     // Initial dashboard refresh
     {
+        let process_id = processes::register("Initial dashboard refresh", "dashboard", Some("Startup"));
         let conn = file_indexer::modules::sql::database::get_connection(&database_url).unwrap();
         file_indexer::modules::sql::database::refresh_dashboard_stats(&conn);
+        processes::complete(process_id, Some("Initial dashboard stats refreshed"));
     }
 
     // Spawn background task for periodic dashboard refresh
     let refresh_db = database_url.clone();
     tokio::spawn(async move {
         loop {
+            let next_id = processes::pending("Dashboard refresh", "dashboard", Some("Scheduled"));
             // Read refresh interval from settings (default 60s)
             let interval_secs = {
                 let conn = file_indexer::modules::sql::database::get_connection(&refresh_db);
@@ -47,8 +51,13 @@ async fn main() {
 
             tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
 
+            processes::update(next_id, Some(50.0), Some("Refreshing stats..."));
+
             if let Ok(conn) = file_indexer::modules::sql::database::get_connection(&refresh_db) {
                 file_indexer::modules::sql::database::recompute_dashboard_stats(&conn);
+                processes::complete(next_id, Some("Dashboard stats refreshed"));
+            } else {
+                processes::fail(next_id, "Failed to connect to database");
             }
         }
     });
