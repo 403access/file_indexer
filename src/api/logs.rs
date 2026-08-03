@@ -1,7 +1,8 @@
 use axum::extract::{Query, State};
 use axum::Json;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
+use crate::modules::logging::{LogEntry, FileSummary};
 use crate::modules::sql::database::{get_connection, get_logs};
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
@@ -11,21 +12,6 @@ pub struct LogsParams {
     pub level: Option<String>,
     pub search: Option<String>,
     pub sort: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct LogEntry {
-    timestamp: String,
-    level: String,
-    message: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    files: Option<Vec<FileSummary>>,
-}
-
-#[derive(Serialize)]
-pub struct FileSummary {
-    name: String,
-    size: u64,
 }
 
 // Only enrich this many log entries with file lists (N+1 query cost)

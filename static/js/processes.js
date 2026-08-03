@@ -122,7 +122,53 @@ function refreshProcesses() {
 }
 
 let processesInterval = null;
+let currentProcessLogsProcessId = null;
+
 document.addEventListener('DOMContentLoaded', () => {
     loadProcesses();
     processesInterval = setInterval(loadProcesses, 2000);
 });
+
+async function showProcessLogs(processId, processName) {
+    currentProcessLogsProcessId = processId;
+    const overlay = document.getElementById('process-logs-overlay');
+    const title = document.getElementById('process-logs-title');
+    const body = document.getElementById('process-logs-body');
+
+    title.textContent = `Logs: ${processName} (#${processId})`;
+    body.innerHTML = '<div class="empty-msg">Loading logs...</div>';
+    overlay.style.display = 'block';
+
+    try {
+        const res = await fetch(`/api/processes/${processId}/logs?limit=500`);
+        if (!res.ok) throw new Error('Failed to load logs');
+        const logs = await res.json();
+        renderProcessLogs(logs);
+    } catch (e) {
+        body.innerHTML = `<div class="empty-msg">Failed to load logs: ${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function renderProcessLogs(logs) {
+    const body = document.getElementById('process-logs-body');
+    if (!logs || logs.length === 0) {
+        body.innerHTML = '<div class="empty-msg">No logs found for this process</div>';
+        return;
+    }
+
+    let html = '<table class="process-logs-table"><thead><tr><th style="width:180px">Timestamp</th><th style="width:60px">Level</th><th>Message</th></tr></thead><tbody>';
+    logs.forEach(log => {
+        html += `<tr>
+            <td class="log-timestamp">${escapeHtml(log.timestamp)}</td>
+            <td class="log-level-${log.level.toLowerCase()}">${escapeHtml(log.level)}</td>
+            <td class="log-message">${escapeHtml(log.message)}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    body.innerHTML = html;
+}
+
+function closeProcessLogs() {
+    document.getElementById('process-logs-overlay').style.display = 'none';
+    currentProcessLogsProcessId = null;
+}

@@ -92,7 +92,8 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
             id INTEGER PRIMARY KEY,
             timestamp TEXT,
             level TEXT,
-            message TEXT
+            message TEXT,
+            process_id INTEGER
         );",
         [],
     );
@@ -100,6 +101,8 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         logging::error(&format!("Failed to create 'logs' table: {:?}", logs_table_result));
         return Err(logs_table_result.unwrap_err());
     }
+
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_logs_process_id ON logs(process_id)", []);
 
     let settings_table_result = tx.execute(
         "CREATE TABLE IF NOT EXISTS settings (

@@ -5,6 +5,8 @@ use chrono::Utc;
 use once_cell::sync::Lazy;
 use serde::Serialize;
 
+use crate::modules::logging;
+
 #[derive(Debug, Clone, Serialize)]
 pub struct Process {
     pub id: u64,
@@ -55,6 +57,7 @@ pub fn register(name: &str, category: &str, message: Option<&str>) -> u64 {
     let mut list = PROCESSES.lock().unwrap();
     list.push(process);
     trim_if_needed(&mut list);
+    logging::info_with_process(&format!("Process registered: {} ({})", name, category), id);
     id
 }
 
@@ -86,6 +89,7 @@ pub fn complete(id: u64, message: Option<&str>) {
             p.message = Some(msg.to_string());
         }
     }
+    logging::info_with_process(&format!("Process completed: {}", message.unwrap_or("done")), id);
     remove_control(id);
 }
 
@@ -95,6 +99,7 @@ pub fn fail(id: u64, message: &str) {
         p.finished_at = Some(Utc::now().to_rfc3339());
         p.message = Some(message.to_string());
     }
+    logging::error_with_process(&format!("Process failed: {}", message), id);
     remove_control(id);
 }
 

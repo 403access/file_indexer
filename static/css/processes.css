@@ -206,3 +206,78 @@
     0%, 100% { opacity: 1; }
     50% { opacity: 0.6; }
 }
+
+.process-logs-overlay {
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.process-logs-panel {
+    background: white;
+    border-radius: 10px;
+    width: 90vw;
+    max-width: 800px;
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.process-logs-header {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #eee;
+}
+.process-logs-header h3 {
+    flex: 1;
+    margin: 0;
+    font-size: 1rem;
+    color: #2c3e50;
+}
+.process-logs-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    font-family: monospace;
+    font-size: 0.82rem;
+}
+.process-logs-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.process-logs-table th,
+.process-logs-table td {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #f0f0f0;
+    vertical-align: top;
+}
+.process-logs-table th {
+    color: #666;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    position: sticky;
+    top: 0;
+    background: #fafbfc;
+}
+.process-logs-table tr:hover td {
+    background: #f9f9f9;
+}
+.log-level-error { color: #dc3545; font-weight: bold; }
+.log-level-warn { color: #ffc107; font-weight: bold; }
+.log-level-info { color: #17a2b8; }
+.log-level-debug { color: #6c757d; }
+.log-timestamp {
+    color: #666;
+    white-space: nowrap;
+}
+.log-message {
+    word-break: break-word;
+}

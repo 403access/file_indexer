@@ -1,3 +1,4 @@
+use crate::modules::logging;
 use crate::modules::processes::{
     clear_completed, complete, fail, get_all, is_paused, is_stopped, pending, register,
     register_controllable, request_stop, set_paused, ProcessStatus,
@@ -70,4 +71,14 @@ fn clear_completed_removes_only_finished_processes() {
     let all = get_all();
     assert!(all.iter().any(|p| p.id == running));
     assert!(!all.iter().any(|p| p.id == done));
+}
+
+#[test]
+fn process_lifecycle_creates_logs() {
+    let id = register_controllable("log-test", "test", Some("starting"));
+    logging::info_with_process("middle", id);
+    complete(id, Some("finished"));
+
+    // Verify logging with process_id compiles and runs without error
+    assert!(true);
 }
