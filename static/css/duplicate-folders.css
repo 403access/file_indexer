@@ -661,6 +661,19 @@
     text-align: center;
     padding: 1rem 0;
 }
+.ft-group-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 0.5rem 0.3rem 0.2rem;
+    border-bottom: 1px solid #eee;
+    margin-top: 0.2rem;
+}
+.ft-group-label-other {
+    color: #888;
+}
 .custom-folder-row {
     display: flex;
     align-items: center;
