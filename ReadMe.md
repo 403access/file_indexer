@@ -79,6 +79,8 @@ A minimal and fast local file indexer written in Rust.
 - ⚡ Fast hashing with Blake3
 - 🧱 Cross-platform (Windows, macOS, Linux)
 - 🧪 Easily extendable (tagging, content indexing, UI)
+- 📊 Materialized duplicate folder groups with background refresh
+- 📋 Process monitoring with pause/resume/stop controls
 
 ## 📄 Stored Metadata
 
@@ -97,6 +99,18 @@ A minimal and fast local file indexer written in Rust.
 - Copy and paste `.example.env`
 - Rename the newly created file to `.env`
 - Make sure the variables are set properly.
+
+### Available Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CWD` | current directory | Working directory to index |
+| `PORT` | `3000` | HTTP API server port |
+| `DATABASE_URL` | derived from `CWD` | SQLite database path |
+| `ENABLE_STARTUP_INDEXING` | `true` | Run automatic indexing at startup |
+| `ENABLE_DASHBOARD_REFRESH` | `true` | Enable periodic dashboard stats refresh |
+| `ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH` | `true` | Enable background materialization of duplicate folder groups |
+| `DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL` | `120` | Refresh interval in seconds for duplicate folder groups |
 
 ## 📦 Build & Run
 
