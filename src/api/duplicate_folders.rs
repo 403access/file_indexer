@@ -362,3 +362,44 @@ pub async fn check_folders_handler(
 
     Ok(Json(CheckFoldersResponse { results }))
 }
+
+#[derive(Serialize)]
+pub struct AvailableFileTypesResponse {
+    pub types: Vec<String>,
+}
+
+/// Return the distinct file extensions present among files that have duplicate hashes.
+/// Used to populate the file-type selector on the duplicate folders page.
+pub async fn available_file_types_handler(
+    State(state): State<AppState>,
+) -> Result<Json<AvailableFileTypesResponse>, (axum::http::StatusCode, String)> {
+    let _guard = IndexerPauseGuard::new(&state);
+    let conn = get_connection(&state.db)
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut stmt = conn.prepare(
+        "SELECT fn.name
+         FROM files f
+         JOIN file_names fn ON f.file_name_id = fn.id
+         WHERE f.hash IN (SELECT hash FROM duplicate_hashes)
+           AND f.hash IS NOT NULL AND f.hash != ''"
+    ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let rows = stmt.query_map([], |row| row.get::<_, String>(0))
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    let mut set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for row in rows {
+        if let Ok(name) = row {
+            if let Some((_, ext)) = name.rsplit_once('.') {
+                let ext = ext.to_lowercase();
+                if !ext.is_empty() {
+                    set.insert(ext);
+                }
+            }
+        }
+    }
+    drop(stmt);
+
+    Ok(Json(AvailableFileTypesResponse { types: set.into_iter().collect() }))
+}

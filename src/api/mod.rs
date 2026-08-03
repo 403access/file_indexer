@@ -6,7 +6,8 @@ use crate::states::app_state::AppState;
 use self::config::config_handler;
 use self::dashboard::{dashboard_handler, refresh_handler};
 use self::duplicate_folders::{
-    check_folders_handler, duplicate_folders_handler, folder_files_handler,
+    available_file_types_handler, check_folders_handler, duplicate_folders_handler,
+    folder_files_handler,
 };
 use self::duplicates::duplicates_handler;
 use self::file_content::file_content_handler;
@@ -43,6 +44,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/duplicates", get(duplicates_handler))
         .route("/api/duplicate-folders/files", get(folder_files_handler))
         .route("/api/duplicate-folders", get(duplicate_folders_handler))
+        .route("/api/duplicate-folders/types", get(available_file_types_handler))
         .route("/api/folders/check", post(check_folders_handler))
         .route("/api/tree", get(tree_handler))
         .route("/api/file", get(file_content_handler))

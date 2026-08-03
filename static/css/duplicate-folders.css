@@ -565,6 +565,102 @@
     color: #999;
     margin-top: 0.25rem;
 }
+
+.ft-select {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+.ft-select-btn {
+    background: #7f8c8d;
+    white-space: nowrap;
+}
+.ft-select-btn:hover { background: #6c7a7a; }
+.ft-count {
+    font-weight: 600;
+}
+.ft-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    min-width: 220px;
+    z-index: 100;
+}
+.ft-panel select {
+    padding: 0.4rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    background: white;
+    color: #333;
+    cursor: pointer;
+}
+.ft-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+.ft-actions button {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    color: #333;
+}
+.ft-actions button:hover { background: #f0f4f8; }
+.ft-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    max-height: 220px;
+    overflow-y: auto;
+    padding: 0.25rem;
+    border: 1px solid #eee;
+    border-radius: 4px;
+    background: #fafbfc;
+}
+.ft-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #333;
+    cursor: pointer;
+    padding: 0.2rem 0.3rem;
+    border-radius: 3px;
+}
+.ft-item:hover { background: #f0f4f8; }
+.ft-item input { cursor: pointer; accent-color: #3498db; }
+.ft-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+.ft-done {
+    padding: 0.4rem 0.9rem;
+    border: none;
+    border-radius: 4px;
+    background: #3498db;
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+.ft-done:hover { background: #2980b9; }
+.ft-empty {
+    font-size: 0.8rem;
+    color: #999;
+    text-align: center;
+    padding: 1rem 0;
+}
 .custom-folder-row {
     display: flex;
     align-items: center;

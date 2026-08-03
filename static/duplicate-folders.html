@@ -40,7 +40,28 @@
                 <option value="5">5+ folders</option>
                 <option value="10">10+ folders</option>
             </select>
-            <input type="text" id="file-types-input" class="ft-input" placeholder="File types (e.g. jpg, png)" onkeydown="if(event.key==='Enter')applyFilter()" title="Only show groups that contain duplicate files of these types (comma separated)">
+            <div class="ft-select" id="ft-select">
+                <button type="button" class="merge-folders-btn ft-select-btn" onclick="toggleFileTypePanel()" style="background:#7f8c8d">File types <span class="ft-count" id="ft-count"></span></button>
+                <div class="ft-panel" id="ft-panel" style="display:none;">
+                    <select id="ft-template" onchange="applyFileTypeTemplate()">
+                        <option value="">Custom</option>
+                        <option value="photo_album">Photo album</option>
+                        <option value="documents">Documents</option>
+                        <option value="video">Video</option>
+                        <option value="audio">Audio</option>
+                        <option value="code">Code</option>
+                        <option value="config">Config</option>
+                    </select>
+                    <div class="ft-actions">
+                        <button type="button" onclick="selectAllFileTypes()">Select all</button>
+                        <button type="button" onclick="unselectAllFileTypes()">Unselect all</button>
+                    </div>
+                    <div class="ft-list" id="ft-list"></div>
+                    <div class="ft-footer">
+                        <button type="button" class="ft-done" onclick="closeFileTypePanel()">Done</button>
+                    </div>
+                </div>
+            </div>
             <select id="sort-select" onchange="applyFilter()">
                 <option value="shared">Sort: shared count</option>
                 <option value="folders">Sort: folder count</option>
