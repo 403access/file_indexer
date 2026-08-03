@@ -43,8 +43,7 @@ pub fn refresh_duplicate_folder_groups(conn: &Connection) {
              FROM files f
              JOIN file_names fn ON f.file_name_id = fn.id
              WHERE f.hash IN (SELECT hash FROM duplicate_hashes)
-               AND f.hash IS NOT NULL AND f.hash != ''
-               AND f.parent_path IS NOT NULL",
+               AND f.hash IS NOT NULL AND f.hash != ''",
         )
         .ok();
 
