@@ -21,7 +21,11 @@ async fn main() {
         pause_indexer: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
     };
 
-    ensure_indexed_async(database_url.clone(), state.cwd.clone(), state.pause_indexer.clone()).await;
+    if file_indexer::modules::environment::env_vars::get_enable_startup_indexing() {
+        ensure_indexed_async(database_url.clone(), state.cwd.clone(), state.pause_indexer.clone()).await;
+    } else {
+        println!("⏸️  Startup indexing disabled via ENABLE_STARTUP_INDEXING");
+    }
 
     // Initial dashboard refresh
     {
@@ -32,35 +36,39 @@ async fn main() {
     }
 
     // Spawn background task for periodic dashboard refresh
-    let refresh_db = database_url.clone();
-    tokio::spawn(async move {
-        loop {
-            let next_id = processes::pending("Dashboard refresh", "dashboard", Some("Scheduled"));
-            // Read refresh interval from settings (default 60s)
-            let interval_secs = {
-                let conn = file_indexer::modules::sql::database::get_connection(&refresh_db);
-                conn.ok()
-                    .and_then(|c| {
-                        file_indexer::modules::sql::database::get_setting(&c, "dashboard_refresh_interval")
-                            .ok()
-                            .flatten()
-                    })
-                    .and_then(|v| v.parse::<u64>().ok())
-                    .unwrap_or(60)
-            };
+    if file_indexer::modules::environment::env_vars::get_enable_dashboard_refresh() {
+        let refresh_db = database_url.clone();
+        tokio::spawn(async move {
+            loop {
+                let next_id = processes::pending("Dashboard refresh", "dashboard", Some("Scheduled"));
+                // Read refresh interval from settings (default 60s)
+                let interval_secs = {
+                    let conn = file_indexer::modules::sql::database::get_connection(&refresh_db);
+                    conn.ok()
+                        .and_then(|c| {
+                            file_indexer::modules::sql::database::get_setting(&c, "dashboard_refresh_interval")
+                                .ok()
+                                .flatten()
+                        })
+                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(60)
+                };
 
-            tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
 
-            processes::update(next_id, Some(50.0), Some("Refreshing stats..."));
+                processes::update(next_id, Some(50.0), Some("Refreshing stats..."));
 
-            if let Ok(conn) = file_indexer::modules::sql::database::get_connection(&refresh_db) {
-                file_indexer::modules::sql::database::recompute_dashboard_stats(&conn);
-                processes::complete(next_id, Some("Dashboard stats refreshed"));
-            } else {
-                processes::fail(next_id, "Failed to connect to database");
+                if let Ok(conn) = file_indexer::modules::sql::database::get_connection(&refresh_db) {
+                    file_indexer::modules::sql::database::recompute_dashboard_stats(&conn);
+                    processes::complete(next_id, Some("Dashboard stats refreshed"));
+                } else {
+                    processes::fail(next_id, "Failed to connect to database");
+                }
             }
-        }
-    });
+        });
+    } else {
+        println!("⏸️  Periodic dashboard refresh disabled via ENABLE_DASHBOARD_REFRESH");
+    }
 
     tracing_subscriber::fmt::init();
 

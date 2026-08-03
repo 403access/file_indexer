@@ -7,6 +7,8 @@ use std::path::Path;
 pub struct EnvironmentVariables {
     pub database_url: String,
     pub cwd: String,
+    pub enable_startup_indexing: bool,
+    pub enable_dashboard_refresh: bool,
 }
 
 impl Default for EnvironmentVariables {
@@ -14,6 +16,8 @@ impl Default for EnvironmentVariables {
         Self {
             database_url: String::from("file_index.db"),
             cwd: env::current_dir().unwrap().to_str().unwrap().to_string(),
+            enable_startup_indexing: true,
+            enable_dashboard_refresh: true,
         }
     }
 }
@@ -42,6 +46,16 @@ pub fn load() {
 
         env_vars.database_url = env::var("DATABASE_URL")
             .unwrap_or_else(|_| derive_db_name(&env_vars.cwd));
+
+        env_vars.enable_startup_indexing = env::var("ENABLE_STARTUP_INDEXING")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
+
+        env_vars.enable_dashboard_refresh = env::var("ENABLE_DASHBOARD_REFRESH")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
     });
 }
 
@@ -64,4 +78,20 @@ pub fn get_server_port() -> u16 {
         .ok()
         .and_then(|v| v.parse::<u16>().ok())
         .unwrap_or(3000)
+}
+
+/// Whether startup indexing is enabled (default: true)
+///
+/// Reads the `ENABLE_STARTUP_INDEXING` environment variable. When set to
+/// `false`, the application will skip the automatic indexing pass at startup.
+pub fn get_enable_startup_indexing() -> bool {
+    ENV_VARS.with(|vars| vars.borrow().enable_startup_indexing)
+}
+
+/// Whether periodic dashboard refresh is enabled (default: true)
+///
+/// Reads the `ENABLE_DASHBOARD_REFRESH` environment variable. When set to
+/// `false`, the background task that recomputes dashboard stats will not run.
+pub fn get_enable_dashboard_refresh() -> bool {
+    ENV_VARS.with(|vars| vars.borrow().enable_dashboard_refresh)
 }

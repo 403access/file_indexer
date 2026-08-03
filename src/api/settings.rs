@@ -31,12 +31,28 @@ impl IgnoreRuleJson {
 pub struct SettingsResponse {
     pub ignore_folders: Vec<IgnoreRuleJson>,
     pub dashboard_refresh_interval: u64,
+    pub enable_startup_indexing: bool,
+    pub enable_dashboard_refresh: bool,
 }
 
 #[derive(Deserialize)]
 pub struct UpdateSettingsRequest {
     pub ignore_folders: Vec<IgnoreRuleJson>,
     pub dashboard_refresh_interval: Option<u64>,
+    pub enable_startup_indexing: Option<bool>,
+    pub enable_dashboard_refresh: Option<bool>,
+}
+
+fn parse_bool_setting(conn: &rusqlite::Connection, key: &str, default: bool) -> bool {
+    get_setting(conn, key)
+        .ok()
+        .flatten()
+        .and_then(|v| v.parse::<bool>().ok())
+        .unwrap_or(default)
+}
+
+fn set_bool_setting(conn: &rusqlite::Connection, key: &str, value: bool) -> rusqlite::Result<()> {
+    set_setting(conn, key, &value.to_string())
 }
 
 pub async fn get_settings_handler(
@@ -54,9 +70,14 @@ pub async fn get_settings_handler(
         .and_then(|v| v.parse().ok())
         .unwrap_or(60);
 
+    let enable_startup_indexing = parse_bool_setting(&conn, "enable_startup_indexing", true);
+    let enable_dashboard_refresh = parse_bool_setting(&conn, "enable_dashboard_refresh", true);
+
     Ok(Json(SettingsResponse {
         ignore_folders: folders,
         dashboard_refresh_interval,
+        enable_startup_indexing,
+        enable_dashboard_refresh,
     }))
 }
 
@@ -76,14 +97,29 @@ pub async fn update_settings_handler(
             .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     }
 
+    if let Some(enabled) = payload.enable_startup_indexing {
+        set_bool_setting(&conn, "enable_startup_indexing", enabled)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
+    if let Some(enabled) = payload.enable_dashboard_refresh {
+        set_bool_setting(&conn, "enable_dashboard_refresh", enabled)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+
     let dashboard_refresh_interval = get_setting(&conn, "dashboard_refresh_interval")
         .ok()
         .flatten()
         .and_then(|v| v.parse().ok())
         .unwrap_or(60);
 
+    let enable_startup_indexing = parse_bool_setting(&conn, "enable_startup_indexing", true);
+    let enable_dashboard_refresh = parse_bool_setting(&conn, "enable_dashboard_refresh", true);
+
     Ok(Json(SettingsResponse {
         ignore_folders: payload.ignore_folders,
         dashboard_refresh_interval,
+        enable_startup_indexing,
+        enable_dashboard_refresh,
     }))
 }

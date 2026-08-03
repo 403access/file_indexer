@@ -140,6 +140,47 @@
             border-radius: 4px;
             border-left: 3px solid #3498db;
         }
+        .toggle {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: relative;
+            width: 34px;
+            height: 20px;
+            background: #ddd;
+            border-radius: 20px;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            top: 2px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.2s;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        .toggle input:checked + .toggle-slider {
+            background: #27ae60;
+        }
+        .toggle input:checked + .toggle-slider::before {
+            transform: translateX(14px);
+        }
     </style>
 </head>
 <body>
@@ -161,6 +202,36 @@
     </header>
 
     <main>
+        <div class="settings-card">
+            <h2>Background Processes</h2>
+            <p class="desc">Control which background processes are active. Changes require a server restart for startup-only processes.</p>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:#f9fafb;border-radius:6px;border:1px solid #eee;">
+                    <div>
+                        <strong style="font-size:0.9rem;color:#333;">Startup Indexing</strong>
+                        <div style="font-size:0.78rem;color:#888;margin-top:0.15rem;">Index the working directory automatically when the server starts.</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="enable-startup-indexing" onchange="saveProcessSetting('enable_startup_indexing', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:#f9fafb;border-radius:6px;border:1px solid #eee;">
+                    <div>
+                        <strong style="font-size:0.9rem;color:#333;">Dashboard Refresh</strong>
+                        <div style="font-size:0.78rem;color:#888;margin-top:0.15rem;">Periodically recompute dashboard stats in the background.</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="enable-dashboard-refresh" onchange="saveProcessSetting('enable_dashboard_refresh', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="save-bar">
+                <span class="save-msg" id="process-save-msg">Saved</span>
+            </div>
+        </div>
+
         <div class="settings-card">
             <h2>Dashboard Refresh Interval</h2>
             <p class="desc">How often the dashboard stats are automatically refreshed (in seconds). Set to 0 to disable auto-refresh.</p>
@@ -351,6 +422,44 @@
                 btn.disabled = false;
             }
         }
+
+        async function saveProcessSetting(key, value) {
+            const msg = document.getElementById('process-save-msg');
+            try {
+                const body = {};
+                body[key] = value;
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    msg.classList.add('show');
+                    setTimeout(() => msg.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                alert('Failed to save process setting');
+            }
+        }
+
+        async function loadProcessSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                if (data.enable_startup_indexing !== undefined) {
+                    document.getElementById('enable-startup-indexing').checked = data.enable_startup_indexing;
+                }
+                if (data.enable_dashboard_refresh !== undefined) {
+                    document.getElementById('enable-dashboard-refresh').checked = data.enable_dashboard_refresh;
+                }
+            } catch (e) {
+                console.error('Failed to load process settings', e);
+            }
+        }
+
+        loadSettings();
+        loadRefreshInterval();
+        loadProcessSettings();
     </script>
 </body>
 </html>
