@@ -398,7 +398,35 @@
 .merge-summary-folder .stat-kept { color: #27ae60; }
 .merge-summary-folder .stat-removed { color: #e74c3c; }
 .merge-summary-folder .stat-total { color: #666; }
+.merge-summary-folder input[type="checkbox"] {
+    width: 16px; height: 16px; cursor: pointer;
+    accent-color: #3498db; flex-shrink: 0;
+}
 .merge-body { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
+.merge-folder-section { margin-bottom: 1rem; }
+.merge-folder-header {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.75rem; background: #f0f4f8;
+    border: 1px solid #dde4ed; border-radius: 6px;
+    margin-bottom: 0.4rem; font-size: 0.85rem;
+}
+.merge-folder-header .merge-folder-check {
+    width: 16px; height: 16px; cursor: pointer;
+    accent-color: #3498db; flex-shrink: 0;
+}
+.merge-folder-header .merge-folder-icon { font-size: 0.9rem; flex-shrink: 0; }
+.merge-folder-header .merge-folder-name {
+    font-weight: 600; color: #2c3e50; min-width: 80px;
+}
+.merge-folder-header .merge-folder-path {
+    flex: 1; color: #999; font-family: monospace;
+    font-size: 0.75rem; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+}
+.merge-folder-header .merge-folder-count {
+    color: #666; font-family: monospace;
+    font-size: 0.78rem; flex-shrink: 0;
+}
 .merge-dir-group { margin-bottom: 1rem; }
 .merge-dir-label {
     font-size: 0.75rem; font-weight: 600; color: #888;

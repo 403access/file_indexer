@@ -674,8 +674,14 @@ function renderMergeSummaryTab(body) {
             if (mergeSelections[key]) kept++;
             else removed++;
         });
+        const allSelected = kept === files.length;
+        const noneSelected = kept === 0;
         html += `
             <div class="merge-summary-folder">
+                <input type="checkbox" class="merge-folder-check"
+                    ${allSelected ? 'checked' : ''}
+                    ${noneSelected && files.length > 0 ? 'style="opacity:0.3"' : ''}
+                    onchange="selectAllFromFolder('${path.replace(/'/g, "\\'")}', this.checked)">
                 <span class="folder-icon">\uD83D\uDCC1</span>
                 <span class="folder-name">${name}</span>
                 <span class="folder-path">${path}</span>
@@ -710,6 +716,10 @@ function renderMergeList(body) {
         return aShared - bShared;
     });
 
+    const folderOrder = mergeGroup.foldersWithFiles.map(f => f.path);
+    const folderNames = {};
+    mergeGroup.foldersWithFiles.forEach(f => { folderNames[f.path] = f.name; });
+
     let html = '';
     entries.forEach(([hash, files]) => {
         const isShared = files.length > 1;
@@ -732,8 +742,71 @@ function renderMergeList(body) {
         });
         html += '</div>';
     });
+
+    html = renderMergeListFolderHeaders(html, folderOrder, folderNames);
     body.innerHTML = html;
     body.className = 'merge-body';
+}
+
+function renderMergeListFolderHeaders(html, folderOrder, folderNames) {
+    const folderHeaderRegex = /(<div class="merge-file-row[^>]*>[\s\S]*?<span class="merge-file-path" title="([^"]+)">[^<]+<\/span>[\s\S]*?<\/div>)/g;
+    const folderFileMap = {};
+    let match;
+    while ((match = folderHeaderRegex.exec(html)) !== null) {
+        const fullMatch = match[0];
+        const pathTitle = match[2];
+        const folderPath = pathTitle.replace(/\/[^/]+$/, '');
+        if (!folderFileMap[folderPath]) folderFileMap[folderPath] = [];
+        folderFileMap[folderPath].push(fullMatch);
+    }
+
+    if (Object.keys(folderFileMap).length === 0) return html;
+
+    let result = '';
+    folderOrder.forEach(folderPath => {
+        const files = folderFileMap[folderPath];
+        if (!files || files.length === 0) return;
+        const name = folderNames[folderPath] || folderPath.split('/').filter(Boolean).pop();
+        const kept = files.filter(f => f.includes('keep')).length;
+        const total = files.length;
+        const allSelected = kept === total;
+        result += `
+            <div class="merge-folder-section">
+                <div class="merge-folder-header">
+                    <input type="checkbox" class="merge-folder-check"
+                        ${allSelected ? 'checked' : ''}
+                        onchange="selectAllFromFolder('${folderPath.replace(/'/g, "\\'")}', this.checked)">
+                    <span class="merge-folder-icon">\uD83D\uDCC1</span>
+                    <span class="merge-folder-name">${name}</span>
+                    <span class="merge-folder-path">${folderPath}</span>
+                    <span class="merge-folder-count">${kept}/${total} selected</span>
+                </div>`;
+        files.forEach(f => { result += f; });
+        result += '</div>';
+        delete folderFileMap[folderPath];
+    });
+
+    Object.entries(folderFileMap).forEach(([folderPath, files]) => {
+        const name = folderNames[folderPath] || folderPath.split('/').filter(Boolean).pop();
+        const kept = files.filter(f => f.includes('keep')).length;
+        const total = files.length;
+        const allSelected = kept === total;
+        result += `
+            <div class="merge-folder-section">
+                <div class="merge-folder-header">
+                    <input type="checkbox" class="merge-folder-check"
+                        ${allSelected ? 'checked' : ''}
+                        onchange="selectAllFromFolder('${folderPath.replace(/'/g, "\\'")}', this.checked)">
+                    <span class="merge-folder-icon">\uD83D\uDCC1</span>
+                    <span class="merge-folder-name">${name}</span>
+                    <span class="merge-folder-path">${folderPath}</span>
+                    <span class="merge-folder-count">${kept}/${total} selected</span>
+                </div>`;
+        files.forEach(f => { result += f; });
+        result += '</div>';
+    });
+
+    return result;
 }
 
 function renderMergeTree(body) {
@@ -804,6 +877,19 @@ function renderTreeNode(node, depth, isLast) {
 
 function toggleMergeFile(key, checked) {
     mergeSelections[key] = checked;
+    renderMergeBody();
+}
+
+function selectAllFromFolder(folderPath, checked) {
+    if (!mergeGroup || !mergeGroup.foldersWithFiles) return;
+    mergeGroup.foldersWithFiles.forEach(({ path, files }) => {
+        if (path === folderPath) {
+            files.forEach(file => {
+                const key = path + '/' + file.name;
+                mergeSelections[key] = checked;
+            });
+        }
+    });
     renderMergeBody();
 }
 
