@@ -13,9 +13,6 @@
             margin-left: auto;
             flex-shrink: 0;
         }
-        .duplicate-group {
-            overflow: visible;
-        }
         .merge-btn:hover { background: #219a52; }
         .merge-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
@@ -88,12 +85,78 @@
         .merge-apply { background: #27ae60; }
         .merge-apply:hover { background: #219a52; }
         .merge-apply:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .duplicate-controls {
+            background: white;
+            padding: 1rem 1.25rem;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+            align-items: center;
+        }
+        .duplicate-controls input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+        .duplicate-controls select {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            background: white;
+        }
+        .duplicate-controls button {
+            padding: 0.5rem 1.25rem;
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+        .duplicate-controls button:hover {
+            background: #2980b9;
+        }
+        .duplicate-controls label {
+            font-size: 0.85rem;
+            color: #666;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
     </style>
 </head>
 <body>
     <nav id="sidebar-container"></nav>
 
     <main>
+        <section class="duplicate-controls">
+            <input type="text" id="dup-search" placeholder="Search by name or path...">
+            <label>Min size:
+                <input type="number" id="dup-min-size" min="0" value="0" placeholder="Bytes">
+            </label>
+            <label>Extension:
+                <input type="text" id="dup-ext" placeholder="e.g. pdf,zip">
+            </label>
+            <select id="dup-sort">
+                <option value="wasted">Sort: wasted</option>
+                <option value="size">Sort: size</option>
+                <option value="copies">Sort: copies</option>
+                <option value="hash">Sort: hash</option>
+            </select>
+            <select id="dup-order">
+                <option value="desc">Descending</option>
+                <option value="asc">Ascending</option>
+            </select>
+            <button id="dup-apply">Apply</button>
+        </section>
+
         <section class="results-info" id="results-info" style="display:none;">
             <span id="result-count"></span>
         </section>
@@ -132,7 +195,22 @@
         let currentGroups = [];
 
         async function loadDuplicates(page = 1) {
-            const res = await fetch(`/api/duplicates?page=${page}&per_page=${perPage}`);
+            const q = document.getElementById('dup-search').value.trim();
+            const minSize = document.getElementById('dup-min-size').value;
+            const ext = document.getElementById('dup-ext').value.trim();
+            const sort = document.getElementById('dup-sort').value;
+            const order = document.getElementById('dup-order').value;
+
+            const params = new URLSearchParams();
+            params.set('page', page);
+            params.set('per_page', perPage);
+            if (q) params.set('q', q);
+            if (minSize && parseInt(minSize, 10) > 0) params.set('min_size', minSize);
+            if (ext) params.set('ext', ext);
+            if (sort) params.set('sort', sort);
+            if (order) params.set('order', order);
+
+            const res = await fetch(`/api/duplicates?${params.toString()}`);
             if (!res.ok) return;
             const data = await res.json();
             currentPage = data.page;
@@ -239,7 +317,6 @@
             if (!group || group.files.length < 2) return;
             mergeGroup = group;
 
-            // Group files by directory
             const byDir = {};
             group.files.forEach(f => {
                 const dir = f.path.replace(/\/[^/]+\/?$/, '') || '/';
@@ -247,14 +324,12 @@
                 byDir[dir].push(f);
             });
 
-            // Auto-select: keep the first file from each directory
             mergeSelections = {};
             Object.values(byDir).forEach(files => {
                 mergeSelections[files[0].path] = true;
                 files.slice(1).forEach(f => { mergeSelections[f.path] = false; });
             });
 
-            // Set default destination
             const firstDir = Object.keys(byDir)[0] || '';
             const parentDir = firstDir.replace(/\/[^/]+$/, '') || firstDir;
             document.getElementById('merge-dest-path').value = parentDir + '/merged';
@@ -358,12 +433,34 @@
             }
         }
 
+        document.getElementById('dup-apply').addEventListener('click', () => {
+            currentPage = 1;
+            loadDuplicates(1);
+        });
+
+        document.getElementById('dup-search').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                currentPage = 1;
+                loadDuplicates(1);
+            }
+        });
+
         document.getElementById('prev-page').addEventListener('click', () => {
             if (currentPage > 1) loadDuplicates(currentPage - 1);
         });
 
         document.getElementById('next-page').addEventListener('click', () => {
             loadDuplicates(currentPage + 1);
+        });
+
+        document.getElementById('dup-sort').addEventListener('change', () => {
+            currentPage = 1;
+            loadDuplicates(1);
+        });
+
+        document.getElementById('dup-order').addEventListener('change', () => {
+            currentPage = 1;
+            loadDuplicates(1);
         });
 
         document.getElementById('merge-overlay').addEventListener('click', (e) => {
