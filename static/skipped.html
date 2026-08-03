@@ -3,6 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
     <title>Skipped Paths - File Indexer</title>
     <link rel="stylesheet" href="/css/style.css">
 </head>
@@ -10,27 +24,40 @@
     <nav id="sidebar-container"></nav>
 
     <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Skipped Paths</h1>
+                <p class="page-header__subtitle">Paths that could not be indexed</p>
+            </div>
+        </header>
+
         <section class="results-info" id="results-info" style="display:none;">
             <span id="result-count"></span>
         </section>
 
         <section class="results">
-            <table id="results-table" style="display:none;">
-                <thead>
-                    <tr>
-                        <th>Path</th>
-                        <th>Error</th>
-                    </tr>
-                </thead>
-                <tbody id="results-body"></tbody>
-            </table>
-            <div id="no-results" style="display:none;">No skipped paths found</div>
+            <div class="table-wrap" id="results-wrap" style="display:none;">
+                <table id="results-table" class="table">
+                    <thead>
+                        <tr>
+                            <th>Path</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body"></tbody>
+                </table>
+            </div>
+            <div id="no-results" class="empty-state" style="display:none;">
+                <div class="empty-state__title">No skipped paths</div>
+                <p class="empty-state__desc">Everything indexed cleanly</p>
+            </div>
         </section>
     </main>
 
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
             const resultsTable = document.getElementById('results-table');
+            const resultsWrap = document.getElementById('results-wrap');
             const resultsBody = document.getElementById('results-body');
             const resultsInfo = document.getElementById('results-info');
             const resultCount = document.getElementById('result-count');
@@ -45,30 +72,34 @@
                     return;
                 }
 
-                resultCount.textContent = `${data.length} skipped path(s)`;
+                resultCount.textContent = `${data.length} skipped path${data.length === 1 ? '' : 's'}`;
                 resultsInfo.style.display = 'block';
-                resultsTable.style.display = 'table';
+                resultsWrap.style.display = '';
+                resultsTable.style.display = '';
 
-                data.forEach(item => {
-                    const tr = document.createElement('tr');
-                    tr.innerHTML = `
-                        <td>${escapeHtml(item.path)}</td>
-                        <td>${escapeHtml(item.error)}</td>
-                    `;
-                    resultsBody.appendChild(tr);
-                });
+                resultsBody.innerHTML = data.map(row => `
+                    <tr>
+                        <td class="path" title="${escapeHtml(row.path)}">${escapeHtml(row.path)}</td>
+                        <td class="text-danger">${escapeHtml(row.error || row.reason || '—')}</td>
+                    </tr>
+                `).join('');
             } catch (err) {
-                noResults.textContent = 'Failed to load skipped paths';
                 noResults.style.display = 'block';
+                noResults.querySelector('.empty-state__title').textContent = 'Failed to load';
+                noResults.querySelector('.empty-state__desc').textContent = err.message;
             }
         });
 
         function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
     </script>
+    <script src="/js/theme.js"></script>
+    <script src="/js/drawer.js"></script>
     <script src="/js/sidebar.js"></script>
     <script src="/js/status.js"></script>
 </body>

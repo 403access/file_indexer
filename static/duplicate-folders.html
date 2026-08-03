@@ -3,6 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
+
     <title>Duplicate Folders - File Indexer</title>
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/duplicate-folders.css">
@@ -121,6 +136,7 @@
         </div>
     </div>
 
+        <script src="/js/drawer.js"></script>
     <script src="/js/app.js"></script>
     <script src="/js/duplicate-folders-utils.js"></script>
     <script src="/js/duplicate-folders-filetypes.js"></script>
@@ -129,6 +145,7 @@
     <script src="/js/duplicate-folders-merge.js"></script>
     <script src="/js/duplicate-folders.js"></script>
     <script src="/js/file-viewer.js">    </script>
+        <script src="/js/theme.js"></script>
     <script src="/js/sidebar.js"></script>
     <script src="/js/status.js"></script>
 </body>

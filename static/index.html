@@ -3,87 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+      })();
+    </script>
     <title>Dashboard - File Indexer</title>
     <link rel="stylesheet" href="/css/style.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <style>
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 16px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-        }
-        .stat-card .value {
-            font-size: 28px;
-            font-weight: 700;
-            color: #333;
-            margin-bottom: 4px;
-        }
-        .stat-card .label {
-            font-size: 13px;
-            color: #888;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .stat-card.wasted .value { color: #dc3545; }
-        .stat-card.dup-files .value { color: #fd7e14; }
-        .stat-card.dup-folders .value { color: #6f42c1; }
-
         .chart-section {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-lg);
+            padding: var(--space-5);
+            margin-bottom: var(--space-6);
+            box-shadow: var(--shadow-xs);
         }
         .chart-header {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
+            align-items: flex-start;
+            margin-bottom: var(--space-4);
             flex-wrap: wrap;
-            gap: 10px;
+            gap: var(--space-3);
         }
         .chart-header h2 {
             margin: 0;
-            font-size: 18px;
-            color: #333;
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            letter-spacing: var(--tracking-tight);
+            color: var(--text-primary);
         }
-        .chart-controls {
+        .chart-controls-row {
             display: flex;
-            gap: 6px;
-        }
-        .chart-controls button {
-            padding: 6px 14px;
-            border: 1px solid #ddd;
-            background: #fff;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 13px;
-            color: #555;
-        }
-        .chart-controls button.active {
-            background: #007bff;
-            color: #fff;
-            border-color: #007bff;
-        }
-        .chart-controls button:hover:not(.active) {
-            background: #f0f0f0;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            align-items: center;
         }
         .chart-container {
             position: relative;
-            height: 350px;
+            height: 360px;
         }
-        .chart-metric {
-            display: flex;
-            gap: 6px;
+        .control-label {
+            font-size: var(--font-size-xs);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--text-muted);
+            margin-right: 0.15rem;
         }
     </style>
 </head>
@@ -91,56 +68,92 @@
     <nav id="sidebar-container"></nav>
 
     <main>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <h2 style="margin:0;font-size:1.1rem;color:#555;">Dashboard</h2>
-            <div style="display:flex;align-items:center;gap:12px;">
-                <button id="refresh-btn" onclick="refreshDashboard()" style="padding:6px 14px;border:1px solid #ddd;background:#fff;border-radius:4px;cursor:pointer;font-size:0.85rem;color:#555;">
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Dashboard</h1>
+                <p class="page-header__subtitle">Overview of your indexed library</p>
+            </div>
+            <div class="page-header__actions">
+                <button type="button" id="refresh-btn" class="btn btn--secondary btn--sm" onclick="refreshDashboard()">
                     Refresh
                 </button>
             </div>
-        </div>
+        </header>
 
-        <div id="snapshot-info" style="display:flex;gap:16px;margin-bottom:20px;padding:10px 16px;background:#f8f9fa;border-radius:6px;font-size:0.82rem;color:#666;flex-wrap:wrap;">
+        <div id="snapshot-info" class="info-bar">
             <span>Last snapshot: <strong id="snap-last">—</strong></span>
             <span>Behind: <strong id="snap-behind">—</strong> entries</span>
             <span>Next snapshot: <strong id="snap-next">—</strong></span>
         </div>
 
-        <section class="stats-grid" id="stats-grid">
-            <div class="stat-card"><div class="value" id="stat-files">-</div><div class="label">Files</div></div>
-            <div class="stat-card"><div class="value" id="stat-folders">-</div><div class="label">Folders</div></div>
-            <div class="stat-card"><div class="value" id="stat-size">-</div><div class="label">Total Size</div></div>
-            <div class="stat-card"><div class="value" id="stat-db">-</div><div class="label">DB Size</div></div>
-            <div class="stat-card dup-files"><div class="value" id="stat-dup-files">-</div><div class="label">Duplicate Files</div></div>
-            <div class="stat-card dup-files"><div class="value" id="stat-dup-file-groups">-</div><div class="label">Dup File Groups</div></div>
-            <div class="stat-card dup-folders"><div class="value" id="stat-dup-folders">-</div><div class="label">Duplicate Folders</div></div>
-            <div class="stat-card dup-folders"><div class="value" id="stat-dup-folder-groups">-</div><div class="label">Dup Folder Groups</div></div>
-            <div class="stat-card wasted"><div class="value" id="stat-wasted">-</div><div class="label">Wasted Space</div></div>
-            <div class="stat-card"><div class="value" id="stat-skipped">-</div><div class="label">Skipped Paths</div></div>
-            <div class="stat-card" style="cursor:pointer" onclick="location.href='/ignored.html'"><div class="value" id="stat-ignore-rules">-</div><div class="label">Ignore Rules</div></div>
+        <section class="stat-grid" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-card__value" id="stat-files">—</div>
+                <div class="stat-card__label">Files</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card__value" id="stat-folders">—</div>
+                <div class="stat-card__label">Folders</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card__value" id="stat-size">—</div>
+                <div class="stat-card__label">Total Size</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card__value" id="stat-db">—</div>
+                <div class="stat-card__label">DB Size</div>
+            </div>
+            <div class="stat-card stat-card--warning">
+                <div class="stat-card__value" id="stat-dup-files">—</div>
+                <div class="stat-card__label">Duplicate Files</div>
+            </div>
+            <div class="stat-card stat-card--warning">
+                <div class="stat-card__value" id="stat-dup-file-groups">—</div>
+                <div class="stat-card__label">Dup File Groups</div>
+            </div>
+            <div class="stat-card stat-card--purple">
+                <div class="stat-card__value" id="stat-dup-folders">—</div>
+                <div class="stat-card__label">Duplicate Folders</div>
+            </div>
+            <div class="stat-card stat-card--purple">
+                <div class="stat-card__value" id="stat-dup-folder-groups">—</div>
+                <div class="stat-card__label">Dup Folder Groups</div>
+            </div>
+            <div class="stat-card stat-card--danger">
+                <div class="stat-card__value" id="stat-wasted">—</div>
+                <div class="stat-card__label">Wasted Space</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-card__value" id="stat-skipped">—</div>
+                <div class="stat-card__label">Skipped Paths</div>
+            </div>
+            <div class="stat-card stat-card--clickable" onclick="location.href='/ignored.html'">
+                <div class="stat-card__value" id="stat-ignore-rules">—</div>
+                <div class="stat-card__label">Ignore Rules</div>
+            </div>
         </section>
 
-        <section class="chart-section">
+        <section class="chart-section" style="margin-top: var(--space-5);">
             <div class="chart-header">
                 <h2>Files Over Time</h2>
-                <div style="display:flex; gap:12px; flex-wrap:wrap;">
-                    <div class="chart-metric">
-                        <button data-metric="files" onclick="setMetric('files')">Files</button>
-                        <button data-metric="folders" onclick="setMetric('folders')">Folders</button>
-                        <button data-metric="size" onclick="setMetric('size')">Size</button>
-                        <button class="active" data-metric="all" onclick="setMetric('all')">All</button>
+                <div class="chart-controls-row">
+                    <div class="segmented" role="group" aria-label="Metric">
+                        <button type="button" class="segmented__btn" data-metric="files" onclick="setMetric('files')">Files</button>
+                        <button type="button" class="segmented__btn" data-metric="folders" onclick="setMetric('folders')">Folders</button>
+                        <button type="button" class="segmented__btn" data-metric="size" onclick="setMetric('size')">Size</button>
+                        <button type="button" class="segmented__btn active" data-metric="all" onclick="setMetric('all')">All</button>
                     </div>
-                    <div class="chart-controls">
-                        <button data-interval="day" onclick="setInterval('day')">Day</button>
-                        <button data-interval="week" onclick="setInterval('week')">Week</button>
-                        <button data-interval="month" onclick="setInterval('month')">Month</button>
-                        <button class="active" data-interval="year" onclick="setInterval('year')">Year</button>
+                    <div class="segmented" role="group" aria-label="Interval">
+                        <button type="button" class="segmented__btn" data-interval="day" onclick="setInterval('day')">Day</button>
+                        <button type="button" class="segmented__btn" data-interval="week" onclick="setInterval('week')">Week</button>
+                        <button type="button" class="segmented__btn" data-interval="month" onclick="setInterval('month')">Month</button>
+                        <button type="button" class="segmented__btn active" data-interval="year" onclick="setInterval('year')">Year</button>
                     </div>
-                    <div class="chart-controls">
-                        <button data-type="bar" onclick="setChartType('bar')">Bar</button>
-                        <button data-type="line" class="active" onclick="setChartType('line')">Line</button>
-                        <button data-type="pie" onclick="setChartType('pie')">Pie</button>
-                        <button data-type="doughnut" onclick="setChartType('doughnut')">Doughnut</button>
+                    <div class="segmented" role="group" aria-label="Chart type">
+                        <button type="button" class="segmented__btn" data-type="bar" onclick="setChartType('bar')">Bar</button>
+                        <button type="button" class="segmented__btn active" data-type="line" onclick="setChartType('line')">Line</button>
+                        <button type="button" class="segmented__btn" data-type="pie" onclick="setChartType('pie')">Pie</button>
+                        <button type="button" class="segmented__btn" data-type="doughnut" onclick="setChartType('doughnut')">Doughnut</button>
                     </div>
                 </div>
             </div>
@@ -157,7 +170,25 @@
         let currentMetric = 'all';
         let timelineData = [];
 
+        function chartColors() {
+            const style = getComputedStyle(document.documentElement);
+            const read = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
+            return {
+                text: read('--text-secondary', '#94a3b8'),
+                grid: read('--border-subtle', '#1e2430'),
+                files: 'rgba(99, 102, 241, 0.85)',
+                filesBorder: '#6366f1',
+                folders: 'rgba(139, 92, 246, 0.85)',
+                foldersBorder: '#8b5cf6',
+                size: 'rgba(16, 185, 129, 0.85)',
+                sizeBorder: '#10b981',
+            };
+        }
+
         document.addEventListener('DOMContentLoaded', fetchDashboard);
+        document.addEventListener('themechange', () => {
+            if (timelineData.length) renderChart();
+        });
 
         async function fetchDashboard() {
             try {
@@ -176,7 +207,6 @@
                 document.getElementById('stat-skipped').textContent = data.skipped_paths.toLocaleString();
                 document.getElementById('stat-ignore-rules').textContent = data.ignore_rules_count.toLocaleString();
 
-                // Snapshot info
                 if (data.last_refreshed) {
                     const date = new Date(data.last_refreshed * 1000);
                     document.getElementById('snap-last').textContent = date.toLocaleTimeString();
@@ -187,7 +217,7 @@
                 const behind = data.entries_behind || 0;
                 const behindEl = document.getElementById('snap-behind');
                 behindEl.textContent = behind.toLocaleString();
-                behindEl.style.color = behind > 0 ? '#dc3545' : '#28a745';
+                behindEl.style.color = behind > 0 ? 'var(--danger)' : 'var(--success)';
 
                 if (data.next_refresh) {
                     const next = new Date(data.next_refresh * 1000);
@@ -207,6 +237,7 @@
             const ctx = document.getElementById('timeline-chart').getContext('2d');
             if (chart) chart.destroy();
 
+            const c = chartColors();
             const labels = timelineData.map(b => b.label);
             const isPie = currentChartType === 'pie' || currentChartType === 'doughnut';
 
@@ -216,6 +247,7 @@
                 datasets = [{
                     data: metricData,
                     backgroundColor: generateColors(metricData.length),
+                    borderWidth: 0,
                 }];
             } else {
                 datasets = [];
@@ -223,43 +255,67 @@
                     datasets.push({
                         label: 'Files',
                         data: timelineData.map(b => b.files),
-                        backgroundColor: 'rgba(0, 123, 255, 0.7)',
-                        borderColor: 'rgba(0, 123, 255, 1)',
+                        backgroundColor: currentChartType === 'line' ? 'rgba(99, 102, 241, 0.12)' : c.files,
+                        borderColor: c.filesBorder,
                         borderWidth: 2,
                         fill: currentChartType === 'line',
-                        tension: 0.3,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
                     });
                 }
                 if (currentMetric === 'folders' || currentMetric === 'all') {
                     datasets.push({
                         label: 'Folders',
                         data: timelineData.map(b => b.folders),
-                        backgroundColor: 'rgba(111, 66, 193, 0.7)',
-                        borderColor: 'rgba(111, 66, 193, 1)',
+                        backgroundColor: currentChartType === 'line' ? 'rgba(139, 92, 246, 0.12)' : c.folders,
+                        borderColor: c.foldersBorder,
                         borderWidth: 2,
                         fill: currentChartType === 'line',
-                        tension: 0.3,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
                     });
                 }
                 if (currentMetric === 'size' || currentMetric === 'all') {
                     datasets.push({
                         label: 'Size (bytes)',
                         data: timelineData.map(b => b.size),
-                        backgroundColor: 'rgba(40, 167, 69, 0.7)',
-                        borderColor: 'rgba(40, 167, 69, 1)',
+                        backgroundColor: currentChartType === 'line' ? 'rgba(16, 185, 129, 0.12)' : c.size,
+                        borderColor: c.sizeBorder,
                         borderWidth: 2,
                         fill: currentChartType === 'line',
-                        tension: 0.3,
+                        tension: 0.35,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
                         yAxisID: 'y1',
                     });
                 }
             }
 
             const scales = isPie ? {} : {
-                x: { ticks: { maxRotation: 45, minRotation: 30 } },
-                y: { beginAtZero: true, position: 'left' },
+                x: {
+                    ticks: { maxRotation: 45, minRotation: 30, color: c.text },
+                    grid: { color: c.grid },
+                    border: { color: c.grid },
+                },
+                y: {
+                    beginAtZero: true,
+                    position: 'left',
+                    ticks: { color: c.text },
+                    grid: { color: c.grid },
+                    border: { color: c.grid },
+                },
                 ...(currentMetric === 'size' || currentMetric === 'all'
-                    ? { y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false } } }
+                    ? {
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: c.text },
+                            border: { color: c.grid },
+                        },
+                    }
                     : {}),
             };
 
@@ -269,8 +325,12 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     plugins: {
-                        legend: { display: currentMetric === 'all' || isPie },
+                        legend: {
+                            display: currentMetric === 'all' || isPie,
+                            labels: { color: c.text, boxWidth: 12, usePointStyle: true },
+                        },
                         tooltip: {
                             callbacks: {
                                 label: (ctx) => {
@@ -296,8 +356,8 @@
 
         function generateColors(count) {
             const palette = [
-                '#007bff', '#6f42c1', '#28a745', '#fd7e14', '#dc3545',
-                '#17a2b8', '#ffc107', '#6610f2', '#20c997', '#e83e8c',
+                '#6366f1', '#8b5cf6', '#10b981', '#f97316', '#ef4444',
+                '#0ea5e9', '#f59e0b', '#a78bfa', '#34d399', '#f472b6',
             ];
             return Array.from({ length: count }, (_, i) => palette[i % palette.length]);
         }
@@ -330,7 +390,7 @@
         async function refreshDashboard() {
             const btn = document.getElementById('refresh-btn');
             btn.disabled = true;
-            btn.textContent = 'Refreshing...';
+            btn.textContent = 'Refreshing…';
 
             try {
                 await fetch('/api/dashboard/refresh', { method: 'POST' });
@@ -343,6 +403,8 @@
             }
         }
     </script>
+    <script src="/js/theme.js"></script>
+    <script src="/js/drawer.js"></script>
     <script src="/js/sidebar.js"></script>
     <script src="/js/status.js"></script>
 </body>
