@@ -125,20 +125,20 @@
                 <h2>Files Over Time</h2>
                 <div style="display:flex; gap:12px; flex-wrap:wrap;">
                     <div class="chart-metric">
-                        <button class="active" data-metric="files" onclick="setMetric('files')">Files</button>
+                        <button data-metric="files" onclick="setMetric('files')">Files</button>
                         <button data-metric="folders" onclick="setMetric('folders')">Folders</button>
                         <button data-metric="size" onclick="setMetric('size')">Size</button>
-                        <button data-metric="all" onclick="setMetric('all')">All</button>
+                        <button class="active" data-metric="all" onclick="setMetric('all')">All</button>
                     </div>
                     <div class="chart-controls">
                         <button data-interval="day" onclick="setInterval('day')">Day</button>
                         <button data-interval="week" onclick="setInterval('week')">Week</button>
-                        <button class="active" data-interval="month" onclick="setInterval('month')">Month</button>
-                        <button data-interval="year" onclick="setInterval('year')">Year</button>
+                        <button data-interval="month" onclick="setInterval('month')">Month</button>
+                        <button class="active" data-interval="year" onclick="setInterval('year')">Year</button>
                     </div>
                     <div class="chart-controls">
-                        <button data-type="bar" class="active" onclick="setChartType('bar')">Bar</button>
-                        <button data-type="line" onclick="setChartType('line')">Line</button>
+                        <button data-type="bar" onclick="setChartType('bar')">Bar</button>
+                        <button data-type="line" class="active" onclick="setChartType('line')">Line</button>
                         <button data-type="pie" onclick="setChartType('pie')">Pie</button>
                         <button data-type="doughnut" onclick="setChartType('doughnut')">Doughnut</button>
                     </div>
@@ -152,9 +152,9 @@
 
     <script>
         let chart = null;
-        let currentInterval = 'month';
-        let currentChartType = 'bar';
-        let currentMetric = 'files';
+        let currentInterval = 'year';
+        let currentChartType = 'line';
+        let currentMetric = 'all';
         let timelineData = [];
 
         document.addEventListener('DOMContentLoaded', fetchDashboard);
