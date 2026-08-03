@@ -122,53 +122,105 @@ function refreshProcesses() {
 }
 
 let processesInterval = null;
-let currentProcessLogsProcessId = null;
+let currentSidebarProcessId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadProcesses();
     processesInterval = setInterval(loadProcesses, 2000);
 });
 
-async function showProcessLogs(processId, processName) {
-    currentProcessLogsProcessId = processId;
-    const overlay = document.getElementById('process-logs-overlay');
-    const title = document.getElementById('process-logs-title');
-    const body = document.getElementById('process-logs-body');
+async function openProcessSidebar(processId) {
+    currentSidebarProcessId = processId;
+    const overlay = document.getElementById('process-sidebar-overlay');
+    const sidebar = document.getElementById('process-sidebar');
+    const title = document.getElementById('process-sidebar-title');
+    const body = document.getElementById('process-sidebar-body');
 
-    title.textContent = `Logs: ${processName} (#${processId})`;
-    body.innerHTML = '<div class="empty-msg">Loading logs...</div>';
-    overlay.style.display = 'block';
+    title.textContent = `Process #${processId}`;
+    body.innerHTML = '<div class="empty-msg">Loading...</div>';
+    overlay.classList.add('open');
+    sidebar.classList.add('open');
 
     try {
-        const res = await fetch(`/api/processes/${processId}/logs?limit=500`);
-        if (!res.ok) throw new Error('Failed to load logs');
-        const logs = await res.json();
-        renderProcessLogs(logs);
+        const [processRes, logsRes] = await Promise.all([
+            fetch('/api/processes'),
+            fetch(`/api/processes/${processId}/logs?limit=500`)
+        ]);
+
+        if (!processRes.ok) throw new Error('Failed to load process');
+        const processData = await processRes.json();
+        const process = processData.processes.find(p => p.id === processId);
+
+        let logs = [];
+        if (logsRes.ok) {
+            logs = await logsRes.json();
+        }
+
+        renderProcessSidebar(process, logs);
     } catch (e) {
-        body.innerHTML = `<div class="empty-msg">Failed to load logs: ${escapeHtml(e.message)}</div>`;
+        body.innerHTML = `<div class="empty-msg">Failed to load: ${escapeHtml(e.message)}</div>`;
     }
 }
 
-function renderProcessLogs(logs) {
-    const body = document.getElementById('process-logs-body');
-    if (!logs || logs.length === 0) {
-        body.innerHTML = '<div class="empty-msg">No logs found for this process</div>';
+function renderProcessSidebar(process, logs) {
+    const body = document.getElementById('process-sidebar-body');
+    if (!process) {
+        body.innerHTML = '<div class="empty-msg">Process not found</div>';
         return;
     }
 
-    let html = '<table class="process-logs-table"><thead><tr><th style="width:180px">Timestamp</th><th style="width:60px">Level</th><th>Message</th></tr></thead><tbody>';
-    logs.forEach(log => {
-        html += `<tr>
-            <td class="log-timestamp">${escapeHtml(log.timestamp)}</td>
-            <td class="log-level-${log.level.toLowerCase()}">${escapeHtml(log.level)}</td>
-            <td class="log-message">${escapeHtml(log.message)}</td>
-        </tr>`;
-    });
-    html += '</tbody></table>';
+    const formatDate = (ts) => {
+        if (!ts) return '—';
+        try {
+            const d = new Date(ts);
+            if (isNaN(d.getTime())) return ts;
+            return d.toLocaleString();
+        } catch (e) {
+            return ts;
+        }
+    };
+
+    const formatProgress = (p) => {
+        if (p === null || p === undefined) return '—';
+        return p.toFixed(1) + '%';
+    };
+
+    let html = '<div class="process-sidebar-section">';
+    html += '<h4>Meta Information</h4>';
+    html += '<table class="process-meta-table">';
+    html += `<tr><td>ID</td><td>#${process.id}</td></tr>`;
+    html += `<tr><td>Name</td><td>${escapeHtml(process.name)}</td></tr>`;
+    html += `<tr><td>Category</td><td>${escapeHtml(process.category)}</td></tr>`;
+    html += `<tr><td>Status</td><td><span class="status-badge ${process.status}">${process.status}</span></td></tr>`;
+    html += `<tr><td>Progress</td><td>${formatProgress(process.progress)}</td></tr>`;
+    html += `<tr><td>Message</td><td>${escapeHtml(process.message || '—')}</td></tr>`;
+    html += `<tr><td>Started</td><td>${formatDate(process.started_at)}</td></tr>`;
+    html += `<tr><td>Finished</td><td>${formatDate(process.finished_at)}</td></tr>`;
+    html += `<tr><td>Paused</td><td>${process.paused ? 'Yes' : 'No'}</td></tr>`;
+    html += '</table></div>';
+
+    html += '<div class="process-sidebar-section">';
+    html += '<h4>Logs</h4>';
+    if (!logs || logs.length === 0) {
+        html += '<div class="empty-msg">No logs found for this process</div>';
+    } else {
+        html += '<table class="process-logs-table"><thead><tr><th style="width:160px">Timestamp</th><th style="width:60px">Level</th><th>Message</th></tr></thead><tbody>';
+        logs.forEach(log => {
+            html += `<tr>
+                <td class="log-timestamp">${escapeHtml(log.timestamp)}</td>
+                <td class="log-level-${log.level.toLowerCase()}">${escapeHtml(log.level)}</td>
+                <td class="log-message">${escapeHtml(log.message)}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    html += '</div>';
+
     body.innerHTML = html;
 }
 
-function closeProcessLogs() {
-    document.getElementById('process-logs-overlay').style.display = 'none';
-    currentProcessLogsProcessId = null;
+function closeProcessSidebar() {
+    document.getElementById('process-sidebar-overlay').classList.remove('open');
+    document.getElementById('process-sidebar').classList.remove('open');
+    currentSidebarProcessId = null;
 }

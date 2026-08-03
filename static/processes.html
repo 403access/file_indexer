@@ -57,17 +57,16 @@
         </div>
     </main>
 
-    <div class="process-logs-overlay" id="process-logs-overlay" style="display:none;">
-        <div class="process-logs-panel">
-            <div class="process-logs-header">
-                <h3 id="process-logs-title">Process Logs</h3>
-                <button class="merge-close" onclick="closeProcessLogs()">&times;</button>
-            </div>
-            <div class="process-logs-body" id="process-logs-body">
-                <div class="empty-msg">Loading logs...</div>
-            </div>
+    <div class="process-sidebar-overlay" id="process-sidebar-overlay" onclick="closeProcessSidebar()"></div>
+    <aside class="process-sidebar" id="process-sidebar">
+        <div class="process-sidebar-header">
+            <h3 id="process-sidebar-title">Process Details</h3>
+            <button class="merge-close" onclick="closeProcessSidebar()">&times;</button>
         </div>
-    </div>
+        <div class="process-sidebar-body" id="process-sidebar-body">
+            <div class="empty-msg">Loading...</div>
+        </div>
+    </aside>
 
     <script src="/js/app.js"></script>
     <script src="/js/processes.js"></script>
