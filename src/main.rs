@@ -51,7 +51,6 @@ async fn main() {
                     break;
                 }
 
-                let next_id = processes::pending("Dashboard refresh", "dashboard", Some("Scheduled"));
                 // Read refresh interval from settings (default 60s)
                 let interval_secs = {
                     let conn = file_indexer::modules::sql::database::get_connection(&refresh_db);
@@ -65,6 +64,8 @@ async fn main() {
                         .unwrap_or(60)
                 };
 
+                processes::update(refresh_process_id, None, Some(&format!("Waiting {}s until next refresh", interval_secs)));
+
                 tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
 
                 if processes::is_stopped(refresh_process_id) {
@@ -72,13 +73,14 @@ async fn main() {
                     break;
                 }
 
-                processes::update(next_id, Some(50.0), Some("Refreshing stats..."));
+                processes::update(refresh_process_id, Some(50.0), Some("Refreshing stats..."));
 
                 if let Ok(conn) = file_indexer::modules::sql::database::get_connection(&refresh_db) {
                     file_indexer::modules::sql::database::recompute_dashboard_stats(&conn);
-                    processes::complete(next_id, Some("Dashboard stats refreshed"));
+                    processes::update(refresh_process_id, Some(100.0), Some(&format!("Dashboard stats refreshed; next in {}s", interval_secs)));
                 } else {
-                    processes::fail(next_id, "Failed to connect to database");
+                    processes::fail(refresh_process_id, "Failed to connect to database");
+                    break;
                 }
             }
         });
