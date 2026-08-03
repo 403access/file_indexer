@@ -15,7 +15,7 @@ use self::folder::folder_handler;
 use self::index::index_handler;
 use self::logs::logs_handler;
 use self::merge::merge_handler;
-use self::processes::{clear_processes_handler, pause_process_handler, processes_handler, resume_process_handler, stop_process_handler, trigger_process_handler};
+use self::processes::{clear_processes_handler, pause_process_handler, process_logs_handler, processes_handler, resume_process_handler, stop_process_handler, trigger_process_handler};
 use self::search::search_handler;
 use self::settings::{get_settings_handler, update_settings_handler};
 use self::skipped::skipped_handler;
@@ -63,6 +63,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/processes/{id}/resume", post(resume_process_handler))
         .route("/api/processes/{id}/stop", post(stop_process_handler))
         .route("/api/processes/{id}/trigger", post(trigger_process_handler))
+        .route("/api/processes/{id}/logs", get(process_logs_handler))
         .route("/api/settings", get(get_settings_handler).post(update_settings_handler))
         .with_state(state)
 }

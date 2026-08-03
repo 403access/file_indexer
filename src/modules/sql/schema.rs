@@ -104,6 +104,8 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
 
     let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_logs_process_id ON logs(process_id)", []);
 
+    let _ = tx.execute("ALTER TABLE logs ADD COLUMN process_id INTEGER", []);
+
     let settings_table_result = tx.execute(
         "CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
