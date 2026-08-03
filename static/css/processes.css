@@ -27,6 +27,12 @@
     color: #666;
     margin-bottom: 0.75rem;
 }
+#process-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
 .processes-table-wrapper {
     background: white;
     border-radius: 8px;

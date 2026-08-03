@@ -43,10 +43,10 @@ function renderProcesses(processes) {
                     </div>
                     <div class="process-card-actions">
                         ${p.paused
-                            ? `<button class="process-action-btn resume-btn" onclick="resumeProcess(${p.id})" title="Resume">▶ Resume</button>`
-                            : `<button class="process-action-btn pause-btn" onclick="pauseProcess(${p.id})" title="Pause">⏸ Pause</button>`
+                            ? `<button class="process-action-btn resume-btn" onclick="resumeProcess(${p.id})" title="Resume the paused process">▶ Resume</button>`
+                            : `<button class="process-action-btn pause-btn" onclick="pauseProcess(${p.id})" title="Temporarily suspend; you can resume later">⏸ Pause</button>`
                         }
-                        <button class="process-action-btn stop-btn" onclick="stopProcess(${p.id})" title="Stop">⏹ Stop</button>
+                        <button class="process-action-btn stop-btn" onclick="stopProcess(${p.id})" title="Permanently terminate this process">⏹ Stop</button>
                     </div>
                 </div>
                 <div class="process-card-body">
