@@ -3,7 +3,8 @@ use axum::extract::{Path, Query, State};
 use serde::{Deserialize, Serialize};
 
 use crate::modules::processes::{self, Process};
-use crate::modules::sql::database::get_connection;
+use crate::modules::sql::database::{get_connection, refresh_dashboard_stats};
+
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Serialize)]
@@ -60,6 +61,79 @@ pub async fn process_logs_handler(
         .collect();
 
     Ok(Json(logs))
+}
+
+pub async fn trigger_process_handler(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+) -> Result<Json<ProcessActionResponse>, (axum::http::StatusCode, String)> {
+    let all_processes = processes::get_all();
+    let process = all_processes.iter().find(|p| p.id == id).ok_or((
+        axum::http::StatusCode::NOT_FOUND,
+        format!("Process #{} not found", id),
+    ))?;
+
+    let name = process.name.as_str();
+    let category = process.category.as_str();
+
+    let new_id = match category {
+        "dashboard" => {
+            let process_id = processes::register_controllable(
+                &format!("Manual {} ({})", name, category),
+                category,
+                Some("Manual trigger"),
+            );
+
+            let conn = get_connection(&state.db)
+                .map_err(|e| {
+                    processes::fail(process_id, &e.to_string());
+                    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+                })?;
+
+            refresh_dashboard_stats(&conn);
+
+            let _last_refreshed: f64 = conn
+                .query_row(
+                    "SELECT value FROM dashboard_stats WHERE key = 'last_refreshed'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.0);
+
+            processes::complete(process_id, Some("Dashboard stats refreshed"));
+            process_id
+        }
+        "duplicate-folders" => {
+            let process_id = processes::register_controllable(
+                &format!("Manual {} ({})", name, category),
+                category,
+                Some("Manual trigger"),
+            );
+
+            let conn = get_connection(&state.db)
+                .map_err(|e| {
+                    processes::fail(process_id, &e.to_string());
+                    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+                })?;
+
+            crate::modules::sql::database::refresh_duplicate_folder_groups(&conn);
+            processes::complete(process_id, Some("Duplicate folder groups refreshed"));
+            process_id
+        }
+        _ => {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("Cannot manually trigger process category: {}", category),
+            ));
+        }
+    };
+
+    Ok(Json(ProcessActionResponse {
+        ok: true,
+        message: format!("Triggered process #{} (new process #{} running)", id, new_id),
+    }))
 }
 
 pub async fn pause_process_handler(

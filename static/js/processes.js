@@ -42,6 +42,7 @@ function renderProcesses(processes) {
                         </div>
                     </div>
                     <div class="process-card-actions">
+                        <button class="process-action-btn trigger-btn" onclick="triggerProcess(${p.id})" title="Run this process immediately">▶ Trigger</button>
                         ${p.paused
                             ? `<button class="process-action-btn resume-btn" onclick="resumeProcess(${p.id})" title="Resume the paused process">▶ Resume</button>`
                             : `<button class="process-action-btn pause-btn" onclick="pauseProcess(${p.id})" title="Temporarily suspend; you can resume later">⏸ Pause</button>`
@@ -92,6 +93,30 @@ function formatDate(ts) {
         return d.toLocaleTimeString();
     } catch (e) {
         return ts;
+    }
+}
+
+async function triggerProcess(id) {
+    if (!confirm('Trigger this process immediately?')) return;
+    const btn = event.target;
+    btn.disabled = true;
+    btn.textContent = 'Running...';
+
+    try {
+        const res = await fetch(`/api/processes/${id}/trigger`, { method: 'POST' });
+        if (res.ok) {
+            const data = await res.json();
+            alert(data.message || 'Process triggered');
+            setTimeout(() => loadProcesses(), 500);
+        } else {
+            const err = await res.text();
+            alert('Failed to trigger: ' + err);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '▶ Trigger';
     }
 }
 
