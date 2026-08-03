@@ -6,4 +6,6 @@ pub fn check_vars() {
     println!("CWD: {}", super::env_vars::get_cwd());
     println!("ENABLE_STARTUP_INDEXING: {}", super::env_vars::get_enable_startup_indexing());
     println!("ENABLE_DASHBOARD_REFRESH: {}", super::env_vars::get_enable_dashboard_refresh());
+    println!("ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH: {}", super::env_vars::get_enable_duplicate_folder_groups_refresh());
+    println!("DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL: {}", super::env_vars::get_duplicate_folder_groups_refresh_interval());
 }

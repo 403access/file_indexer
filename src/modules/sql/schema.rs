@@ -127,6 +127,25 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         return Err(dashboard_stats_result.unwrap_err());
     }
 
+    // Materialized duplicate folder groups
+    let duplicate_folder_groups_result = tx.execute(
+        "CREATE TABLE IF NOT EXISTS duplicate_folder_groups (
+            id INTEGER PRIMARY KEY,
+            group_id TEXT NOT NULL,
+            folder_path TEXT NOT NULL,
+            folder_name TEXT,
+            shared_count INTEGER NOT NULL DEFAULT 0,
+            file_count INTEGER NOT NULL DEFAULT 0,
+            updated_at REAL NOT NULL,
+            UNIQUE(group_id, folder_path)
+        );",
+        [],
+    );
+    if duplicate_folder_groups_result.is_err() {
+        logging::error(&format!("Failed to create 'duplicate_folder_groups' table: {:?}", duplicate_folder_groups_result));
+        return Err(duplicate_folder_groups_result.unwrap_err());
+    }
+
     // Materialized dashboard timeline buckets
     let dashboard_timeline_result = tx.execute(
         "CREATE TABLE IF NOT EXISTS dashboard_timeline (

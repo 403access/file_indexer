@@ -3,6 +3,9 @@
 
 pub use super::connection::get_connection;
 pub use super::dashboard::{recompute_dashboard_stats, refresh_dashboard_stats};
+pub use super::duplicate_folders_materialized::{
+    create_duplicate_folder_groups_table, refresh_duplicate_folder_groups,
+};
 pub use super::duplicates::{
     create_duplicates_table, refresh_duplicate_hashes, remove_duplicates_table,
     reset_duplicates_table, update_duplicate_hashes_incremental,

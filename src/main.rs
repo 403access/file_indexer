@@ -88,6 +88,43 @@ async fn main() {
         println!("⏸️  Periodic dashboard refresh disabled via ENABLE_DASHBOARD_REFRESH");
     }
 
+    // Spawn background task for duplicate folder groups materialization
+    if file_indexer::modules::environment::env_vars::get_enable_duplicate_folder_groups_refresh() {
+        let dup_db = database_url.clone();
+        let dup_process_id = processes::register_controllable("Duplicate folder groups refresh", "duplicate-folders", Some("Scheduled"));
+        tokio::spawn(async move {
+            loop {
+                if processes::is_stopped(dup_process_id) {
+                    processes::fail(dup_process_id, "Stopped by user");
+                    break;
+                }
+
+                let interval_secs = file_indexer::modules::environment::env_vars::get_duplicate_folder_groups_refresh_interval();
+
+                processes::update(dup_process_id, None, Some(&format!("Waiting {}s until next refresh", interval_secs)));
+
+                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+
+                if processes::is_stopped(dup_process_id) {
+                    processes::fail(dup_process_id, "Stopped by user");
+                    break;
+                }
+
+                processes::update(dup_process_id, Some(50.0), Some("Refreshing duplicate folder groups..."));
+
+                if let Ok(conn) = file_indexer::modules::sql::database::get_connection(&dup_db) {
+                    file_indexer::modules::sql::database::refresh_duplicate_folder_groups(&conn);
+                    processes::update(dup_process_id, Some(100.0), Some(&format!("Duplicate folder groups refreshed; next in {}s", interval_secs)));
+                } else {
+                    processes::fail(dup_process_id, "Failed to connect to database");
+                    break;
+                }
+            }
+        });
+    } else {
+        println!("⏸️  Duplicate folder groups refresh disabled via ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH");
+    }
+
     tracing_subscriber::fmt::init();
 
     let api_router = create_router(state);

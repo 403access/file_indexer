@@ -9,6 +9,8 @@ pub struct EnvironmentVariables {
     pub cwd: String,
     pub enable_startup_indexing: bool,
     pub enable_dashboard_refresh: bool,
+    pub enable_duplicate_folder_groups_refresh: bool,
+    pub duplicate_folder_groups_refresh_interval: u64,
 }
 
 impl Default for EnvironmentVariables {
@@ -18,6 +20,8 @@ impl Default for EnvironmentVariables {
             cwd: env::current_dir().unwrap().to_str().unwrap().to_string(),
             enable_startup_indexing: true,
             enable_dashboard_refresh: true,
+            enable_duplicate_folder_groups_refresh: true,
+            duplicate_folder_groups_refresh_interval: 120,
         }
     }
 }
@@ -56,6 +60,26 @@ pub fn load() {
             .ok()
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
+
+        env_vars.enable_duplicate_folder_groups_refresh = env::var("ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
+
+        env_vars.duplicate_folder_groups_refresh_interval = env::var("DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(120);
+
+        env_vars.enable_duplicate_folder_groups_refresh = env::var("ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
+
+        env_vars.duplicate_folder_groups_refresh_interval = env::var("DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(120);
     });
 }
 
@@ -94,4 +118,18 @@ pub fn get_enable_startup_indexing() -> bool {
 /// `false`, the background task that recomputes dashboard stats will not run.
 pub fn get_enable_dashboard_refresh() -> bool {
     ENV_VARS.with(|vars| vars.borrow().enable_dashboard_refresh)
+}
+
+/// Whether duplicate folder groups materialization refresh is enabled (default: true)
+///
+/// Reads the `ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH` environment variable.
+pub fn get_enable_duplicate_folder_groups_refresh() -> bool {
+    ENV_VARS.with(|vars| vars.borrow().enable_duplicate_folder_groups_refresh)
+}
+
+/// Interval in seconds for duplicate folder groups materialization refresh (default: 120)
+///
+/// Reads the `DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL` environment variable.
+pub fn get_duplicate_folder_groups_refresh_interval() -> u64 {
+    ENV_VARS.with(|vars| vars.borrow().duplicate_folder_groups_refresh_interval)
 }
