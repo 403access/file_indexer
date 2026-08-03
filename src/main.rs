@@ -22,7 +22,12 @@ async fn main() {
     };
 
     if file_indexer::modules::environment::env_vars::get_enable_startup_indexing() {
-        ensure_indexed_async(database_url.clone(), state.cwd.clone(), state.pause_indexer.clone()).await;
+        let db_clone = database_url.clone();
+        let cwd_clone = state.cwd.clone();
+        let pause_clone = state.pause_indexer.clone();
+        tokio::spawn(async move {
+            ensure_indexed_async(db_clone, cwd_clone, pause_clone).await;
+        });
     } else {
         println!("⏸️  Startup indexing disabled via ENABLE_STARTUP_INDEXING");
     }
@@ -38,8 +43,14 @@ async fn main() {
     // Spawn background task for periodic dashboard refresh
     if file_indexer::modules::environment::env_vars::get_enable_dashboard_refresh() {
         let refresh_db = database_url.clone();
+        let refresh_process_id = processes::register_controllable("Dashboard refresh", "dashboard", Some("Scheduled"));
         tokio::spawn(async move {
             loop {
+                if processes::is_stopped(refresh_process_id) {
+                    processes::fail(refresh_process_id, "Stopped by user");
+                    break;
+                }
+
                 let next_id = processes::pending("Dashboard refresh", "dashboard", Some("Scheduled"));
                 // Read refresh interval from settings (default 60s)
                 let interval_secs = {
@@ -55,6 +66,11 @@ async fn main() {
                 };
 
                 tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+
+                if processes::is_stopped(refresh_process_id) {
+                    processes::fail(refresh_process_id, "Stopped by user");
+                    break;
+                }
 
                 processes::update(next_id, Some(50.0), Some("Refreshing stats..."));
 

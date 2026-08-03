@@ -13,6 +13,7 @@ async function loadProcesses() {
 function renderProcesses(processes) {
     const tbody = document.getElementById('processes-tbody');
     const summary = document.getElementById('processes-summary');
+    const cardsContainer = document.getElementById('process-cards');
 
     const running = processes.filter(p => p.status === 'running').length;
     const pending = processes.filter(p => p.status === 'pending').length;
@@ -21,6 +22,45 @@ function renderProcesses(processes) {
 
     summary.textContent = `${processes.length} total • ${running} running • ${pending} upcoming • ${completed} completed • ${failed} failed`;
 
+    const active = processes.filter(p => p.status === 'running' || p.status === 'pending');
+
+    if (active.length === 0) {
+        cardsContainer.innerHTML = '';
+    } else {
+        cardsContainer.innerHTML = active.map(p => {
+            const progressHtml = p.progress !== null && p.progress !== undefined
+                ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'running' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
+                : '<span class="process-mono">—</span>';
+
+            return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}">
+                <div class="process-card-header">
+                    <div>
+                        <div class="process-card-name">${escapeHtml(p.name)}</div>
+                        <div class="process-card-meta">
+                            <span class="category-badge">${escapeHtml(p.category)}</span>
+                            <span class="status-badge ${p.status}">${p.status}${p.paused ? ' (paused)' : ''}</span>
+                        </div>
+                    </div>
+                    <div class="process-card-actions">
+                        ${p.paused
+                            ? `<button class="process-action-btn resume-btn" onclick="resumeProcess(${p.id})" title="Resume">▶ Resume</button>`
+                            : `<button class="process-action-btn pause-btn" onclick="pauseProcess(${p.id})" title="Pause">⏸ Pause</button>`
+                        }
+                        <button class="process-action-btn stop-btn" onclick="stopProcess(${p.id})" title="Stop">⏹ Stop</button>
+                    </div>
+                </div>
+                <div class="process-card-body">
+                    <div style="flex:1;min-width:120px">${progressHtml}</div>
+                    <div class="process-card-message" title="${escapeHtml(p.message || '')}">${escapeHtml(p.message || '—')}</div>
+                </div>
+                <div class="process-card-footer">
+                    <span class="process-mono">Started: ${formatDate(p.started_at)}</span>
+                    <span class="process-mono">#${p.id}</span>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
     if (processes.length === 0) {
         tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">No processes tracked yet</td></tr>';
         return;
@@ -28,14 +68,14 @@ function renderProcesses(processes) {
 
     tbody.innerHTML = processes.map(p => {
         const progressHtml = p.progress !== null && p.progress !== undefined
-            ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'running' ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
+            ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'running' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
             : '<span class="process-mono">—</span>';
 
         return `<tr>
             <td class="process-mono">#${p.id}</td>
             <td><strong>${escapeHtml(p.name)}</strong></td>
             <td><span class="category-badge">${escapeHtml(p.category)}</span></td>
-            <td><span class="status-badge ${p.status}">${p.status}</span></td>
+            <td><span class="status-badge ${p.status}">${p.status}${p.paused ? ' (paused)' : ''}</span></td>
             <td style="min-width:120px">${progressHtml}</td>
             <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(p.message || '')}">${escapeHtml(p.message || '—')}</td>
             <td class="process-mono">${formatDate(p.started_at)}</td>
@@ -53,6 +93,22 @@ function formatDate(ts) {
     } catch (e) {
         return ts;
     }
+}
+
+async function pauseProcess(id) {
+    await fetch(`/api/processes/${id}/pause`, { method: 'POST' });
+    loadProcesses();
+}
+
+async function resumeProcess(id) {
+    await fetch(`/api/processes/${id}/resume`, { method: 'POST' });
+    loadProcesses();
+}
+
+async function stopProcess(id) {
+    if (!confirm('Stop this process?')) return;
+    await fetch(`/api/processes/${id}/stop`, { method: 'POST' });
+    loadProcesses();
 }
 
 function clearCompleted() {

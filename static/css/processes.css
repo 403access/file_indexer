@@ -60,6 +60,79 @@
     padding: 2rem;
     color: #999;
 }
+.process-card {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border-left: 4px solid #3498db;
+    overflow: hidden;
+    transition: opacity 0.2s;
+}
+.process-card.running { border-left-color: #f39c12; }
+.process-card.pending { border-left-color: #6366f1; }
+.process-card.paused { border-left-color: #888; opacity: 0.85; }
+.process-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    background: #fafbfc;
+    border-bottom: 1px solid #f0f0f0;
+    gap: 1rem;
+}
+.process-card-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #2c3e50;
+}
+.process-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.25rem;
+}
+.process-card-actions {
+    display: flex;
+    gap: 0.4rem;
+    flex-shrink: 0;
+}
+.process-action-btn {
+    padding: 0.35rem 0.75rem;
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-size: 0.8rem;
+    cursor: pointer;
+    font-weight: 500;
+}
+.process-action-btn:hover { opacity: 0.85; }
+.pause-btn { background: #f39c12; }
+.resume-btn { background: #27ae60; }
+.stop-btn { background: #e74c3c; }
+.process-card-body {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+}
+.process-card-message {
+    flex: 1;
+    font-size: 0.82rem;
+    color: #666;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.process-card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 1rem;
+    background: #f8f9fa;
+    border-top: 1px solid #f0f0f0;
+    font-size: 0.75rem;
+    color: #999;
+}
 .status-badge {
     display: inline-flex;
     align-items: center;
