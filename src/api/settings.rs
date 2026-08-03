@@ -2,20 +2,23 @@ use axum::extract::State;
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
-use crate::modules::sql::database::{get_connection, get_ignore_rules, get_setting, set_ignore_rules, set_setting, IgnoreRule};
+use crate::modules::sql::database::{count_ignore_events, get_connection, get_ignore_rules, get_setting, set_ignore_rules, set_setting, IgnoreRule};
 use crate::states::app_state::AppState;
 
 #[derive(Serialize, Deserialize)]
 pub struct IgnoreRuleJson {
     pub name: String,
     pub condition: Option<String>,
+    #[serde(default)]
+    pub ignore_count: u64,
 }
 
 impl IgnoreRuleJson {
-    pub fn from_rule(rule: &IgnoreRule) -> Self {
+    pub fn from_rule(rule: &IgnoreRule, ignore_count: u64) -> Self {
         Self {
             name: rule.name.clone(),
             condition: rule.condition.clone(),
+            ignore_count,
         }
     }
 
@@ -62,7 +65,15 @@ pub async fn get_settings_handler(
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let rules = get_ignore_rules(&conn);
-    let folders: Vec<IgnoreRuleJson> = rules.iter().map(IgnoreRuleJson::from_rule).collect();
+    let folders: Vec<IgnoreRuleJson> = rules
+        .iter()
+        .map(|rule| {
+            let count = count_ignore_events(&conn, &rule.to_raw())
+                .unwrap_or(0)
+                .max(0) as u64;
+            IgnoreRuleJson::from_rule(rule, count)
+        })
+        .collect();
 
     let dashboard_refresh_interval = get_setting(&conn, "dashboard_refresh_interval")
         .ok()

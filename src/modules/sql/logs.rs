@@ -58,3 +58,20 @@ pub fn get_logs(
     }
     Ok(result)
 }
+
+/// Count how many times a specific ignore rule has been applied, based on the
+/// marker logs emitted by the indexer: "Ignored folder '<name>' via rule '<raw>'".
+/// The rule raw string is escaped so LIKE wildcards (% and _) in a rule name do
+/// not cause false matches.
+pub fn count_ignore_events(conn: &Connection, rule_raw: &str) -> rusqlite::Result<i64> {
+    let escaped = rule_raw
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let pattern = format!("%via rule '{}'%", escaped);
+    conn.query_row(
+        "SELECT COUNT(*) FROM logs WHERE message LIKE ?1 ESCAPE '\\'",
+        [pattern],
+        |row| row.get(0),
+    )
+}

@@ -77,6 +77,7 @@
                         <th>Folder Name</th>
                         <th>Condition File</th>
                         <th>Description</th>
+                        <th>Ignored Count</th>
                     </tr>
                 </thead>
                 <tbody id="rules-body"></tbody>
@@ -131,6 +132,7 @@
                             <td><code>${escapeHtml(r.name)}</code></td>
                             <td>${condition}</td>
                             <td>${desc}</td>
+                            <td>${(r.ignore_count || 0).toLocaleString()}</td>
                         `;
                         rulesBody.appendChild(tr);
                     });

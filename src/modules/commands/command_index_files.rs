@@ -210,11 +210,15 @@ pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<Ato
                     total_entries += r.file_count + r.folder_count;
                     for d in &r.directories {
                         let parent_path = std::path::Path::new(path.trim_end_matches('/'));
-                        let should_skip = ignore_rules.iter().any(|rule| {
-                            rule.name == d.name && rule.should_skip(parent_path)
-                        });
-                        if should_skip {
-                            logging::debug(&format!("Ignoring folder '{}'", d.name));
+                        if let Some(rule) = ignore_rules
+                            .iter()
+                            .find(|rule| rule.name == d.name && rule.should_skip(parent_path))
+                        {
+                            logging::debug(&format!(
+                                "Ignored folder '{}' via rule '{}'",
+                                d.name,
+                                rule.to_raw()
+                            ));
                             continue;
                         }
                         new_paths.push(format!("{}/{}/", path.trim_end_matches('/'), d.name));
