@@ -32,7 +32,7 @@ function renderProcesses(processes) {
                 ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
                 : '<span class="process-mono">—</span>';
 
-            return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}">
+            return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}" onclick="openProcessSidebar(${p.id})" style="cursor:pointer">
                 <div class="process-card-header">
                     <div>
                         <div class="process-card-name">${escapeHtml(p.name)}</div>
@@ -72,7 +72,7 @@ function renderProcesses(processes) {
             ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
             : '<span class="process-mono">—</span>';
 
-        return `<tr>
+        return `<tr onclick="openProcessSidebar(${p.id})" style="cursor:pointer">
             <td class="process-mono">#${p.id}</td>
             <td><strong>${escapeHtml(p.name)}</strong></td>
             <td><span class="category-badge">${escapeHtml(p.category)}</span></td>
