@@ -19,25 +19,39 @@
             </div>
         </div>
         <div class="processes-summary" id="processes-summary"></div>
-        <div id="process-cards"></div>
-        <div class="processes-table-wrapper">
-            <table class="processes-table">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Category</th>
-                        <th>Status</th>
-                        <th>Progress</th>
-                        <th>Message</th>
-                        <th>Started</th>
-                        <th>Finished</th>
-                    </tr>
-                </thead>
-                <tbody id="processes-tbody">
-                    <tr><td colspan="8" class="empty-msg">Loading...</td></tr>
-                </tbody>
-            </table>
+        <div class="processes-layout">
+            <div class="processes-cards-col">
+                <div id="process-cards"></div>
+            </div>
+            <div class="processes-table-wrapper">
+                <table class="processes-table">
+                    <colgroup>
+                        <col style="width:5%">
+                        <col style="width:18%">
+                        <col style="width:12%">
+                        <col style="width:10%">
+                        <col style="width:11%">
+                        <col style="width:20%">
+                        <col style="width:12%">
+                        <col style="width:12%">
+                    </colgroup>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Message</th>
+                            <th>Started</th>
+                            <th>Finished</th>
+                        </tr>
+                    </thead>
+                    <tbody id="processes-tbody">
+                        <tr><td colspan="8" class="empty-msg">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </main>
 
