@@ -53,8 +53,69 @@ function escapeHtml(str) {
         .replace(/'/g, '&#39;');
 }
 
-// Folder Sidebar
-let folderSidebar = null;
+// ---------------------------------------------------------------------------
+// Folder detail drawer (reusable Drawer component when available)
+// ---------------------------------------------------------------------------
+
+let folderDrawer = null;
+let folderSidebar = null; // legacy fallback reference
+
+function getFolderDrawer() {
+    if (folderDrawer) return folderDrawer;
+    if (typeof Drawer === 'undefined') return null;
+    folderDrawer = Drawer.create({
+        id: 'folder-drawer',
+        title: 'Folder',
+        size: 'md',
+    });
+    return folderDrawer;
+}
+
+function folderMetaHtml(folder, totalSize) {
+    return `
+        <div class="meta-row">
+            <span class="meta-row__label">Path</span>
+            <span class="meta-row__value meta-row__value--mono" data-folder-path title="${escapeHtml(folder.path)}">${escapeHtml(folder.path)}</span>
+        </div>
+        <div class="meta-row">
+            <span class="meta-row__label">Size</span>
+            <span class="meta-row__value" data-folder-size>${formatSize(totalSize)}</span>
+        </div>
+        <div class="meta-row">
+            <span class="meta-row__label">Modified</span>
+            <span class="meta-row__value" data-folder-modified>${formatDateFull(folder.modified)}</span>
+        </div>
+        <div class="meta-row">
+            <span class="meta-row__label">Contents</span>
+            <span class="meta-row__value" data-folder-counts>${folder.folder_count} folders, ${folder.file_count} files</span>
+        </div>
+    `;
+}
+
+function folderBodyHtml(folder) {
+    const rows = folder.files.length === 0
+        ? '<div class="empty-state"><div class="empty-state__title">Empty folder</div></div>'
+        : `<div class="list">${folder.files.map(file => {
+            const safePath = file.path.replace(/'/g, "\\'");
+            const safeName = file.name.replace(/'/g, "\\'");
+            const onclick = file.is_directory
+                ? `loadSubfolder('${safePath}')`
+                : `FileViewer.open('${safePath}', '${safeName}')`;
+            return `
+                <div class="list-row" onclick="${onclick}">
+                    <span class="list-row__icon">${file.is_directory ? '\uD83D\uDCC1' : '\uD83D\uDCC4'}</span>
+                    <span class="list-row__name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+                    <span class="list-row__meta">${file.is_directory ? '' : formatSize(file.size)}</span>
+                </div>`;
+        }).join('')}</div>`;
+
+    return `
+        <div class="drawer__section">
+            <div class="drawer__section-title">Contents</div>
+            ${rows}
+        </div>
+    `;
+}
 
 async function openFolder(path) {
     try {
@@ -66,58 +127,43 @@ async function openFolder(path) {
 }
 
 function showFolderSidebar(folder) {
-    closeFolderSidebar();
+    const totalSize = folder.files.reduce((sum, f) => sum + (f.is_file ? f.size : 0), 0);
+    const drawer = getFolderDrawer();
 
+    if (drawer) {
+        drawer
+            .setTitle(folder.name)
+            .setMeta(folderMetaHtml(folder, totalSize))
+            .setBody(folderBodyHtml(folder))
+            .open();
+        folderSidebar = { kind: 'drawer', drawer };
+        return;
+    }
+
+    // Fallback without Drawer.js
+    closeFolderSidebar();
     const overlay = document.createElement('div');
     overlay.className = 'folder-sidebar-overlay';
     overlay.onclick = closeFolderSidebar;
 
     const sidebar = document.createElement('div');
     sidebar.className = 'folder-sidebar';
-
-    const totalSize = folder.files.reduce((sum, f) => sum + (f.is_file ? f.size : 0), 0);
-
     sidebar.innerHTML = `
         <div class="fs-header">
-            <button class="fs-close" onclick="closeFolderSidebar()">&times;</button>
-            <span class="fs-title">${folder.name}</span>
+            <button type="button" class="fs-close" onclick="closeFolderSidebar()" aria-label="Close">&times;</button>
+            <span class="fs-title">${escapeHtml(folder.name)}</span>
         </div>
-        <div class="fs-meta">
-            <div class="fs-meta-row">
-                <span class="fs-meta-label">Path</span>
-                <span class="fs-meta-value fs-path" title="${folder.path}">${folder.path}</span>
-            </div>
-            <div class="fs-meta-row">
-                <span class="fs-meta-label">Size</span>
-                <span class="fs-meta-value">${formatSize(totalSize)}</span>
-            </div>
-            <div class="fs-meta-row">
-                <span class="fs-meta-label">Modified</span>
-                <span class="fs-meta-value">${formatDateFull(folder.modified)}</span>
-            </div>
-            <div class="fs-meta-row">
-                <span class="fs-meta-label">Contents</span>
-                <span class="fs-meta-value">${folder.folder_count} folders, ${folder.file_count} files</span>
-            </div>
-        </div>
-        <div class="fs-content">
-            <div class="fs-section-title">Contents</div>
-            <div class="fs-file-list">
-                ${folder.files.length === 0 ? '<div class="fs-empty">Empty folder</div>' : ''}
-                ${folder.files.map(file => `
-                    <div class="fs-file-row" onclick="${file.is_directory ? `loadSubfolder('${file.path.replace(/'/g, "\\'")}')` : `FileViewer.open('${file.path.replace(/'/g, "\\'")}', '${file.name.replace(/'/g, "\\'")}')`}">
-                        <span class="fs-file-icon">${file.is_directory ? '\uD83D\uDCC1' : '\uD83D\uDCC4'}</span>
-                        <span class="fs-file-name" title="${file.name}">${file.name}</span>
-                        <span class="fs-file-size">${file.is_directory ? '' : formatSize(file.size)}</span>
-                    </div>
-                `).join('')}
-            </div>
-        </div>
+        <div class="fs-meta">${folderMetaHtml(folder, totalSize)
+            .replace(/meta-row__/g, 'fs-meta-')
+            .replace(/class="meta-row"/g, 'class="fs-meta-row"')
+            .replace(/meta-row__value--mono/g, 'fs-path')
+            .replace(/data-folder-path/g, 'fs-path')}</div>
+        <div class="fs-content">${folderBodyHtml(folder)}</div>
     `;
 
     document.body.appendChild(overlay);
     document.body.appendChild(sidebar);
-    folderSidebar = { overlay, sidebar };
+    folderSidebar = { kind: 'legacy', overlay, sidebar };
 
     requestAnimationFrame(() => {
         overlay.classList.add('open');
@@ -135,33 +181,45 @@ async function loadSubfolder(path) {
 }
 
 function updateFolderSidebar(folder) {
-    if (!folderSidebar) return;
-    const sidebar = folderSidebar.sidebar;
+    if (!folderSidebar) {
+        showFolderSidebar(folder);
+        return;
+    }
 
     const totalSize = folder.files.reduce((sum, f) => sum + (f.is_file ? f.size : 0), 0);
 
-    sidebar.querySelector('.fs-title').textContent = folder.name;
-    sidebar.querySelector('.fs-path').textContent = folder.path;
-    sidebar.querySelector('.fs-path').title = folder.path;
+    if (folderSidebar.kind === 'drawer') {
+        const d = folderSidebar.drawer;
+        d.setTitle(folder.name)
+            .setMeta(folderMetaHtml(folder, totalSize))
+            .setBody(folderBodyHtml(folder));
+        return;
+    }
 
-    const metaRows = sidebar.querySelectorAll('.fs-meta-value');
-    metaRows[1].textContent = formatSize(totalSize);
-    metaRows[2].textContent = formatDateFull(folder.modified);
-    metaRows[3].textContent = `${folder.folder_count} folders, ${folder.file_count} files`;
-
-    const fileList = sidebar.querySelector('.fs-file-list');
-    fileList.innerHTML = folder.files.length === 0 ? '<div class="fs-empty">Empty folder</div>' :
-        folder.files.map(file => `
-            <div class="fs-file-row" onclick="${file.is_directory ? `loadSubfolder('${file.path.replace(/'/g, "\\'")}')` : `FileViewer.open('${file.path.replace(/'/g, "\\'")}', '${file.name.replace(/'/g, "\\'")}')`}">
-                <span class="fs-file-icon">${file.is_directory ? '\uD83D\uDCC1' : '\uD83D\uDCC4'}</span>
-                <span class="fs-file-name" title="${file.name}">${file.name}</span>
-                <span class="fs-file-size">${file.is_directory ? '' : formatSize(file.size)}</span>
-            </div>
-        `).join('');
+    const sidebar = folderSidebar.sidebar;
+    const title = sidebar.querySelector('.fs-title');
+    if (title) title.textContent = folder.name;
+    const content = sidebar.querySelector('.fs-content');
+    if (content) content.innerHTML = folderBodyHtml(folder);
+    const meta = sidebar.querySelector('.fs-meta');
+    if (meta) {
+        meta.innerHTML = folderMetaHtml(folder, totalSize)
+            .replace(/class="meta-row"/g, 'class="fs-meta-row"')
+            .replace(/meta-row__label/g, 'fs-meta-label')
+            .replace(/meta-row__value meta-row__value--mono/g, 'fs-meta-value fs-path')
+            .replace(/meta-row__value/g, 'fs-meta-value');
+    }
 }
 
 function closeFolderSidebar() {
     if (!folderSidebar) return;
+
+    if (folderSidebar.kind === 'drawer') {
+        folderSidebar.drawer.close();
+        folderSidebar = null;
+        return;
+    }
+
     const { overlay, sidebar } = folderSidebar;
     overlay.classList.remove('open');
     sidebar.classList.remove('open');

@@ -19,128 +19,127 @@
     </script>
 
     <title>Duplicates - File Indexer</title>
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .merge-btn {
-            padding: 0.3rem 0.75rem;
-            font-size: 0.8rem;
-            background: #27ae60;
             margin-left: auto;
             flex-shrink: 0;
         }
-        .merge-btn:hover { background: #219a52; }
         .merge-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.4); z-index: 999;
+            position: fixed; inset: 0;
+            background: var(--bg-overlay); z-index: 950;
             display: flex; align-items: center; justify-content: center;
-            opacity: 0; transition: opacity 0.2s;
+            opacity: 0; visibility: hidden;
+            transition: opacity var(--duration-normal) var(--ease-in-out),
+                        visibility var(--duration-normal) var(--ease-in-out);
+            backdrop-filter: blur(3px);
+            padding: var(--space-4);
         }
-        .merge-overlay.open { opacity: 1; }
+        .merge-overlay.open { opacity: 1; visibility: visible; }
         .merge-panel {
-            background: white; border-radius: 10px; width: 90vw; max-width: 900px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-xl);
+            width: 90vw; max-width: 900px;
             max-height: 85vh; display: flex; flex-direction: column;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            box-shadow: var(--shadow-lg);
         }
         .merge-header {
             display: flex; align-items: center; gap: 1rem;
-            padding: 1rem 1.5rem; border-bottom: 1px solid #eee;
+            padding: 1rem 1.5rem; border-bottom: 1px solid var(--border-subtle);
         }
-        .merge-header h2 { flex: 1; font-size: 1.1rem; }
+        .merge-header h2 { flex: 1; font-size: 1.1rem; color: var(--text-primary); margin: 0; }
         .merge-close {
             background: none; border: none; font-size: 1.3rem;
-            cursor: pointer; color: #666; padding: 0.25rem;
+            cursor: pointer; color: var(--text-secondary); padding: 0.25rem;
         }
-        .merge-close:hover { color: #333; }
+        .merge-close:hover { color: var(--text-primary); }
         .merge-dest {
             display: flex; align-items: center; gap: 0.75rem;
-            padding: 0.75rem 1.5rem; border-bottom: 1px solid #eee;
-            background: #fafbfc;
+            padding: 0.75rem 1.5rem; border-bottom: 1px solid var(--border-subtle);
+            background: var(--bg-muted);
         }
-        .merge-dest label { font-size: 0.85rem; font-weight: 600; color: #555; }
+        .merge-dest label { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
         .merge-dest input {
-            flex: 1; padding: 0.4rem 0.6rem; border: 1px solid #ddd;
-            border-radius: 4px; font-size: 0.85rem; font-family: monospace;
+            flex: 1; padding: 0.4rem 0.6rem; border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm); font-size: 0.85rem; font-family: var(--font-mono);
+            background: var(--bg-elevated); color: var(--text-primary);
         }
         .merge-body { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
         .merge-dir-group { margin-bottom: 1rem; }
         .merge-dir-label {
-            font-size: 0.75rem; font-weight: 600; color: #888;
+            font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
             text-transform: uppercase; letter-spacing: 0.03em;
             margin-bottom: 0.4rem;
         }
         .merge-file-row {
             display: flex; align-items: center; gap: 0.75rem;
-            padding: 0.5rem 0.75rem; border-radius: 6px;
+            padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
             border: 1px solid transparent; margin-bottom: 0.3rem;
             font-size: 0.85rem;
         }
         .merge-file-row.keep {
-            background: #eafaf1; border-color: #27ae60;
+            background: var(--success-muted); border-color: var(--success);
         }
         .merge-file-row.remove {
-            background: #fdf2f2; border-color: #e0e0e0; opacity: 0.6;
+            background: var(--danger-muted); border-color: var(--border-default); opacity: 0.6;
         }
         .merge-file-check {
             width: 16px; height: 16px; cursor: pointer;
-            accent-color: #27ae60;
+            accent-color: var(--success);
         }
         .merge-file-name { font-weight: 500; min-width: 120px; }
         .merge-file-path {
-            flex: 1; color: #666; font-family: monospace;
+            flex: 1; color: var(--text-secondary); font-family: var(--font-mono);
             font-size: 0.78rem; overflow: hidden;
             text-overflow: ellipsis; white-space: nowrap;
         }
-        .merge-file-size { color: #999; font-family: monospace; font-size: 0.8rem; }
+        .merge-file-size { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.8rem; }
         .merge-footer {
             display: flex; align-items: center; justify-content: space-between;
-            padding: 0.75rem 1.5rem; border-top: 1px solid #eee;
-            background: #fafbfc;
+            padding: 0.75rem 1.5rem; border-top: 1px solid var(--border-subtle);
+            background: var(--bg-muted);
         }
-        .merge-stats { font-size: 0.8rem; color: #666; }
-        .merge-apply { background: #27ae60; }
-        .merge-apply:hover { background: #219a52; }
-        .merge-apply:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .merge-stats { font-size: 0.8rem; color: var(--text-secondary); }
+        .merge-apply { /* uses .btn */ }
+        .merge-cancel { /* uses .btn */ }
         .duplicate-controls {
-            background: white;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
             padding: 1rem 1.25rem;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xs);
             margin-bottom: 1rem;
             display: flex;
             flex-wrap: wrap;
             gap: 0.75rem;
             align-items: center;
         }
-        .duplicate-controls input[type="text"] {
+        .duplicate-controls input[type="text"],
+        .duplicate-controls input[type="number"] {
             flex: 1;
-            min-width: 200px;
+            min-width: 140px;
             padding: 0.5rem 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
             font-size: 0.9rem;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
         }
         .duplicate-controls select {
             padding: 0.5rem 0.75rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
             font-size: 0.9rem;
-            background: white;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
         }
-        .duplicate-controls button {
-            padding: 0.5rem 1.25rem;
-            background: #3498db;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-        .duplicate-controls button:hover {
-            background: #2980b9;
-        }
+        /* primary actions use .btn */
         .duplicate-controls label {
             font-size: 0.85rem;
-            color: #666;
+            color: var(--text-secondary);
             display: flex;
             align-items: center;
             gap: 0.4rem;
@@ -151,7 +150,14 @@
     <nav id="sidebar-container"></nav>
 
     <main>
-        <section class="duplicate-controls">
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Duplicate Files</h1>
+                <p class="page-header__subtitle">Groups of files with identical content</p>
+            </div>
+        </header>
+
+        <section class="duplicate-controls toolbar">
             <input type="text" id="dup-search" placeholder="Search by name or path...">
             <label>Min size:
                 <input type="number" id="dup-min-size" min="0" value="0" placeholder="Bytes">
@@ -169,7 +175,7 @@
                 <option value="desc">Descending</option>
                 <option value="asc">Ascending</option>
             </select>
-            <button id="dup-apply">Apply</button>
+            <button type="button" class="btn btn--sm" id="dup-apply">Apply</button>
         </section>
 
         <section class="results-info" id="results-info" style="display:none;">
@@ -179,9 +185,9 @@
         <section class="groups" id="groups"></section>
 
         <section class="pagination" id="pagination" style="display:none;">
-            <button id="prev-page" disabled>Previous</button>
+            <button type="button" class="btn btn--secondary btn--sm" id="prev-page" disabled>Previous</button>
             <span id="page-info"></span>
-            <button id="next-page" disabled>Next</button>
+            <button type="button" class="btn btn--secondary btn--sm" id="next-page" disabled>Next</button>
         </section>
     </main>
 
@@ -198,7 +204,7 @@
             <div class="merge-body" id="merge-body"></div>
             <div class="merge-footer">
                 <span class="merge-stats" id="merge-stats"></span>
-                <button class="merge-apply" id="merge-apply" onclick="applyMerge()">Apply Merge</button>
+                <button type="button" class="btn btn--success btn--sm merge-apply" id="merge-apply" onclick="applyMerge()">Apply Merge</button>
             </div>
         </div>
     </div>
@@ -279,7 +285,7 @@
                             <span class="wasted">${formatSize(group.wasted_bytes)} wasted</span>
                         </span>
                         <span class="group-size">${formatSize(group.files[0].size)} each</span>
-                        <button class="merge-btn" onclick="event.stopPropagation(); openMerge(${i})">Merge</button>
+                        <button type="button" class="btn btn--success btn--sm merge-btn" onclick="event.stopPropagation(); openMerge(${i})">Merge</button>
                     </div>
                     <div class="group-files" id="files-${i}" style="display:none;">
                         <table>

@@ -32,7 +32,7 @@ function renderProcesses(processes) {
                 ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
                 : '<span class="process-mono">—</span>';
 
-            return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}" onclick="openProcessSidebar(${p.id})" style="cursor:pointer">
+            return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}" onclick="openProcessSidebar(${p.id})">
                 <div class="process-card-header">
                     <div>
                         <div class="process-card-name">${escapeHtml(p.name)}</div>
@@ -41,13 +41,13 @@ function renderProcesses(processes) {
                             <span class="status-badge ${p.status}">${p.status}${p.paused ? ' (paused)' : ''}</span>
                         </div>
                     </div>
-                    <div class="process-card-actions">
-                        <button class="process-action-btn trigger-btn" onclick="triggerProcess(${p.id})" title="Run this process immediately">▶ Trigger</button>
+                    <div class="process-card-actions" onclick="event.stopPropagation()">
+                        <button type="button" class="process-action-btn trigger-btn" onclick="event.stopPropagation(); triggerProcess(${p.id})" title="Run this process immediately">▶ Trigger</button>
                         ${p.paused
-                            ? `<button class="process-action-btn resume-btn" onclick="resumeProcess(${p.id})" title="Resume the paused process">▶ Resume</button>`
-                            : `<button class="process-action-btn pause-btn" onclick="pauseProcess(${p.id})" title="Temporarily suspend; you can resume later">⏸ Pause</button>`
+                            ? `<button type="button" class="process-action-btn resume-btn" onclick="event.stopPropagation(); resumeProcess(${p.id})" title="Resume the paused process">▶ Resume</button>`
+                            : `<button type="button" class="process-action-btn pause-btn" onclick="event.stopPropagation(); pauseProcess(${p.id})" title="Temporarily suspend; you can resume later">⏸ Pause</button>`
                         }
-                        <button class="process-action-btn stop-btn" onclick="stopProcess(${p.id})" title="Permanently terminate this process">⏹ Stop</button>
+                        <button type="button" class="process-action-btn stop-btn" onclick="event.stopPropagation(); stopProcess(${p.id})" title="Permanently terminate this process">⏹ Stop</button>
                     </div>
                 </div>
                 <div class="process-card-body">

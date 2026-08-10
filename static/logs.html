@@ -19,6 +19,8 @@
     </script>
 
     <title>Logs - File Indexer</title>
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .log-controls {
@@ -30,65 +32,54 @@
         }
         .log-controls select, .log-controls input {
             padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
         }
         .log-controls input[type="text"] {
             width: 220px;
         }
-        .log-controls button {
-            padding: 8px 16px;
-            background: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .log-controls button:hover {
-            background: #0056b3;
-        }
-        .log-controls button.active {
-            background: #0056b3;
-        }
+        /* buttons use .btn */
         .log-table {
             width: 100%;
             border-collapse: collapse;
-            font-family: monospace;
+            font-family: var(--font-mono);
         }
         .log-table th, .log-table td {
             padding: 10px;
             text-align: left;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid var(--border-subtle);
         }
         .log-table th {
-            background: #f5f5f5;
+            background: var(--bg-subtle);
             font-weight: bold;
             cursor: pointer;
             user-select: none;
         }
         .log-table th:hover {
-            background: #e9ecef;
+            background: var(--bg-hover);
         }
         .log-table tr:hover {
-            background: #f9f9f9;
+            background: var(--bg-hover);
         }
-        .level-error { color: #dc3545; font-weight: bold; }
-        .level-warn { color: #ffc107; font-weight: bold; }
-        .level-info { color: #17a2b8; }
-        .level-debug { color: #6c757d; }
-        .timestamp { color: #666; white-space: nowrap; }
+        .level-error { color: var(--danger); font-weight: bold; }
+        .level-warn { color: var(--warning); font-weight: bold; }
+        .level-info { color: var(--info); }
+        .level-debug { color: var(--text-muted); }
+        .timestamp { color: var(--text-secondary); white-space: nowrap; }
         .message { word-break: break-word; }
         .indexed-row {
             cursor: pointer;
         }
         .indexed-row:hover {
-            background: #eef6ff !important;
+            background: var(--accent-muted) !important;
         }
         .expand-icon {
             display: inline-block;
             width: 1rem;
             text-align: center;
-            color: #999;
+            color: var(--text-muted);
             transition: transform 0.15s;
             flex-shrink: 0;
         }
@@ -100,8 +91,8 @@
         }
         .file-list {
             padding: 0.25rem 1rem 0.5rem 2.5rem;
-            background: #f8f9fa;
-            border-bottom: 1px solid #eee;
+            background: var(--bg-muted);
+            border-bottom: 1px solid var(--border-subtle);
             font-size: 0.8rem;
         }
         .file-list-item {
@@ -109,20 +100,20 @@
             align-items: center;
             gap: 0.5rem;
             padding: 0.15rem 0;
-            color: #555;
+            color: var(--text-secondary);
         }
         .file-list-item .fl-name {
-            font-family: monospace;
+            font-family: var(--font-mono);
         }
         .file-list-item .fl-size {
-            color: #999;
+            color: var(--text-muted);
             margin-left: auto;
-            font-family: monospace;
+            font-family: var(--font-mono);
             font-size: 0.75rem;
         }
         .file-list-toggle {
             font-size: 0.75rem;
-            color: #3498db;
+            color: var(--accent);
             cursor: pointer;
             border: none;
             background: none;
@@ -134,7 +125,7 @@
             display: none;
             text-align: center;
             padding: 40px;
-            color: #666;
+            color: var(--text-secondary);
         }
         .auto-refresh {
             display: flex;
@@ -143,7 +134,7 @@
         }
         .search-hint {
             font-size: 12px;
-            color: #999;
+            color: var(--text-muted);
             margin-top: -8px;
             margin-bottom: 10px;
         }
@@ -153,7 +144,14 @@
     <nav id="sidebar-container"></nav>
 
     <main>
-        <section class="log-controls">
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Logs</h1>
+                <p class="page-header__subtitle">Application and indexing event stream</p>
+            </div>
+        </header>
+
+        <section class="log-controls toolbar">
             <label>Level:
                 <select id="level-filter">
                     <option value="all">All</option>
@@ -174,8 +172,8 @@
                     <option value="5000">5000</option>
                 </select>
             </label>
-            <button id="sort-btn" onclick="toggleSort()">Timestamp ▼</button>
-            <button onclick="fetchLogs()">Refresh</button>
+            <button type="button" class="btn btn--secondary btn--sm" id="sort-btn" onclick="toggleSort()">Timestamp ▼</button>
+            <button type="button" class="btn btn--sm" onclick="fetchLogs()">Refresh</button>
             <div class="auto-refresh">
                 <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()">
                 <label for="auto-refresh">Auto-refresh (5s)</label>
@@ -188,7 +186,7 @@
         </section>
 
         <section class="results">
-            <table class="log-table" id="results-table" style="display:none;">
+            <div class="table-wrap" id="results-wrap" style="display:none;"><table class="log-table table" id="results-table">
                 <thead>
                     <tr>
                         <th>Timestamp</th>
@@ -197,8 +195,8 @@
                     </tr>
                 </thead>
                 <tbody id="results-body"></tbody>
-            </table>
-            <div id="no-results">No logs found</div>
+            </table></div>
+            <div id="no-results" class="empty-state" style="display:none;"><div class="empty-state__title">No logs found</div></div>
         </section>
     </main>
 
@@ -244,15 +242,18 @@
 
                 resultsBody.innerHTML = '';
 
+                const resultsWrap = document.getElementById('results-wrap');
                 if (data.length === 0) {
                     noResults.style.display = 'block';
                     resultsTable.style.display = 'none';
+                    if (resultsWrap) resultsWrap.style.display = 'none';
                     resultsInfo.style.display = 'none';
                     return;
                 }
 
                 noResults.style.display = 'none';
                 resultsTable.style.display = 'table';
+                if (resultsWrap) resultsWrap.style.display = '';
                 resultCount.textContent = `${data.length} log(s)`;
                 resultsInfo.style.display = 'block';
 

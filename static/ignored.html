@@ -19,6 +19,8 @@
     </script>
 
     <title>Ignored Folders - File Indexer</title>
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .ignored-stats {
@@ -28,9 +30,9 @@
             flex-wrap: wrap;
         }
         .ignored-stat {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-lg);
             padding: 16px 24px;
             text-align: center;
             min-width: 160px;
@@ -38,77 +40,48 @@
         .ignored-stat .value {
             font-size: 32px;
             font-weight: 700;
-            color: #333;
+            color: var(--text-primary);
             margin-bottom: 4px;
         }
         .ignored-stat .label {
             font-size: 13px;
-            color: #888;
+            color: var(--text-muted);
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        .ignored-stat.rules .value { color: #007bff; }
-        .ignored-stat.skipped .value { color: #dc3545; }
+        .ignored-stat.rules .value { color: var(--accent); }
+        .ignored-stat.skipped .value { color: var(--danger); }
         .section-title {
             font-size: 18px;
             font-weight: 600;
-            color: #333;
+            color: var(--text-primary);
             margin-bottom: 12px;
             margin-top: 32px;
         }
         table th { text-align: left; }
         .condition-tag {
             display: inline-block;
-            background: #e8f4fd;
-            color: #0c5460;
-            border-radius: 4px;
+            background: var(--info-muted);
+            color: var(--info-text);
+            border-radius: var(--radius-sm);
             padding: 2px 8px;
             font-size: 12px;
-            font-family: monospace;
+            font-family: var(--font-mono);
         }
 
         /* Ignore Rule detail sidebar */
+        /* Ignore rule drawer content */
         #rules-table tbody tr { cursor: pointer; }
-        .ir-sidebar-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.3); z-index: 999;
-            opacity: 0; transition: opacity 0.2s; display: none;
-        }
-        .ir-sidebar-overlay.open { opacity: 1; display: block; }
-        .ir-sidebar {
-            position: fixed; top: 0; right: 0;
-            width: 450px; max-width: 90vw; height: 100vh;
-            background: white;
-            box-shadow: -4px 0 20px rgba(0,0,0,0.15);
-            display: flex; flex-direction: column;
-            transform: translateX(100%); transition: transform 0.25s ease;
-            z-index: 1000;
-        }
-        .ir-sidebar.open { transform: translateX(0); }
-        .ir-header {
-            display: flex; align-items: center; gap: 0.75rem;
-            padding: 1rem 1.25rem; border-bottom: 1px solid #eee;
-        }
-        .ir-close {
-            background: none; border: none; font-size: 1.3rem;
-            cursor: pointer; color: #666; padding: 0.25rem;
-        }
-        .ir-close:hover { color: #333; }
-        .ir-title {
-            font-size: 1.1rem; font-weight: 600; color: #2c3e50;
-            flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        .ir-body { flex: 1; overflow-y: auto; padding: 1rem 1.25rem; }
         .ir-section { margin-bottom: 1.25rem; }
         .ir-section-title {
-            font-size: 0.75rem; font-weight: 600; color: #888;
+            font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
             text-transform: uppercase; letter-spacing: 0.03em;
             margin-bottom: 0.5rem;
         }
         .ir-rule-code {
-            font-family: monospace; font-size: 0.8rem;
-            background: #f5f5f5; padding: 0.5rem 0.75rem; border-radius: 4px;
-            border: 1px solid #eee; color: #333; word-break: break-all;
+            font-family: var(--font-mono); font-size: 0.8rem;
+            background: var(--bg-muted); padding: 0.5rem 0.75rem; border-radius: var(--radius-sm);
+            border: 1px solid var(--border-default); color: var(--text-primary); word-break: break-all;
         }
         .ir-meta-row {
             display: flex; align-items: baseline; gap: 0.75rem;
@@ -116,61 +89,90 @@
         }
         .ir-meta-row:last-child { margin-bottom: 0; }
         .ir-meta-label {
-            font-size: 0.75rem; font-weight: 600; color: #888;
+            font-size: 0.75rem; font-weight: 600; color: var(--text-muted);
             text-transform: uppercase; letter-spacing: 0.03em;
             width: 110px; flex-shrink: 0;
         }
         .ir-meta-value {
-            font-size: 0.85rem; color: #333; word-break: break-all;
+            font-size: 0.85rem; color: var(--text-primary); word-break: break-all;
         }
-        .ir-count { font-size: 1.8rem; font-weight: 700; color: #007bff; }
+        .ir-count { font-size: 1.8rem; font-weight: 700; color: var(--accent); }
+    
+        .section-heading {
+            font-size: var(--font-size-lg);
+            font-weight: 600;
+            letter-spacing: var(--tracking-tight);
+            color: var(--text-primary);
+            margin: var(--space-5) 0 var(--space-3);
+        }
     </style>
 </head>
 <body>
     <nav id="sidebar-container"></nav>
 
     <main>
-        <section class="ignored-stats">
-            <div class="ignored-stat rules">
-                <div class="value" id="stat-rules">-</div>
-                <div class="label">Ignore Rules</div>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Ignored</h1>
+                <p class="page-header__subtitle">Ignore rules and paths skipped by them</p>
             </div>
-            <div class="ignored-stat skipped">
-                <div class="value" id="stat-skipped">-</div>
-                <div class="label">Skipped Paths</div>
+        </header>
+
+        <section class="ignored-stats stat-grid">
+            <div class="stat-card stat-card--accent">
+                <div class="stat-card__value" id="stat-rules">-</div>
+                <div class="stat-card__label">Ignore Rules</div>
+            </div>
+            <div class="stat-card stat-card--danger">
+                <div class="stat-card__value" id="stat-skipped">-</div>
+                <div class="stat-card__label">Skipped Paths</div>
             </div>
         </section>
 
-        <div class="section-title">Ignore Rules</div>
+        <h2 class="section-heading">Ignore Rules</h2>
         <section class="results">
-            <div id="no-rules" style="display:none;">No ignore rules configured</div>
-            <table id="rules-table" style="display:none;">
-                <thead>
-                    <tr>
-                        <th>Folder Name</th>
-                        <th>Condition File</th>
-                        <th>Description</th>
-                        <th>Ignored Count</th>
-                    </tr>
-                </thead>
-                <tbody id="rules-body"></tbody>
-            </table>
+            <div id="no-rules" class="empty-state" style="display:none;">
+                <div class="empty-state__title">No ignore rules configured</div>
+                <p class="empty-state__desc">Add rules in Settings</p>
+            </div>
+            <div class="table-wrap" id="rules-wrap" style="display:none;">
+                <table id="rules-table" class="table">
+                    <thead>
+                        <tr>
+                            <th>Folder Name</th>
+                            <th>Condition File</th>
+                            <th>Description</th>
+                            <th>Ignored Count</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rules-body"></tbody>
+                </table>
+            </div>
         </section>
 
-        <div class="section-title">Skipped Paths</div>
+        <h2 class="section-heading">Skipped Paths</h2>
         <section class="results">
-            <div id="no-skipped" style="display:none;">No skipped paths</div>
-            <table id="skipped-table" style="display:none;">
-                <thead>
-                    <tr>
-                        <th>Path</th>
-                        <th>Error</th>
-                    </tr>
-                </thead>
-                <tbody id="skipped-body"></tbody>
-            </table>
+            <div id="no-skipped" class="empty-state" style="display:none;">
+                <div class="empty-state__title">No skipped paths</div>
+            </div>
+            <div class="table-wrap" id="skipped-wrap" style="display:none;">
+                <table id="skipped-table" class="table">
+                    <thead>
+                        <tr>
+                            <th>Path</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="skipped-body"></tbody>
+                </table>
+            </div>
         </section>
     </main>
+
+    <script src="/js/theme.js"></script>
+    <script src="/js/drawer.js"></script>
+    <script src="/js/sidebar.js"></script>
+    <script src="/js/status.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
@@ -193,11 +195,13 @@
                     noRules.style.display = 'block';
                 } else {
                     rulesTable.style.display = 'table';
+                    const rulesWrap = document.getElementById('rules-wrap');
+                    if (rulesWrap) rulesWrap.style.display = '';
                     rules.forEach(r => {
                         const tr = document.createElement('tr');
                         const condition = r.condition
                             ? `<span class="condition-tag">${escapeHtml(r.condition)}</span>`
-                            : '<span style="color:#999">—</span>';
+                            : '<span style="color:var(--text-muted)">—</span>';
                         const desc = r.condition
                             ? `Skip ${escapeHtml(r.name)} if ${escapeHtml(r.condition)} exists`
                             : `Skip all ${escapeHtml(r.name)} folders`;
@@ -227,6 +231,8 @@
                     noSkipped.style.display = 'block';
                 } else {
                     skippedTable.style.display = 'table';
+                    const skippedWrap = document.getElementById('skipped-wrap');
+                    if (skippedWrap) skippedWrap.style.display = '';
                     data.forEach(item => {
                         const tr = document.createElement('tr');
                         tr.innerHTML = `
@@ -248,83 +254,62 @@
             return div.innerHTML;
         }
 
-        // Ignore Rule detail sidebar
-        let ruleSidebar = null;
+        // Ignore rule detail — shared Drawer component
+        let ruleDrawer = null;
+
+        function getRuleDrawer() {
+            if (ruleDrawer) return ruleDrawer;
+            if (typeof Drawer === 'undefined') return null;
+            ruleDrawer = Drawer.create({ id: 'ignore-rule-drawer', title: 'Ignore Rule', size: 'md' });
+            return ruleDrawer;
+        }
 
         function openRuleSidebar(rule) {
-            closeRuleSidebar();
-
-            const overlay = document.createElement('div');
-            overlay.className = 'ir-sidebar-overlay';
-            overlay.onclick = closeRuleSidebar;
-
-            const sidebar = document.createElement('div');
-            sidebar.className = 'ir-sidebar';
-
             const raw = rule.condition ? `${rule.name}:${rule.condition}` : rule.name;
             const desc = rule.condition
                 ? `Skip ${rule.name} if ${rule.condition} exists`
                 : `Skip all ${rule.name} folders`;
 
-            sidebar.innerHTML = `
-                <div class="ir-header">
-                    <button class="ir-close" onclick="closeRuleSidebar()">&times;</button>
-                    <span class="ir-title">Ignore Rule</span>
+            const body = `
+                <div class="ir-section">
+                    <div class="ir-section-title">Rule</div>
+                    <div class="ir-rule-code">${escapeHtml(raw)}</div>
                 </div>
-                <div class="ir-body">
-                    <div class="ir-section">
-                        <div class="ir-section-title">Rule</div>
-                        <div class="ir-rule-code">${escapeHtml(raw)}</div>
+                <div class="ir-section">
+                    <div class="meta-row">
+                        <span class="meta-row__label">Folder</span>
+                        <span class="meta-row__value"><code>${escapeHtml(rule.name)}</code></span>
                     </div>
-                    <div class="ir-section">
-                        <div class="ir-meta-row">
-                            <span class="ir-meta-label">Folder Name</span>
-                            <span class="ir-meta-value"><code>${escapeHtml(rule.name)}</code></span>
-                        </div>
-                        <div class="ir-meta-row">
-                            <span class="ir-meta-label">Condition</span>
-                            <span class="ir-meta-value">${
-                                rule.condition
-                                    ? `<span class="condition-tag">${escapeHtml(rule.condition)}</span>`
-                                    : '<span style="color:#999">—</span>'
-                            }</span>
-                        </div>
-                        <div class="ir-meta-row">
-                            <span class="ir-meta-label">Ignored Count</span>
-                            <span class="ir-meta-value ir-count">${(rule.ignore_count || 0).toLocaleString()}</span>
-                        </div>
+                    <div class="meta-row">
+                        <span class="meta-row__label">Condition</span>
+                        <span class="meta-row__value">${
+                            rule.condition
+                                ? `<span class="condition-tag">${escapeHtml(rule.condition)}</span>`
+                                : '<span class="text-muted">—</span>'
+                        }</span>
                     </div>
-                    <div class="ir-section">
-                        <div class="ir-section-title">Description</div>
-                        <div class="ir-meta-value">${escapeHtml(desc)}</div>
+                    <div class="meta-row">
+                        <span class="meta-row__label">Ignored</span>
+                        <span class="meta-row__value ir-count">${(rule.ignore_count || 0).toLocaleString()}</span>
                     </div>
+                </div>
+                <div class="ir-section">
+                    <div class="ir-section-title">Description</div>
+                    <div class="meta-row__value">${escapeHtml(desc)}</div>
                 </div>
             `;
 
-            document.body.appendChild(overlay);
-            document.body.appendChild(sidebar);
-            ruleSidebar = { overlay, sidebar };
-
-            requestAnimationFrame(() => {
-                overlay.classList.add('open');
-                sidebar.classList.add('open');
-            });
+            const drawer = getRuleDrawer();
+            if (drawer) {
+                drawer.setTitle('Ignore Rule').setMeta('').setBody(body).open();
+                return;
+            }
+            console.warn('Drawer component not loaded');
         }
 
         function closeRuleSidebar() {
-            if (!ruleSidebar) return;
-            ruleSidebar.overlay.remove();
-            ruleSidebar.sidebar.remove();
-            ruleSidebar = null;
+            if (ruleDrawer) ruleDrawer.close();
         }
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeRuleSidebar();
-        });
     </script>
-        <script src="/js/theme.js"></script>
-    <script src="/js/drawer.js"></script>
-    <script src="/js/sidebar.js"></script>
-    <script src="/js/status.js"></script>
 </body>
 </html>

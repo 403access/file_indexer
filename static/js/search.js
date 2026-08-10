@@ -24,6 +24,7 @@ async function doSearch(page = 1) {
 
 function renderResults(data) {
     const table = document.getElementById('results-table');
+    const wrap = document.getElementById('results-wrap');
     const tbody = document.getElementById('results-body');
     const noResults = document.getElementById('no-results');
     const info = document.getElementById('results-info');
@@ -32,6 +33,7 @@ function renderResults(data) {
 
     if (data.results.length === 0) {
         table.style.display = 'none';
+        if (wrap) wrap.style.display = 'none';
         noResults.style.display = 'block';
         info.style.display = 'none';
         pagination.style.display = 'none';
@@ -40,6 +42,7 @@ function renderResults(data) {
 
     noResults.style.display = 'none';
     table.style.display = 'table';
+    if (wrap) wrap.style.display = '';
     info.style.display = 'block';
     pagination.style.display = 'flex';
 

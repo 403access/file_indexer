@@ -78,7 +78,8 @@ A minimal and fast local file indexer written in Rust.
 - 🔍 Search by filename using LIKE queries
 - ⚡ Fast hashing with Blake3
 - 🧱 Cross-platform (Windows, macOS, Linux)
-- 🧪 Easily extendable (tagging, content indexing, UI)
+- 🌐 Web UI with light / dark / system themes and a shared design system
+- 🧪 Easily extendable (tagging, content indexing, UI components)
 - 📊 Materialized duplicate folder groups with background refresh
 - 📋 Process monitoring with pause/resume/stop controls
 
@@ -120,6 +121,27 @@ cargo run --release
 cargo build --release
 ./target/release/file_indexer
 ```
+
+Then open the UI in a browser (default port from `PORT`, typically `http://localhost:3000`).
+
+Use the sun / moon / monitor controls in the sidebar footer to switch **light**, **dark**, or **system** theme.
+
+## 🎨 Web UI & design system
+
+Static assets live under `static/`. There is no frontend bundler.
+
+| Doc | Contents |
+|-----|----------|
+| [docs/UI.md](docs/UI.md) | Themes, tokens, components, Drawer API, page checklist |
+| [docs/PROJECT.md](docs/PROJECT.md) | Architecture and product overview |
+
+**Quick conventions**
+
+- Link `tokens.css` → `components.css` → `style.css` on every page
+- Prefer CSS variables (`var(--accent)`) over hardcoded colors
+- Use shared classes (`.btn`, `.card`, `.page-header`, `.table-wrap`, …)
+- Inject nav via `#sidebar-container` + `sidebar.js` (do not copy-paste menus)
+- Prefer `Drawer.create(…)` for new detail side panels
 
 ## 🧪 Tests
 

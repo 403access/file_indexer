@@ -2,10 +2,8 @@
    File Indexer — Base layout & app shell
    ============================================================================= */
 
-@import url("tokens.css");
-@import url("components.css");
-
-/* Inter font (optional CDN — falls back to system stack) */
+/* tokens.css + components.css are linked from HTML (before this file).
+   Fonts load here; system stack is the fallback. */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 *,

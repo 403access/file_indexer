@@ -17,129 +17,136 @@
         }
       })();
     </script>
-
     <title>Status - File Indexer</title>
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
-        .status-card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            padding: 2rem;
-            margin-bottom: 1.5rem;
+        .status-hero {
+            text-align: center;
+            padding: var(--space-8) var(--space-4);
         }
-        .status-card h2 {
-            margin-bottom: 1rem;
-            font-size: 1.1rem;
-            color: #2c3e50;
+        .status-hero .dot {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-bottom: var(--space-3);
         }
+        .status-hero .dot.idle {
+            background: var(--success);
+            box-shadow: 0 0 0 6px var(--success-muted);
+        }
+        .status-hero .dot.indexing {
+            background: var(--warning);
+            box-shadow: 0 0 0 6px var(--warning-muted);
+            animation: badge-pulse 1s ease-in-out infinite;
+        }
+        .status-hero .dot.error {
+            background: var(--danger);
+            box-shadow: 0 0 0 6px var(--danger-muted);
+        }
+        .status-hero .text {
+            font-size: var(--font-size-2xl);
+            font-weight: 650;
+            letter-spacing: var(--tracking-tight);
+        }
+        .status-hero .text.idle { color: var(--success); }
+        .status-hero .text.indexing { color: var(--warning); }
+        .status-hero .text.error { color: var(--danger); }
+
         .status-row {
             display: flex;
             align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 0.75rem;
+            gap: var(--space-3);
+            margin-bottom: var(--space-3);
         }
+        .status-row:last-of-type { margin-bottom: 0; }
         .status-label {
-            color: #666;
+            color: var(--text-muted);
             min-width: 120px;
-            font-size: 0.9rem;
+            font-size: var(--font-size-sm);
+            font-weight: 500;
         }
         .status-value {
-            font-weight: 500;
-            font-size: 0.95rem;
+            font-weight: 550;
+            font-size: var(--font-size-base);
+            color: var(--text-primary);
         }
-        .status-value.idle { color: #27ae60; }
-        .status-value.indexing { color: #f39c12; }
-        .progress-bar-container {
-            background: #ecf0f1;
-            border-radius: 8px;
-            height: 8px;
-            margin-top: 1rem;
-            overflow: hidden;
-        }
-        .progress-bar {
-            height: 100%;
-            background: #3498db;
-            border-radius: 8px;
-            transition: width 0.3s ease;
-            width: 0%;
-        }
-        .progress-bar.active {
-            background: #f39c12;
-            animation: progress-pulse 1.5s infinite;
-        }
-        @keyframes progress-pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
+        .status-value.idle { color: var(--success); }
+        .status-value.indexing { color: var(--warning); }
+
         .dir-display {
-            font-family: monospace;
-            font-size: 0.85rem;
-            color: #333;
-            background: #f8f9fa;
-            padding: 0.5rem 0.75rem;
-            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: var(--font-size-sm);
+            color: var(--text-primary);
+            background: var(--bg-muted);
+            border: 1px solid var(--border-default);
+            padding: 0.65rem 0.85rem;
+            border-radius: var(--radius-sm);
             word-break: break-all;
-            margin-top: 0.5rem;
+            margin-top: var(--space-2);
         }
-        .big-status {
-            text-align: center;
-            padding: 2rem;
+
+        .status-progress {
+            margin-top: var(--space-4);
         }
-        .big-status .dot {
-            width: 24px;
-            height: 24px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-bottom: 0.75rem;
-        }
-        .big-status .dot.idle { background: #27ae60; }
-        .big-status .dot.indexing { background: #f39c12; animation: pulse 1s infinite; }
-        .big-status .text {
-            font-size: 1.5rem;
-            font-weight: 600;
-        }
-        .big-status .text.idle { color: #27ae60; }
-        .big-status .text.indexing { color: #f39c12; }
     </style>
 </head>
 <body>
     <nav id="sidebar-container"></nav>
 
     <main>
-        <div class="status-card">
-            <div class="big-status">
-                <div class="dot" id="big-dot"></div>
-                <div class="text" id="big-text">Idle</div>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Status</h1>
+                <p class="page-header__subtitle">Live indexing state</p>
+            </div>
+        </header>
+
+        <div class="card" style="margin-bottom: var(--space-4);">
+            <div class="status-hero">
+                <div class="dot idle" id="big-dot"></div>
+                <div class="text idle" id="big-text">Idle</div>
             </div>
         </div>
 
-        <div class="status-card">
-            <h2>Indexing Progress</h2>
-            <div class="status-row">
-                <span class="status-label">Status</span>
-                <span class="status-value" id="status">-</span>
+        <div class="card" style="margin-bottom: var(--space-4);">
+            <div class="card__header">
+                <h2 class="card__title">Indexing Progress</h2>
             </div>
-            <div class="status-row">
-                <span class="status-label">Entries</span>
-                <span class="status-value" id="entries">-</span>
-            </div>
-            <div class="status-row">
-                <span class="status-label">Elapsed</span>
-                <span class="status-value" id="elapsed">-</span>
-            </div>
-            <div class="progress-bar-container">
-                <div class="progress-bar" id="progress-bar"></div>
+            <div class="card__body">
+                <div class="status-row">
+                    <span class="status-label">Status</span>
+                    <span class="status-value" id="status">—</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Entries</span>
+                    <span class="status-value" id="entries">—</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Elapsed</span>
+                    <span class="status-value" id="elapsed">—</span>
+                </div>
+                <div class="status-progress">
+                    <div class="progress">
+                        <div class="progress__bar" id="progress-bar" style="width:0%"></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="status-card" id="current-dir-card" style="display:none;">
-            <h2>Current Directory</h2>
-            <div class="dir-display" id="current-dir">-</div>
+        <div class="card" id="current-dir-card" style="display:none;">
+            <div class="card__header">
+                <h2 class="card__title">Current Directory</h2>
+            </div>
+            <div class="card__body">
+                <div class="dir-display" id="current-dir">—</div>
+            </div>
         </div>
     </main>
 
-        <script src="/js/theme.js"></script>
+    <script src="/js/theme.js"></script>
     <script src="/js/drawer.js"></script>
     <script src="/js/sidebar.js"></script>
     <script src="/js/status.js"></script>
@@ -160,7 +167,8 @@
 
                 bigDot.className = 'dot ' + data.status;
                 bigText.className = 'text ' + data.status;
-                bigText.textContent = data.status === 'indexing' ? 'Indexing...' : 'Idle';
+                bigText.textContent = data.status === 'indexing' ? 'Indexing…' : 'Idle';
+                bigText.style.color = '';
 
                 status.textContent = data.status;
                 status.className = 'status-value ' + data.status;
@@ -172,16 +180,16 @@
                     const remainSecs = secs % 60;
                     elapsed.textContent = mins > 0 ? `${mins}m ${remainSecs}s` : `${remainSecs}s`;
                 } else {
-                    elapsed.textContent = '-';
+                    elapsed.textContent = '—';
                 }
 
                 if (data.status === 'indexing') {
-                    progressBar.classList.add('active');
+                    progressBar.classList.add('progress__bar--active');
                     progressBar.style.width = '100%';
-                    currentDirCard.style.display = 'block';
-                    currentDir.textContent = data.current_dir || '...';
+                    currentDirCard.style.display = '';
+                    currentDir.textContent = data.current_dir || '…';
                 } else {
-                    progressBar.classList.remove('active');
+                    progressBar.classList.remove('progress__bar--active');
                     progressBar.style.width = '0%';
                     currentDirCard.style.display = 'none';
                     if (statusInterval) {
@@ -192,8 +200,7 @@
             } catch (e) {
                 document.getElementById('big-dot').className = 'dot error';
                 document.getElementById('big-text').textContent = 'Server unreachable';
-                document.getElementById('big-text').className = 'text';
-                document.getElementById('big-text').style.color = '#e74c3c';
+                document.getElementById('big-text').className = 'text error';
             }
         }
 

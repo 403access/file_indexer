@@ -19,6 +19,8 @@
     </script>
 
     <title>Duplicate Folders - File Indexer</title>
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="/css/duplicate-folders.css">
 </head>
@@ -26,7 +28,14 @@
     <nav id="sidebar-container"></nav>
 
     <main>
-        <div class="filter-bar">
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Duplicate Folders</h1>
+                <p class="page-header__subtitle">Folders that share duplicate file content</p>
+            </div>
+        </header>
+
+        <div class="filter-bar toolbar">
             <input type="text" id="filter-input" placeholder="Filter by folder or file name..." onkeydown="if(event.key==='Enter')applyFilter()">
             <label class="filter-number">
                 Min shared files:
@@ -41,7 +50,7 @@
                 <option value="10">10+ folders</option>
             </select>
             <div class="ft-select" id="ft-select">
-                <button type="button" class="merge-folders-btn ft-select-btn" onclick="toggleFileTypePanel()" style="background:#7f8c8d">File types <span class="ft-count" id="ft-count"></span></button>
+                <button type="button" class="merge-folders-btn ft-select-btn" onclick="toggleFileTypePanel()" >File types <span class="ft-count" id="ft-count"></span></button>
                 <div class="ft-panel" id="ft-panel" style="display:none;">
                     <select id="ft-template" onchange="applyFileTypeTemplate()">
                         <option value="">Custom</option>
@@ -76,7 +85,7 @@
                 <input type="checkbox" id="align-files" onchange="applyFilter()">
                 Align shared files
             </label>
-            <button class="merge-folders-btn" onclick="applyFilter()" style="background:#3498db">Search</button>
+            <button type="button" class="btn btn--sm" onclick="applyFilter()">Search</button>
         </div>
         <div class="custom-folders-panel">
             <div class="custom-folders-head">
@@ -105,7 +114,7 @@
             </div>
 
             <div class="custom-folders-actions">
-                <button class="merge-folders-btn" onclick="checkCustomFolders()" style="background:#8e44ad">Check &amp; Merge</button>
+                <button type="button" class="btn btn--sm" style="background:var(--purple)" onclick="checkCustomFolders()">Check &amp; Merge</button>
             </div>
         </div>
         <div class="summary" id="summary"></div>

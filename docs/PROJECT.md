@@ -19,6 +19,7 @@ The tool targets users who need to manage large file collections — finding dup
 | Hashing | SHA-256 via `sha2` (partial-file fast hash) |
 | Web Server | `axum` (HTTP framework) |
 | Async Runtime | `tokio` |
+| Web UI | Static HTML/CSS/JS in `static/` (no build step) |
 | CLI Prompts | `inquire` |
 | Progress Bars | `indicatif` |
 | Config | `dotenvy` (.env files) |
@@ -37,12 +38,19 @@ main.rs                          Entry point (Axum server)
   │     └── services/            Business logic layer
   │           └── sql/           Database queries (search, duplicates, CRUD)
   │                 └── file_entry/   Data types, conversion, hashing
-  └── api/                       Axum HTTP handlers (placeholder)
+  ├── api/                       Axum HTTP handlers + static file serving
+  └── static/                    Web UI (design system, pages, JS modules)
 ```
+
+## Web UI
+
+The HTTP server serves a full browser UI from `static/`: dashboard, search, explorer, duplicates, processes, logs, and settings. The UI uses a shared **design system** with light/dark/system themes and reusable components (sidebar, buttons, cards, drawers, tables).
+
+See **[UI.md](./UI.md)** for tokens, components, theme API, page checklist, and conventions.
 
 ## Project Status
 
-The project is in a **transitional phase**. A fully functional CLI REPL (interactive mode with `inquire`) has been built but is now disabled in `main.rs`. The replacement Axum HTTP server is scaffolded with only placeholder routes. The core database and file processing logic works, but the API layer and several feature areas are incomplete.
+The project is in a **transitional phase**. A fully functional CLI REPL (interactive mode with `inquire`) has been built but is now disabled in `main.rs` in favor of the Axum HTTP server and web UI. Core database and file processing logic work; many API routes and UI pages are implemented. Some roadmap items (e.g. full directory diffing view) remain incomplete.
 
 ## Feature Roadmap
 
@@ -105,19 +113,34 @@ The project is in a **transitional phase**. A fully functional CLI REPL (interac
 | Skip directories (node_modules) | Not started | Listed in features.md |
 | Preserve organized files | Not started | Mentioned in README goals |
 
+### Web UI / Design System
+
+| Feature | Status | Notes |
+|---|---|---|
+| Static page shell + sidebar | Done | Injected nav via `sidebar.js`; see [UI.md](./UI.md) |
+| Theme switching (light/dark/system) | Done | `theme.js` + `tokens.css`; preference in `localStorage` |
+| Design tokens | Done | Surfaces, text, accents, semantic colors, spacing, radii |
+| Reusable components | Done | Buttons, cards, tables, badges, drawers, forms, … |
+| Drawer detail panels | Done | `drawer.js`; folders, ignore rules, processes |
+| Dashboard / Search / Explorer | Done | Chart.js dashboard; search + folder drawer; tree explorer |
+| Duplicates & processes UI | Done | File/folder dupes, merge flows, process monitor |
+| Settings / logs / status | Done | Tokenized layouts |
+
+Full component and authoring guide: **[UI.md](./UI.md)**.
+
 ### Infrastructure
 
 | Feature | Status | Notes |
 |---|---|---|
-| Axum HTTP server | Scaffolded | Only placeholder routes (Hello World, hardcoded user) |
+| Axum HTTP server | In progress | Serves API routes and static UI from `static/` |
 | REPL mode | Built but disabled | Commented out in `main.rs` |
 | CLI argument parsing | Partial | `check_arguments.rs` works; `clap` used in prototype only |
 | Environment variable config | Done | .env loading via dotenvy |
 | Thread-local app state | Done | `app_state` module |
 | Error handling patterns | In progress | `docs/rust_error_handling.md` exists as reference |
 | Logging | Scaffolded | `tracing-subscriber` imported, not fully configured |
-| Tests | Minimal | 1 integration test for DB init; no search/duplicate/API tests |
-| Documentation | Partial | README and features.md exist but are out of sync with code |
+| Tests | Partial | Unit/integration coverage growing; see `src/tests/` |
+| Documentation | Partial | [UI.md](./UI.md) covers the design system; some roadmap rows still lag the code |
 
 ## Known Issues
 

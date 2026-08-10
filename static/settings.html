@@ -19,22 +19,25 @@
     </script>
 
     <title>Settings - File Indexer</title>
+    <link rel="stylesheet" href="/css/tokens.css">
+    <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
         .settings-card {
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xs);
             padding: 1.5rem;
             margin-bottom: 1.5rem;
         }
         .settings-card h2 {
             margin: 0 0 0.25rem 0;
             font-size: 1.05rem;
-            color: #2c3e50;
+            color: var(--text-primary);
         }
         .settings-card .desc {
-            color: #888;
+            color: var(--text-muted);
             font-size: 0.82rem;
             margin-bottom: 1rem;
         }
@@ -48,42 +51,42 @@
             align-items: center;
             gap: 0.5rem;
             padding: 0.5rem;
-            background: #f9fafb;
-            border-radius: 4px;
+            background: var(--bg-muted);
+            border-radius: var(--radius-sm);
         }
         .ignore-item input {
             flex: 1;
             padding: 0.4rem 0.6rem;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-family: monospace;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
             font-size: 0.85rem;
         }
         .ignore-item input:focus {
             outline: none;
-            border-color: #3498db;
+            border-color: var(--accent);
         }
         .ignore-item input.condition-input {
             flex: 0.8;
-            background: #fff;
+            background: var(--bg-elevated);
             border-style: dashed;
         }
         .ignore-item .condition-input::placeholder {
-            color: #bbb;
+            color: var(--text-muted);
             font-style: italic;
         }
         .ignore-item .remove-btn {
             background: none;
             border: none;
-            color: #ccc;
+            color: var(--text-muted);
             font-size: 1.1rem;
             cursor: pointer;
             padding: 0.2rem 0.4rem;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
         }
         .ignore-item .remove-btn:hover {
-            color: #e74c3c;
-            background: #fdf2f2;
+            color: var(--danger);
+            background: var(--danger-muted);
         }
         .add-btn {
             display: inline-flex;
@@ -91,16 +94,16 @@
             gap: 0.3rem;
             margin-top: 0.5rem;
             padding: 0.4rem 0.75rem;
-            background: #f0f4f8;
-            border: 1px dashed #ccc;
-            border-radius: 4px;
-            color: #666;
+            background: var(--bg-subtle);
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
             font-size: 0.82rem;
             cursor: pointer;
         }
         .add-btn:hover {
-            background: #e8eef4;
-            border-color: #999;
+            background: var(--bg-hover);
+            border-color: var(--border-strong);
         }
         .save-bar {
             display: flex;
@@ -110,18 +113,18 @@
         }
         .save-btn {
             padding: 0.5rem 1.25rem;
-            background: #27ae60;
+            background: var(--success);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             font-size: 0.9rem;
             cursor: pointer;
         }
-        .save-btn:hover { background: #219a52; }
-        .save-btn:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .save-btn:hover { background: var(--success); }
+        .save-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
         .save-msg {
             font-size: 0.82rem;
-            color: #27ae60;
+            color: var(--success-text);
             opacity: 0;
             transition: opacity 0.3s;
         }
@@ -134,26 +137,27 @@
         }
         .preset-tag {
             padding: 0.2rem 0.55rem;
-            background: #f0f4f8;
-            border: 1px solid #ddd;
-            border-radius: 12px;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-full);
             font-size: 0.75rem;
-            color: #555;
+            color: var(--text-secondary);
             cursor: pointer;
         }
         .preset-tag:hover {
-            background: #e0e8f0;
-            border-color: #3498db;
-            color: #2980b9;
+            background: var(--bg-hover);
+            border-color: var(--accent);
+            color: var(--accent-hover);
         }
         .condition-hint {
             font-size: 0.75rem;
-            color: #888;
+            color: var(--text-muted);
             margin-top: 0.75rem;
             padding: 0.5rem;
-            background: #f5f7fa;
-            border-radius: 4px;
-            border-left: 3px solid #3498db;
+            background: var(--accent-muted);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--accent);
+            color: var(--text-secondary);
         }
         .toggle {
             position: relative;
@@ -173,7 +177,7 @@
             position: relative;
             width: 34px;
             height: 20px;
-            background: #ddd;
+            background: var(--border-default);
             border-radius: 20px;
             transition: background 0.2s;
             flex-shrink: 0;
@@ -185,13 +189,13 @@
             width: 16px;
             left: 2px;
             top: 2px;
-            background: white;
+            background: var(--bg-elevated);
             border-radius: 50%;
             transition: transform 0.2s;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            box-shadow: var(--shadow-xs);
         }
         .toggle input:checked + .toggle-slider {
-            background: #27ae60;
+            background: var(--success);
         }
         .toggle input:checked + .toggle-slider::before {
             transform: translateX(14px);
@@ -202,24 +206,31 @@
     <nav id="sidebar-container"></nav>
 
     <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Settings</h1>
+                <p class="page-header__subtitle">Configure indexing and background processes</p>
+            </div>
+        </header>
+
         <div class="settings-card">
             <h2>Background Processes</h2>
             <p class="desc">Control which background processes are active. Changes require a server restart for startup-only processes.</p>
             <div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem;">
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:#f9fafb;border-radius:6px;border:1px solid #eee;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg-muted);border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
                     <div>
-                        <strong style="font-size:0.9rem;color:#333;">Startup Indexing</strong>
-                        <div style="font-size:0.78rem;color:#888;margin-top:0.15rem;">Index the working directory automatically when the server starts.</div>
+                        <strong style="font-size:0.9rem;color:var(--text-primary);">Startup Indexing</strong>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">Index the working directory automatically when the server starts.</div>
                     </div>
                     <label class="toggle">
                         <input type="checkbox" id="enable-startup-indexing" onchange="saveProcessSetting('enable_startup_indexing', this.checked)">
                         <span class="toggle-slider"></span>
                     </label>
                 </div>
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:#f9fafb;border-radius:6px;border:1px solid #eee;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg-muted);border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
                     <div>
-                        <strong style="font-size:0.9rem;color:#333;">Dashboard Refresh</strong>
-                        <div style="font-size:0.78rem;color:#888;margin-top:0.15rem;">Periodically recompute dashboard stats in the background.</div>
+                        <strong style="font-size:0.9rem;color:var(--text-primary);">Dashboard Refresh</strong>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">Periodically recompute dashboard stats in the background.</div>
                     </div>
                     <label class="toggle">
                         <input type="checkbox" id="enable-dashboard-refresh" onchange="saveProcessSetting('enable_dashboard_refresh', this.checked)">
@@ -237,9 +248,9 @@
             <p class="desc">How often the dashboard stats are automatically refreshed (in seconds). Set to 0 to disable auto-refresh.</p>
             <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.5rem;">
                 <input type="number" id="refresh-interval" min="0" max="3600" value="60"
-                       style="width:100px;padding:0.4rem 0.6rem;border:1px solid #ddd;border-radius:4px;font-size:0.9rem;">
-                <span style="color:#888;font-size:0.85rem;">seconds</span>
-                <button class="save-btn" id="save-interval-btn" onclick="saveRefreshInterval()">Save</button>
+                       style="width:100px;padding:0.4rem 0.6rem;border:1px solid var(--border-default);border-radius:var(--radius-sm);font-size:0.9rem;background:var(--bg-elevated);color:var(--text-primary);">
+                <span style="color:var(--text-muted);font-size:0.85rem;">seconds</span>
+                <button class="btn btn--success btn--sm" id="save-interval-btn" onclick="saveRefreshInterval()">Save</button>
                 <span class="save-msg" id="save-interval-msg">Saved</span>
             </div>
         </div>
@@ -248,12 +259,12 @@
             <h2>Ignored Folders</h2>
             <p class="desc">Folders are skipped during indexing. Add a condition to only skip when a specific file exists in the parent directory.</p>
             <div class="ignore-list" id="ignore-list"></div>
-            <button class="add-btn" onclick="addIgnoreItem()">+ Add folder</button>
+            <button class="btn btn--secondary btn--sm" onclick="addIgnoreItem()">+ Add folder</button>
             <div class="condition-hint">
                 <strong>Conditional skip:</strong> Leave the condition empty to always skip, or enter a filename (e.g. <code>package.json</code>) to only skip when that file exists in the parent directory.
             </div>
             <div class="save-bar">
-                <button class="save-btn" id="save-btn" onclick="saveSettings()">Save</button>
+                <button class="btn btn--success btn--sm" id="save-btn" onclick="saveSettings()">Save</button>
                 <span class="save-msg" id="save-msg">Saved</span>
             </div>
         </div>
@@ -296,7 +307,7 @@
         function renderList() {
             const container = document.getElementById('ignore-list');
             if (currentRules.length === 0) {
-                container.innerHTML = '<div style="color:#999;font-size:0.85rem;padding:0.5rem 0;">No folders ignored</div>';
+                container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:0.5rem 0;">No folders ignored</div>';
                 return;
             }
             container.innerHTML = currentRules.map((rule, i) => `
@@ -304,7 +315,7 @@
                     <input type="text" value="${escapeAttr(rule.name)}" placeholder="Folder name"
                            onchange="updateItemName(${i}, this.value)"
                            onkeydown="if(event.key==='Enter')saveSettings()">
-                    <span style="color:#999;font-size:0.8rem;">if</span>
+                    <span style="color:var(--text-muted);font-size:0.8rem;">if</span>
                     <input type="text" class="condition-input" value="${escapeAttr(rule.condition || '')}"
                            placeholder="No condition (always skip)"
                            onchange="updateItemCondition(${i}, this.value)"

@@ -1,5 +1,6 @@
 .group-card {
     background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xs);
     margin-bottom: 1.5rem;
@@ -98,11 +99,11 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.4rem 1rem;
-    border-bottom: 1px solid #f5f5f5;
+    border-bottom: 1px solid var(--bg-muted);
     font-size: 0.85rem;
 }
 .folder-file:hover {
-    background: #fafafa;
+    background: var(--bg-muted);
 }
 .folder-file.unique {
     background: var(--bg-muted);
@@ -160,7 +161,7 @@
 .aligned-table th {
     padding: 0.5rem 0.75rem;
     background: var(--bg-subtle);
-    border-bottom: 2px solid #ddd;
+    border-bottom: 2px solid var(--border-default);
     text-align: left;
     font-size: 0.8rem;
     font-weight: 600;
@@ -181,7 +182,7 @@
 }
 .aligned-table td {
     padding: 0.35rem 0.75rem;
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--bg-hover);
     font-size: 0.85rem;
     vertical-align: middle;
 }
@@ -210,7 +211,7 @@
     flex-shrink: 0;
 }
 .aligned-table td.empty-cell {
-    color: #ddd;
+    color: var(--border-default);
     font-style: italic;
     font-size: 0.8rem;
 }
@@ -273,11 +274,13 @@
 }
 .filter-bar {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
     align-items: center;
     margin-bottom: 1rem;
     background: var(--bg-elevated);
     padding: 0.75rem 1rem;
+    border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xs);
 }
@@ -287,6 +290,8 @@
     border: 1px solid var(--border-default);
     border-radius: var(--radius-sm);
     font-size: 0.9rem;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
 }
 .filter-bar select {
     padding: 0.45rem 0.5rem;
@@ -338,20 +343,25 @@
     cursor: pointer;
     margin-left: auto;
 }
-.merge-folders-btn:hover { background: var(--success); }
+.merge-folders-btn:hover { filter: brightness(1.08); }
 .merge-overlay {
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.3); z-index: 999;
-    opacity: 0; transition: opacity 0.2s;
+    background: var(--bg-overlay); z-index: 999;
+    opacity: 0; visibility: hidden;
+    transition: opacity var(--duration-normal) var(--ease-in-out),
+                visibility var(--duration-normal) var(--ease-in-out);
+    backdrop-filter: blur(2px);
 }
-.merge-overlay.open { opacity: 1; }
+.merge-overlay.open { opacity: 1; visibility: visible; }
 .merge-panel {
     position: fixed; top: 0; right: 0;
-    width: 50vw; max-width: 800px; min-width: 400px;
+    width: 50vw; max-width: 800px; min-width: min(400px, 92vw);
     height: 100vh; background: var(--bg-elevated);
-    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    box-shadow: var(--shadow-drawer);
+    border-left: 1px solid var(--border-default);
     display: flex; flex-direction: column;
-    transform: translateX(100%); transition: transform 0.25s ease;
+    transform: translateX(100%);
+    transition: transform var(--duration-slow) var(--ease-out);
 }
 .merge-overlay.open .merge-panel { transform: translateX(0); }
 .merge-header {
@@ -380,7 +390,7 @@
 .merge-summary-folder {
     display: flex; align-items: center; gap: 0.5rem;
     padding: 0.4rem 0.6rem; background: var(--bg-elevated);
-    border: 1px solid #e0e0e0; border-radius: var(--radius-sm);
+    border: 1px solid var(--border-default); border-radius: var(--radius-sm);
 }
 .merge-summary-folder .folder-icon { font-size: 0.9rem; }
 .merge-summary-folder .folder-name {
@@ -395,7 +405,7 @@
     display: flex; gap: 0.5rem; font-family: var(--font-mono);
     font-size: 0.78rem;
 }
-.merge-summary-folder .stat-kept { color: #27ae60; }
+.merge-summary-folder .stat-kept { color: var(--success); }
 .merge-summary-folder .stat-removed { color: var(--danger); }
 .merge-summary-folder .stat-total { color: var(--text-secondary); }
 .merge-summary-folder input[type="checkbox"] {
@@ -407,7 +417,7 @@
 .merge-folder-header {
     display: flex; align-items: center; gap: 0.5rem;
     padding: 0.5rem 0.75rem; background: var(--bg-subtle);
-    border: 1px solid #dde4ed; border-radius: 6px;
+    border: 1px solid var(--border-default); border-radius: 6px;
     margin-bottom: 0.4rem; font-size: 0.85rem;
 }
 .merge-folder-header .merge-folder-check {
@@ -440,14 +450,14 @@
     font-size: 0.85rem;
 }
 .merge-file-row.keep {
-    background: #eafaf1; border-color: #27ae60;
+    background: var(--success-muted); border-color: var(--success);
 }
 .merge-file-row.remove {
-    background: #fdf2f2; border-color: #e0e0e0; opacity: 0.6;
+    background: var(--danger-muted); border-color: var(--border-default); opacity: 0.6;
 }
 .merge-file-check {
     width: 16px; height: 16px; cursor: pointer;
-    accent-color: #27ae60;
+    accent-color: var(--success);
 }
 .merge-file-name { font-weight: 500; min-width: 120px; }
 .merge-file-path {
@@ -467,7 +477,7 @@
 .merge-stats { font-size: 0.8rem; color: var(--text-secondary); }
 .merge-apply { background: var(--success); }
 .merge-apply:hover { background: var(--success); }
-.merge-apply:disabled { background: #bdc3c7; cursor: not-allowed; }
+.merge-apply:disabled { background: var(--text-muted); cursor: not-allowed; }
 .merge-view-toggle {
     display: flex; gap: 0.25rem;
 }
@@ -479,7 +489,7 @@
 .merge-view-btn.active {
     background: var(--accent); color: #fff; border-color: var(--accent);
 }
-.merge-view-btn:hover:not(.active) { background: #f0f0f0; }
+.merge-view-btn:hover:not(.active) { background: var(--bg-hover); }
 .merge-tree {
     font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.6;
     padding: 1rem 1.5rem;
@@ -497,6 +507,7 @@
 }
 .custom-folders-panel {
     background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-xs);
     margin-bottom: 1.5rem;
@@ -525,7 +536,7 @@
 }
 .custom-folders-panel textarea:focus {
     outline: none;
-    border-color: #8e44ad;
+    border-color: var(--purple);
     box-shadow: 0 0 0 2px rgba(142,68,173,0.15);
 }
 .custom-folders-actions {
@@ -561,7 +572,7 @@
     position: relative;
     width: 34px;
     height: 20px;
-    background: #ddd;
+    background: var(--border-default);
     border-radius: 20px;
     transition: background 0.2s;
     flex-shrink: 0;
@@ -579,7 +590,7 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.2);
 }
 .toggle input:checked + .toggle-slider {
-    background: #8e44ad;
+    background: var(--purple);
 }
 .toggle input:checked + .toggle-slider::before {
     transform: translateX(14px);
@@ -600,10 +611,10 @@
     align-items: center;
 }
 .ft-select-btn {
-    background: #7f8c8d;
+    background: var(--text-muted);
     white-space: nowrap;
 }
-.ft-select-btn:hover { background: #6c7a7a; }
+.ft-select-btn:hover { background: var(--text-muted); }
 .ft-count {
     font-weight: 600;
 }
@@ -719,7 +730,7 @@
 }
 .custom-folder-row input:focus {
     outline: none;
-    border-color: #8e44ad;
+    border-color: var(--purple);
     box-shadow: 0 0 0 2px rgba(142,68,173,0.15);
 }
 .custom-folder-remove {
@@ -735,13 +746,13 @@
     flex-shrink: 0;
 }
 .custom-folder-remove:hover {
-    background: #c0392b;
+    background: var(--danger);
 }
 .add-folder-btn {
-    background: #7f8c8d;
+    background: var(--text-muted);
 }
 .add-folder-btn:hover {
-    background: #6c7a7a;
+    background: var(--text-muted);
 }
 .merge-error {
     display: flex;
@@ -751,7 +762,7 @@
 }
 .merge-error-title {
     font-weight: 600;
-    color: #c0392b;
+    color: var(--danger);
     font-size: 0.9rem;
 }
 .merge-error-list {
@@ -761,12 +772,12 @@
 }
 .merge-error-item {
     padding: 0.45rem 0.6rem;
-    background: #fdf2f2;
-    border: 1px solid #e74c3c;
+    background: var(--danger-muted);
+    border: 1px solid var(--danger);
     border-radius: var(--radius-sm);
     font-family: var(--font-mono);
     font-size: 0.8rem;
-    color: #c0392b;
+    color: var(--danger);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
