@@ -13,7 +13,7 @@ use crate::{
         processes,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{delete_directory_tree, delete_stale_children, get_connection, get_ignore_rules, get_child_directories, get_directory_metadata, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, mark_directory_error, mark_directory_traversed_and_modified, update_duplicate_hashes_incremental, upsert_file, IgnoreRule},
+        sql::database::{delete_directory_tree, delete_stale_children, get_connection, get_ignore_rules, get_child_directories, get_directory_metadata, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, mark_directory_error, mark_directory_traversed_and_modified, set_directory_size, update_duplicate_hashes_incremental, upsert_file, IgnoreRule},
     },
     states::app_state,
 };
@@ -25,6 +25,8 @@ struct InsertResult {
     skipped: Option<(String, String)>,
     // Hashes that need a duplicate-hash recheck (newly inserted or changed).
     rechecked_hashes: Vec<String>,
+    // Sum of sizes of the file children of this folder (used to size leaf dirs).
+    folder_file_size: u64,
 }
 
 /// Index `root_dir` into the database.
@@ -253,6 +255,12 @@ pub fn index_directory(
                             io::Error::new(io::ErrorKind::Other, e.to_string())
                         })?;
                         let _ = mark_directory_traversed_and_modified(&tx, &trimmed, disk_mtime);
+                        // A folder without subdirectories cannot go deeper — give
+                        // it an aggregate size so the UI can display something
+                        // useful instead of nothing/"Folder".
+                        if r.directories.is_empty() && r.folder_file_size > 0 {
+                            let _ = set_directory_size(&tx, &trimmed, r.folder_file_size);
+                        }
                         tx.commit().map_err(|e| {
                             logging::error(&format!("Failed to commit transaction: {}", e));
                             io::Error::new(io::ErrorKind::Other, e.to_string())
@@ -366,6 +374,7 @@ fn get_and_insert_entries(
     let mut directories: Vec<FileEntry> = Vec::new();
     let mut file_count = 0usize;
     let mut folder_count = 0usize;
+    let mut folder_file_size = 0u64;
     let mut rechecked_hashes: Vec<String> = Vec::new();
 
     for entry in &entries {
@@ -392,6 +401,7 @@ fn get_and_insert_entries(
                     folder_count += 1;
                 } else {
                     file_count += 1;
+                    folder_file_size = folder_file_size.saturating_add(entry.size);
                 }
             }
             Err(e) => {
@@ -429,6 +439,7 @@ fn get_and_insert_entries(
         folder_count,
         skipped: None,
         rechecked_hashes,
+        folder_file_size,
     })
 }
 

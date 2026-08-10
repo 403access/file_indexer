@@ -63,6 +63,16 @@ pub fn mark_directory_traversed(tx: &Transaction, path: &str) -> rusqlite::Resul
     Ok(())
 }
 
+/// Store an aggregate size for a directory row (used for leaf folders whose
+/// size = sum of the sizes of the files they contain directly).
+pub fn set_directory_size(tx: &Transaction, path: &str, size: u64) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE files SET size = ?1 WHERE path = ?2 AND is_directory = 1",
+        rusqlite::params![size, path],
+    )?;
+    Ok(())
+}
+
 /// Set a folder as fully indexed AND refresh its stored mtime.
 /// The mtime is what later runs compare against to decide whether a
 /// reconcile is needed. Any prior traversal error is cleared.

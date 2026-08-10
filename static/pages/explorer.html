@@ -899,7 +899,9 @@
                 const meta = isDir
                     ? item.traverse_error
                         ? `<span class="folder-item__meta badge badge--danger" title="${escapeHtml(item.traverse_error)}">Unreadable</span>`
-                        : (item.traversed ? '<span class="folder-item__meta">Folder</span>' : '<span class="folder-item__meta badge badge--warning">Not indexed</span>')
+                        : item.traversed && item.size > 0
+                            ? `<span class="folder-item__meta">${formatSize(item.size)}</span>`
+                            : (item.traversed ? '<span class="folder-item__meta">Folder</span>' : '<span class="folder-item__meta badge badge--warning">Not indexed</span>')
                     : `<span class="folder-item__meta">${formatSize(item.size)}</span>`;
                 return `<div class="folder-item" onclick="${click}">
                     <span class="folder-item__icon">${icon}</span>
