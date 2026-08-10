@@ -151,6 +151,27 @@
             align-items: center;
             gap: 0.4rem;
         }
+        .group-files table {
+            table-layout: fixed;
+            width: 100%;
+        }
+        .group-files th,
+        .group-files td {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .group-files th:nth-child(1),
+        .group-files td:nth-child(1) { width: 25%; }
+        .group-files th:nth-child(2),
+        .group-files td:nth-child(2) { width: auto; }
+        .group-files th:nth-child(3),
+        .group-files td:nth-child(3) { width: 12%; }
+        .group-files th:nth-child(4),
+        .group-files td:nth-child(4) { width: 13%; }
+        .group-files .size {
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -321,7 +342,7 @@
                                 ${group.files.map(f => `
                                     <tr>
                                         <td class="name">${f.name}</td>
-                                        <td class="path" title="${f.path || ''}">${truncatePath(f.path)}</td>
+                                        <td class="path" title="${f.path || ''}">${f.path || ''}</td>
                                         <td class="size">${formatSize(f.size)}</td>
                                         <td class="modified">${formatDate(f.modified)}</td>
                                     </tr>
