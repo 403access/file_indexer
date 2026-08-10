@@ -21,11 +21,16 @@ pub fn create_duplicate_folder_groups_table(conn: &Connection) -> rusqlite::Resu
             folder_name TEXT,
             shared_count INTEGER NOT NULL DEFAULT 0,
             file_count INTEGER NOT NULL DEFAULT 0,
+            min_size INTEGER NOT NULL DEFAULT 0,
             updated_at REAL NOT NULL,
             UNIQUE(group_id, folder_path)
         );",
         [],
     )?;
+    let _ = conn.execute(
+        "ALTER TABLE duplicate_folder_groups ADD COLUMN min_size INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
     let _ = conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_dfg_group_id ON duplicate_folder_groups(group_id);",
         [],
@@ -44,10 +49,11 @@ pub fn refresh_duplicate_folder_groups(conn: &Connection) {
 
     let mut folder_hashes: HashMap<String, Vec<String>> = HashMap::new();
     let mut folder_names: HashMap<String, String> = HashMap::new();
+    let mut folder_min_size: HashMap<String, u64> = HashMap::new();
 
     let mut stmt = conn
         .prepare(
-            "SELECT f.path, fn.name, f.hash
+            "SELECT f.path, fn.name, f.hash, f.size
              FROM files f
              JOIN file_names fn ON f.file_name_id = fn.id
              WHERE f.hash IN (SELECT hash FROM duplicate_hashes)
@@ -61,16 +67,22 @@ pub fn refresh_duplicate_folder_groups(conn: &Connection) {
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
                 row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
             ))
         }).ok();
 
         if let Some(rows) = rows {
             for row in rows {
-                if let Ok((path, _name, hash)) = row {
+                if let Ok((path, _name, hash, size)) = row {
                     let normalized = path.replace("//", "/");
                     if let Some(parent) = normalized.rsplit_once('/') {
                         let folder = parent.0.to_string();
                         folder_hashes.entry(folder.clone()).or_default().push(hash);
+                        let size = size.max(0) as u64;
+                        folder_min_size
+                            .entry(folder.clone())
+                            .and_modify(|m| *m = (*m).min(size))
+                            .or_insert(size);
                         if let Some(display) = folder.rsplit_once('/') {
                             folder_names.entry(folder.clone()).or_insert_with(|| display.1.to_string());
                         }
@@ -132,11 +144,12 @@ pub fn refresh_duplicate_folder_groups(conn: &Connection) {
                 .get(folder_path)
                 .cloned()
                 .unwrap_or_else(|| folder_path.rsplit_once('/').map(|s| s.1.to_string()).unwrap_or_default());
+            let min_size = folder_min_size.get(folder_path).copied().unwrap_or(0);
 
             let _ = conn.execute(
-                "INSERT OR REPLACE INTO duplicate_folder_groups (group_id, folder_path, folder_name, shared_count, file_count, updated_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-                rusqlite::params![group_id, folder_path, folder_name, shared_count as u64, file_count as u64, now],
+                "INSERT OR REPLACE INTO duplicate_folder_groups (group_id, folder_path, folder_name, shared_count, file_count, min_size, updated_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                rusqlite::params![group_id, folder_path, folder_name, shared_count as u64, file_count as u64, min_size, now],
             );
         }
     }

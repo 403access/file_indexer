@@ -144,6 +144,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
             folder_name TEXT,
             shared_count INTEGER NOT NULL DEFAULT 0,
             file_count INTEGER NOT NULL DEFAULT 0,
+            min_size INTEGER NOT NULL DEFAULT 0,
             updated_at REAL NOT NULL,
             UNIQUE(group_id, folder_path)
         );",
@@ -153,6 +154,10 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         logging::error(&format!("Failed to create 'duplicate_folder_groups' table: {:?}", duplicate_folder_groups_result));
         return Err(duplicate_folder_groups_result.unwrap_err());
     }
+    let _ = tx.execute(
+        "ALTER TABLE duplicate_folder_groups ADD COLUMN min_size INTEGER NOT NULL DEFAULT 0",
+        [],
+    );
     let _ = tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_dfg_group_id ON duplicate_folder_groups(group_id);",
         [],

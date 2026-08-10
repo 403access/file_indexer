@@ -18,6 +18,8 @@ pub struct DuplicateFoldersParams {
     pub min_shared: Option<u32>,
     #[serde(default)]
     pub min_folders: Option<u32>,
+    #[serde(default)]
+    pub min_size: Option<u64>,
     /// Reserved: materialization does not store per-hash extensions yet.
     #[serde(default)]
     pub file_types: Option<String>,
@@ -106,6 +108,7 @@ pub async fn duplicate_folders_handler(
         } else {
             min_folders
         };
+        let min_size = params.min_size.unwrap_or(0) as i64;
 
         let q = params
             .q
@@ -155,7 +158,7 @@ pub async fn duplicate_folders_handler(
                                OR folder_path LIKE ?1 COLLATE NOCASE
                         )
                         GROUP BY g.group_id
-                        HAVING MAX(g.shared_count) >= ?2 AND COUNT(*) >= ?3
+                        HAVING MAX(g.shared_count) >= ?2 AND COUNT(*) >= ?3 AND MIN(g.min_size) >= ?4
                     )"
                 ),
                 format!(
@@ -171,9 +174,9 @@ pub async fn duplicate_folders_handler(
                             OR folder_path LIKE ?1 COLLATE NOCASE
                      )
                      GROUP BY g.group_id
-                     HAVING MAX(g.shared_count) >= ?2 AND COUNT(*) >= ?3
+                     HAVING MAX(g.shared_count) >= ?2 AND COUNT(*) >= ?3 AND MIN(g.min_size) >= ?4
                      ORDER BY {sort_expr} {order}
-                     LIMIT ?4 OFFSET ?5"
+                     LIMIT ?5 OFFSET ?6"
                 ),
             )
         } else {
@@ -182,7 +185,7 @@ pub async fn duplicate_folders_handler(
                     SELECT group_id
                     FROM duplicate_folder_groups
                     GROUP BY group_id
-                    HAVING MAX(shared_count) >= ?1 AND COUNT(*) >= ?2
+                    HAVING MAX(shared_count) >= ?1 AND COUNT(*) >= ?2 AND MIN(min_size) >= ?3
                 )"
                 .to_string(),
                 format!(
@@ -193,9 +196,9 @@ pub async fn duplicate_folders_handler(
                             MIN(folder_name) AS name
                      FROM duplicate_folder_groups
                      GROUP BY group_id
-                     HAVING MAX(shared_count) >= ?1 AND COUNT(*) >= ?2
+                     HAVING MAX(shared_count) >= ?1 AND COUNT(*) >= ?2 AND MIN(min_size) >= ?3
                      ORDER BY {sort_expr} {order}
-                     LIMIT ?3 OFFSET ?4"
+                     LIMIT ?4 OFFSET ?5"
                 ),
             )
         };
@@ -203,14 +206,14 @@ pub async fn duplicate_folders_handler(
         let total_groups: usize = if let Some(ref pat) = q_pat {
             conn.query_row(
                 &count_sql,
-                rusqlite::params![pat, min_shared, min_folders],
+                rusqlite::params![pat, min_shared, min_folders, min_size],
                 |r| r.get::<_, i64>(0),
             )
             .unwrap_or(0) as usize
         } else {
             conn.query_row(
                 &count_sql,
-                rusqlite::params![min_shared, min_folders],
+                rusqlite::params![min_shared, min_folders, min_size],
                 |r| r.get::<_, i64>(0),
             )
             .unwrap_or(0) as usize
@@ -235,7 +238,7 @@ pub async fn duplicate_folders_handler(
             if let Some(ref pat) = q_pat {
                 let rows = stmt
                     .query_map(
-                        rusqlite::params![pat, min_shared, min_folders, per_page, offset],
+                        rusqlite::params![pat, min_shared, min_folders, min_size, per_page, offset],
                         map_row,
                     )
                     .map_err(|e| {
@@ -255,7 +258,7 @@ pub async fn duplicate_folders_handler(
             } else {
                 let rows = stmt
                     .query_map(
-                        rusqlite::params![min_shared, min_folders, per_page, offset],
+                        rusqlite::params![min_shared, min_folders, min_size, per_page, offset],
                         map_row,
                     )
                     .map_err(|e| {

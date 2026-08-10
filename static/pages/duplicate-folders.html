@@ -56,6 +56,17 @@
                 <option value="5">5+ folders</option>
                 <option value="10">10+ folders</option>
             </select>
+            <label class="filter-number">
+                Min file size:
+                <input type="number" id="min-size-input" min="0" value="0" onchange="applyFilter()" title="Only show groups where each folder's files are at least this size">
+                <select id="min-size-unit" onchange="applyFilter()">
+                    <option value="1">B</option>
+                    <option value="1024">KB</option>
+                    <option value="1048576">MB</option>
+                    <option value="1073741824">GB</option>
+                    <option value="1099511627776">TB</option>
+                </select>
+            </label>
             <div class="ft-select" id="ft-select">
                 <button type="button" class="merge-folders-btn ft-select-btn" onclick="toggleFileTypePanel()" >File types <span class="ft-count" id="ft-count"></span></button>
                 <div class="ft-panel" id="ft-panel" style="display:none;">

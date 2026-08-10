@@ -11,6 +11,8 @@ async function loadGroups() {
     const q = (document.getElementById('filter-input').value || '').trim();
     const minShared = parseInt(document.getElementById('min-shared-input').value || '0', 10) || 0;
     const minFolders = parseInt(document.getElementById('min-folders').value || '0', 10) || 0;
+    const minSize = parseInt(document.getElementById('min-size-input').value || '0', 10) || 0;
+    const minSizeUnit = parseInt(document.getElementById('min-size-unit').value || '1', 10) || 1;
     const fileTypes = Array.from(selectedFileTypes).join(',');
     const sort = document.getElementById('sort-select').value || 'shared';
     const order = document.getElementById('sort-dir').value || 'desc';
@@ -21,6 +23,7 @@ async function loadGroups() {
     if (q) params.set('q', q);
     if (minShared) params.set('min_shared', minShared);
     if (minFolders) params.set('min_folders', minFolders);
+    if (minSize > 0) params.set('min_size', minSize * minSizeUnit);
     if (fileTypes) params.set('file_types', fileTypes);
     if (sort !== 'shared') params.set('sort', sort);
     if (order !== 'desc') params.set('order', order);
