@@ -146,6 +146,31 @@
             overflow-x: auto;
             white-space: nowrap;
         }
+        .folders-toolbar .breadcrumb .sep {
+            color: var(--text-muted);
+            margin: 0 0.15rem;
+        }
+        .folders-toolbar .breadcrumb .crumb {
+            color: var(--text-link);
+            cursor: pointer;
+        }
+        .folders-toolbar .breadcrumb .crumb:hover {
+            text-decoration: underline;
+        }
+        .folders-toolbar .breadcrumb .current {
+            color: var(--text-primary);
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 1px dashed var(--text-muted);
+        }
+        .folders-toolbar .breadcrumb .current:hover {
+            border-bottom-color: var(--accent);
+        }
+        .folders-toolbar .breadcrumb-edit {
+            width: 100%;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
         .folders-toolbar .summary {
             padding: 0;
         }
@@ -293,6 +318,7 @@
             <div class="folders-toolbar">
                 <button type="button" class="btn btn--secondary btn--sm" id="folders-up" onclick="folderGoUp()" disabled>&#8593; Up</button>
                 <button type="button" class="btn btn--secondary btn--sm" onclick="folderOpen(folderPath)">&#8635; Refresh</button>
+                <button type="button" class="btn btn--secondary btn--sm" id="folders-edit" onclick="folderBreadcrumbEdit()" title="Edit path">&#9998; Edit</button>
                 <div class="breadcrumb" id="folders-breadcrumb"></div>
                 <span class="summary" id="folders-summary"></span>
             </div>
@@ -741,16 +767,52 @@
                 acc += '/' + seg;
                 const isLast = i === parts.length - 1;
                 if (isLast) {
-                    crumbs.push(`<span class="current" title="${escapeHtml(acc)}">${escapeHtml(seg)}</span>`);
+                    crumbs.push(`<span class="current" onclick="folderBreadcrumbEdit(event)" title="Edit path">${escapeHtml(seg)}</span>`);
                 } else {
-                    crumbs.push(`<span onclick="folderOpen('${acc.replace(/'/g, "\\'")}')">${escapeHtml(seg)}</span>`);
+                    crumbs.push(`<span class="crumb" onclick="folderOpen('${acc.replace(/'/g, "\\'")}')">${escapeHtml(seg)}</span>`);
                     crumbs.push('<span class="sep">/</span>');
                 }
             });
             if (parts.length === 0) {
-                crumbs.push('<span class="current">Root</span>');
+                crumbs.push('<span class="crumb" onclick="folderBreadcrumbEdit(event)">Root</span>');
             }
             return crumbs.join('');
+        }
+
+        function folderBreadcrumbEdit(event) {
+            if (event && event.stopPropagation) event.stopPropagation();
+            const bc = document.getElementById('folders-breadcrumb');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'input breadcrumb-edit';
+            input.value = folderPath || folderRoot || '';
+            input.spellcheck = false;
+            input.setAttribute('aria-label', 'Folder path');
+            bc.innerHTML = '';
+            bc.appendChild(input);
+            input.focus();
+            input.select();
+            let done = false;
+            const commit = () => {
+                if (done) return;
+                done = true;
+                const v = input.value.trim().replace(/\/+$/, '');
+                if (v) {
+                    folderOpen(v);
+                } else {
+                    bc.innerHTML = folderBreadcrumbHtml(folderPath);
+                }
+            };
+            const cancel = () => {
+                if (done) return;
+                done = true;
+                bc.innerHTML = folderBreadcrumbHtml(folderPath);
+            };
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') commit();
+                else if (e.key === 'Escape') cancel();
+            });
+            input.addEventListener('blur', cancel);
         }
 
         async function folderStart() {
@@ -769,10 +831,21 @@
 
         async function folderOpen(path) {
             const res = await fetch('/api/folder?path=' + encodeURIComponent(path));
-            if (!res.ok) return;
+            if (!res.ok) {
+                document.getElementById('folders-breadcrumb').innerHTML = folderBreadcrumbHtml(folderPath);
+                folderShowError('Open failed (HTTP ' + res.status + '): ' + path);
+                return;
+            }
             const data = await res.json();
+            document.getElementById('folders-error').style.display = 'none';
             folderPath = data.path;
             folderRender(data);
+        }
+
+        function folderShowError(message) {
+            const foldersError = document.getElementById('folders-error');
+            foldersError.textContent = message;
+            foldersError.style.display = 'block';
         }
 
         function folderRender(data) {
