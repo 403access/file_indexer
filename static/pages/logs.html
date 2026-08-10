@@ -157,8 +157,7 @@
         }
         .logs-layout > .page-header,
         .logs-layout > .log-controls,
-        .logs-layout > .search-hint,
-        .logs-layout > .results-info {
+        .logs-layout > .search-hint {
             flex-shrink: 0;
         }
         .logs-layout .pagination {
@@ -283,10 +282,6 @@
         </section>
         <div class="search-hint">Search: plain text = exact match, <code>prefix*</code> = starts with</div>
 
-        <section class="results-info" id="results-info" style="display:none;">
-            <span id="result-count"></span>
-        </section>
-
         <section class="results">
             <div class="table-wrap" id="results-wrap" style="display:none;"><table class="log-table table" id="results-table">
                 <thead>
@@ -343,8 +338,6 @@
 
                 const resultsTable = document.getElementById('results-table');
                 const resultsBody = document.getElementById('results-body');
-                const resultsInfo = document.getElementById('results-info');
-                const resultCount = document.getElementById('result-count');
                 const noResults = document.getElementById('no-results');
                 const pagination = document.getElementById('pagination');
 
@@ -355,7 +348,6 @@
                     noResults.style.display = 'block';
                     resultsTable.style.display = 'none';
                     if (resultsWrap) resultsWrap.style.display = 'none';
-                    resultsInfo.style.display = 'none';
                     pagination.style.display = 'none';
                     pagination.innerHTML = '';
                     return;
@@ -364,8 +356,6 @@
                 noResults.style.display = 'none';
                 resultsTable.style.display = 'table';
                 if (resultsWrap) resultsWrap.style.display = '';
-                resultCount.textContent = `${total.toLocaleString()} log${total === 1 ? '' : 's'}`;
-                resultsInfo.style.display = 'block';
 
                 entries.forEach((log, idx) => {
                     const isIndexed = log.files && log.files.length > 0;
