@@ -10,6 +10,7 @@ use self::duplicate_folders::{
     folder_files_handler,
 };
 use self::duplicates::duplicates_handler;
+use self::explorer::explorer_handler;
 use self::file_content::file_content_handler;
 use self::folder::folder_handler;
 use self::index::index_handler;
@@ -26,6 +27,7 @@ pub mod config;
 pub mod dashboard;
 pub mod duplicate_folders;
 pub mod duplicates;
+pub mod explorer;
 pub mod file_content;
 pub mod folder;
 pub mod index;
@@ -66,6 +68,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/duplicate-folders/types", get(available_file_types_handler))
         .route("/api/folders/check", post(check_folders_handler))
         .route("/api/tree", get(tree_handler))
+        .route("/api/explorer", get(explorer_handler))
         .route("/api/file", get(file_content_handler))
         .route("/api/folder", get(folder_handler))
         .route("/api/index", post(index_handler))
