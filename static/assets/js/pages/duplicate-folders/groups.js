@@ -83,7 +83,11 @@ function renderGroups(data) {
     const aligned = document.getElementById('align-files').checked;
 
     if (data.groups.length === 0) {
-        container.innerHTML = '<div class="empty-msg">No duplicate folders found</div>';
+        if (data.needs_refresh) {
+            container.innerHTML = '<div class="empty-msg">Duplicate folder groups are still being computed. Refresh this page shortly to see results.</div>';
+        } else {
+            container.innerHTML = '<div class="empty-msg">No duplicate folders found</div>';
+        }
         summary.textContent = '';
         return;
     }

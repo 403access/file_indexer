@@ -218,27 +218,14 @@ fn spawn_background_jobs(state: AppState, database_url: String) {
                     break;
                 }
 
-                let interval_secs = file_indexer::modules::environment::env_vars::get_duplicate_folder_groups_refresh_interval()
-                    .max(30);
-
-                processes::update(
-                    dup_process_id,
-                    None,
-                    Some(&format!("Waiting {}s until next refresh", interval_secs)),
-                );
-
-                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
-
-                if processes::is_stopped(dup_process_id) {
-                    processes::fail(dup_process_id, "Stopped by user");
-                    break;
-                }
-
                 processes::update(
                     dup_process_id,
                     Some(50.0),
                     Some("Refreshing duplicate folder groups..."),
                 );
+
+                let interval_secs = file_indexer::modules::environment::env_vars::get_duplicate_folder_groups_refresh_interval()
+                    .max(30);
 
                 let db = dup_db.clone();
                 let ok = tokio::task::spawn_blocking(move || {
@@ -268,6 +255,14 @@ fn spawn_background_jobs(state: AppState, database_url: String) {
                         break;
                     }
                 }
+
+                processes::update(
+                    dup_process_id,
+                    None,
+                    Some(&format!("Waiting {}s until next refresh", interval_secs)),
+                );
+
+                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
             }
         });
     } else {
