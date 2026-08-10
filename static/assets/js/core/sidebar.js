@@ -28,31 +28,31 @@ const SIDEBAR_ITEMS = [
     section: 'Browse',
     links: [
       { href: '/', label: 'Dashboard', icon: 'dashboard' },
-      { href: '/search.html', label: 'Search', icon: 'search' },
-      { href: '/explorer.html', label: 'Explorer', icon: 'explorer' },
+      { href: '/pages/search.html', label: 'Search', icon: 'search' },
+      { href: '/pages/explorer.html', label: 'Explorer', icon: 'explorer' },
     ],
   },
   {
     section: 'Duplicates',
     links: [
-      { href: '/duplicates.html', label: 'Files', icon: 'duplicates' },
-      { href: '/duplicate-folders.html', label: 'Folders', icon: 'folders' },
+      { href: '/pages/duplicates.html', label: 'Files', icon: 'duplicates' },
+      { href: '/pages/duplicate-folders.html', label: 'Folders', icon: 'folders' },
     ],
   },
   {
     section: 'Data',
     links: [
-      { href: '/skipped.html', label: 'Skipped', icon: 'skipped' },
-      { href: '/ignored.html', label: 'Ignored', icon: 'ignored' },
+      { href: '/pages/skipped.html', label: 'Skipped', icon: 'skipped' },
+      { href: '/pages/ignored.html', label: 'Ignored', icon: 'ignored' },
     ],
   },
   {
     section: 'System',
     links: [
-      { href: '/status.html', label: 'Status', icon: 'status' },
-      { href: '/processes.html', label: 'Processes', icon: 'processes' },
-      { href: '/logs.html', label: 'Logs', icon: 'logs' },
-      { href: '/settings.html', label: 'Settings', icon: 'settings' },
+      { href: '/pages/status.html', label: 'Status', icon: 'status' },
+      { href: '/pages/processes.html', label: 'Processes', icon: 'processes' },
+      { href: '/pages/logs.html', label: 'Logs', icon: 'logs' },
+      { href: '/pages/settings.html', label: 'Settings', icon: 'settings' },
     ],
   },
 ];

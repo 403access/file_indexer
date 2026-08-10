@@ -89,7 +89,7 @@
         const link = document.createElement('link');
         link.id = 'file-viewer-css';
         link.rel = 'stylesheet';
-        link.href = '/css/file-viewer.css';
+        link.href = '/assets/css/pages/file-viewer.css';
         document.head.appendChild(link);
     }
 

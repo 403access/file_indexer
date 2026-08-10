@@ -6,15 +6,15 @@ The File Indexer ships a static web UI served by the Axum server from the `stati
 
 | Concern | Location |
 |---|---|
-| Design tokens (colors, spacing, typography) | `static/css/tokens.css` |
-| Reusable UI components | `static/css/components.css` |
-| App shell (sidebar layout, base) | `static/css/style.css` |
-| Page-specific styles | `static/css/processes.css`, `file-viewer.css`, `duplicate-folders.css` |
-| Theme manager | `static/js/theme.js` |
-| Navigation sidebar | `static/js/sidebar.js` |
-| Right-hand drawer | `static/js/drawer.js` |
-| Shared helpers / folder drawer | `static/js/app.js` |
-| Pages | `static/*.html` |
+| Design tokens (colors, spacing, typography) | `static/assets/css/tokens.css` |
+| Reusable UI components | `static/assets/css/components.css` |
+| App shell (sidebar layout, base) | `static/assets/css/style.css` |
+| Page-specific styles | `static/assets/css/pages/*.css` |
+| Theme manager | `static/assets/js/core/theme.js` |
+| Navigation sidebar | `static/assets/js/core/sidebar.js` |
+| Right-hand drawer | `static/assets/js/core/drawer.js` |
+| Shared helpers / folder drawer | `static/assets/js/core/app.js` |
+| Pages | `static/index.html`, `static/pages/*.html` |
 
 There is **no frontend build step**. HTML, CSS, and JS are plain static assets. Prefer CSS variables and shared component classes over one-off colors.
 
@@ -24,42 +24,57 @@ There is **no frontend build step**. HTML, CSS, and JS are plain static assets. 
 
 ```
 static/
-├── css/
-│   ├── tokens.css          # Light/dark design tokens
-│   ├── components.css      # Buttons, cards, tables, drawers, …
-│   ├── style.css           # App shell + sidebar layout
-│   ├── processes.css       # Processes page
-│   ├── file-viewer.css     # File content viewer panel
-│   └── duplicate-folders.css
-├── js/
-│   ├── theme.js            # Theme API + persistence
-│   ├── sidebar.js          # Nav injection (single source of truth)
-│   ├── drawer.js           # Reusable Drawer component
-│   ├── app.js              # API helpers, folder drawer, formatters
-│   ├── status.js           # Sidebar status-dot polling
-│   └── …                   # Page-specific modules
-└── *.html                  # One page per route
+├── index.html                 # Dashboard (/)
+├── pages/                     # One HTML file per app route
+│   ├── search.html
+│   ├── processes.html
+│   └── …
+├── assets/
+│   ├── css/
+│   │   ├── tokens.css         # Light/dark design tokens
+│   │   ├── components.css     # Buttons, cards, tables, drawers, …
+│   │   ├── style.css          # App shell + nav layout
+│   │   └── pages/             # Page-specific stylesheets
+│   │       ├── processes.css
+│   │       ├── file-viewer.css
+│   │       └── duplicate-folders.css
+│   └── js/
+│       ├── core/              # Shared modules (theme, nav, drawer, …)
+│       └── pages/             # Page-specific modules
+│           ├── search.js
+│           ├── processes.js
+│           └── duplicate-folders/
+└── …
 ```
+
+Public URLs:
+
+| Path | Source |
+|---|---|
+| `/` | `static/index.html` |
+| `/pages/<name>.html` | `static/pages/<name>.html` |
+| `/assets/...` | `static/assets/...` |
+| `/<name>.html` (legacy) | Aliased to `static/pages/<name>.html` in `main.rs` |
 
 ### Stylesheet load order
 
 Every page should link stylesheets in this order:
 
 ```html
-<link rel="stylesheet" href="/css/tokens.css">
-<link rel="stylesheet" href="/css/components.css">
-<link rel="stylesheet" href="/css/style.css">
-<!-- optional page-specific CSS -->
+<link rel="stylesheet" href="/assets/css/tokens.css">
+<link rel="stylesheet" href="/assets/css/components.css">
+<link rel="stylesheet" href="/assets/css/style.css">
+<!-- optional: /assets/css/pages/<page>.css -->
 ```
 
 ### Script load order (typical)
 
 ```html
-<script src="/js/theme.js"></script>
-<script src="/js/drawer.js"></script>
-<script src="/js/sidebar.js"></script>
-<script src="/js/status.js"></script>
-<!-- page-specific scripts (app.js, search.js, …) -->
+<script src="/assets/js/core/theme.js"></script>
+<script src="/assets/js/core/drawer.js"></script>
+<script src="/assets/js/core/sidebar.js"></script>
+<script src="/assets/js/core/status.js"></script>
+<!-- page-specific: /assets/js/pages/... -->
 ```
 
 ---
@@ -171,7 +186,7 @@ When adding a new color, define it in **both** light and dark sections of `token
 
 ## Reusable components
 
-Defined in `static/css/components.css`. Prefer these classes over custom one-offs.
+Defined in `static/assets/css/components.css`. Prefer these classes over custom one-offs.
 
 ### Buttons
 
@@ -339,7 +354,7 @@ Every page includes:
 
 ### Navigation structure
 
-Defined once in `SIDEBAR_ITEMS` inside `static/js/sidebar.js`:
+Defined once in `SIDEBAR_ITEMS` inside `static/assets/js/core/sidebar.js`:
 
 | Section | Links |
 |---|---|
@@ -425,7 +440,7 @@ Prefer **`Drawer.create`** for new detail panels so behavior (Escape, scroll loc
 
 ## Page checklist (new page)
 
-1. Create `static/your-page.html`.
+1. Create `static/pages/your-page.html`.
 2. Copy the standard head bootstrap:
 
 ```html
@@ -449,9 +464,9 @@ Prefer **`Drawer.create`** for new detail panels so behavior (Escape, scroll loc
     })();
   </script>
   <title>Your Page - File Indexer</title>
-  <link rel="stylesheet" href="/css/tokens.css">
-  <link rel="stylesheet" href="/css/components.css">
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/assets/css/tokens.css">
+  <link rel="stylesheet" href="/assets/css/components.css">
+  <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
   <nav id="sidebar-container"></nav>
@@ -464,17 +479,18 @@ Prefer **`Drawer.create`** for new detail panels so behavior (Escape, scroll loc
     </header>
     <!-- content -->
   </main>
-  <script src="/js/theme.js"></script>
-  <script src="/js/drawer.js"></script>
-  <script src="/js/sidebar.js"></script>
-  <script src="/js/status.js"></script>
+  <script src="/assets/js/core/theme.js"></script>
+  <script src="/assets/js/core/drawer.js"></script>
+  <script src="/assets/js/core/sidebar.js"></script>
+  <script src="/assets/js/core/status.js"></script>
 </body>
 </html>
 ```
 
-3. Register the route in `SIDEBAR_ITEMS` (`sidebar.js`).
+3. Register the route in `SIDEBAR_ITEMS` (`static/assets/js/core/sidebar.js`).
 4. Use token variables and component classes only.
-5. Put page-only CSS in a dedicated file under `static/css/` if it grows beyond a small `<style>` block.
+5. Put page-only CSS under `static/assets/css/pages/` if it grows beyond a small `<style>` block.
+6. Optionally add a legacy alias in `static_page_aliases()` (`main.rs`) if you want `/your-page.html` without the `/pages/` prefix.
 
 ---
 
@@ -483,16 +499,16 @@ Prefer **`Drawer.create`** for new detail panels so behavior (Escape, scroll loc
 | Path | Purpose |
 |---|---|
 | `/` (`index.html`) | Dashboard — stats + timeline chart |
-| `/search.html` | Search index |
-| `/explorer.html` | Tree browser |
-| `/duplicates.html` | Duplicate file groups |
-| `/duplicate-folders.html` | Duplicate folder groups / merge |
-| `/skipped.html` | Paths skipped during indexing |
-| `/ignored.html` | Ignore rules + skipped-by-rule stats |
-| `/status.html` | Live indexing status |
-| `/processes.html` | Background process monitor |
-| `/logs.html` | Log stream |
-| `/settings.html` | Process toggles, refresh interval, ignore rules |
+| `/pages/search.html` | Search index |
+| `/pages/explorer.html` | Tree browser |
+| `/pages/duplicates.html` | Duplicate file groups |
+| `/pages/duplicate-folders.html` | Duplicate folder groups / merge |
+| `/pages/skipped.html` | Paths skipped during indexing |
+| `/pages/ignored.html` | Ignore rules + skipped-by-rule stats |
+| `/pages/status.html` | Live indexing status |
+| `/pages/processes.html` | Background process monitor |
+| `/pages/logs.html` | Log stream |
+| `/pages/settings.html` | Process toggles, refresh interval, ignore rules |
 
 ---
 
@@ -502,7 +518,7 @@ Prefer **`Drawer.create`** for new detail panels so behavior (Escape, scroll loc
 2. **Buttons** use `.btn` (+ variant), not bare styled `<button>` rules.
 3. **Tables** live inside `.table-wrap` when they should look like elevated cards.
 4. **Detail UIs** use `Drawer` when possible instead of one-off fixed panels.
-5. **Shared formatters** (`formatSize`, `escapeHtml`, …) live in `app.js` when reused across pages.
+5. **Shared formatters** (`formatSize`, `escapeHtml`, …) live in `assets/js/core/app.js` when reused across pages.
 6. **Sidebar is the only nav source** — do not duplicate nav markup in HTML.
 7. **Theme-aware charts** (dashboard) should re-render on `themechange`.
 

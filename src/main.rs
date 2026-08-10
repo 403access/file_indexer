@@ -1,10 +1,33 @@
 use axum::Router;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 
 use file_indexer::api::{create_router, index::ensure_indexed_async};
 use file_indexer::modules::environment::check_vars::check_vars;
 use file_indexer::modules::processes;
 use file_indexer::states::app_state::{self, AppState};
+
+/// Legacy root-level HTML paths → files under `static/pages/`.
+/// Keeps bookmarks like `/search.html` working after the assets reorg.
+fn static_page_aliases() -> Router {
+    const PAGES: &[(&str, &str)] = &[
+        ("/search.html", "static/pages/search.html"),
+        ("/explorer.html", "static/pages/explorer.html"),
+        ("/duplicates.html", "static/pages/duplicates.html"),
+        ("/duplicate-folders.html", "static/pages/duplicate-folders.html"),
+        ("/skipped.html", "static/pages/skipped.html"),
+        ("/ignored.html", "static/pages/ignored.html"),
+        ("/status.html", "static/pages/status.html"),
+        ("/processes.html", "static/pages/processes.html"),
+        ("/logs.html", "static/pages/logs.html"),
+        ("/settings.html", "static/pages/settings.html"),
+    ];
+
+    let mut router = Router::new();
+    for (route, path) in PAGES {
+        router = router.route_service(route, ServeFile::new(path));
+    }
+    router
+}
 
 #[tokio::main]
 async fn main() {
@@ -27,9 +50,16 @@ async fn main() {
 
     let api_router = create_router(state.clone());
 
+    // static/
+    //   index.html
+    //   pages/*.html
+    //   assets/{css,js}/...
+    // ServeDir covers / , /pages/..., /assets/...
+    // Aliases keep old /foo.html URLs working.
     let app = Router::new()
-        .fallback_service(ServeDir::new("static"))
-        .merge(api_router);
+        .merge(static_page_aliases())
+        .merge(api_router)
+        .fallback_service(ServeDir::new("static"));
 
     let port = file_indexer::modules::environment::env_vars::get_server_port();
     let addr = format!("0.0.0.0:{}", port);
