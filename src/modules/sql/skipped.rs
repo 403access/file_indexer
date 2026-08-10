@@ -12,11 +12,34 @@ pub fn insert_skipped_path(tx: &Transaction, path: &str, error: &str) -> rusqlit
     }
 }
 
+pub fn count_skipped_paths(conn: &Connection) -> rusqlite::Result<u64> {
+    conn.query_row("SELECT COUNT(*) FROM skipped_paths", [], |row| row.get(0))
+}
+
+/// Fetch all skipped paths (legacy full scan — prefer paginated variant).
 pub fn get_skipped_paths(conn: &Connection) -> rusqlite::Result<Vec<(String, String)>> {
-    let mut stmt = conn.prepare("SELECT path, error FROM skipped_paths")?;
-    let rows = stmt.query_map([], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-    })?;
+    let mut stmt = conn.prepare("SELECT path, error FROM skipped_paths ORDER BY path")?;
+    let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    let mut result = Vec::new();
+    for row in rows {
+        result.push(row?);
+    }
+    Ok(result)
+}
+
+/// Fetch a page of skipped paths ordered by path.
+pub fn get_skipped_paths_page(
+    conn: &Connection,
+    limit: u32,
+    offset: u32,
+) -> rusqlite::Result<Vec<(String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT path, error FROM skipped_paths ORDER BY path LIMIT :limit OFFSET :offset",
+    )?;
+    let rows = stmt.query_map(
+        named_params! { ":limit": limit, ":offset": offset },
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
     let mut result = Vec::new();
     for row in rows {
         result.push(row?);

@@ -61,42 +61,85 @@
                 <p class="empty-state__desc">Everything indexed cleanly</p>
             </div>
         </section>
+
+        <section class="pagination" id="pagination" style="display:none;">
+            <button type="button" id="prev-page" class="btn btn--secondary btn--sm" disabled>Previous</button>
+            <span id="page-info"></span>
+            <button type="button" id="next-page" class="btn btn--secondary btn--sm" disabled>Next</button>
+        </section>
     </main>
 
     <script>
-        document.addEventListener('DOMContentLoaded', async () => {
+        const PER_PAGE = 50;
+        let currentPage = 1;
+
+        async function loadPage(page = 1) {
             const resultsTable = document.getElementById('results-table');
             const resultsWrap = document.getElementById('results-wrap');
             const resultsBody = document.getElementById('results-body');
             const resultsInfo = document.getElementById('results-info');
             const resultCount = document.getElementById('result-count');
             const noResults = document.getElementById('no-results');
+            const pagination = document.getElementById('pagination');
+            const pageInfo = document.getElementById('page-info');
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
 
             try {
-                const res = await fetch('/api/skipped');
+                const res = await fetch(`/api/skipped?page=${page}&per_page=${PER_PAGE}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
+                const results = data.results || [];
+                const total = data.total ?? 0;
+                currentPage = data.page || page;
 
-                if (data.length === 0) {
+                if (total === 0) {
                     noResults.style.display = 'block';
+                    resultsInfo.style.display = 'none';
+                    if (resultsWrap) resultsWrap.style.display = 'none';
+                    resultsTable.style.display = 'none';
+                    pagination.style.display = 'none';
                     return;
                 }
 
-                resultCount.textContent = `${data.length} skipped path${data.length === 1 ? '' : 's'}`;
+                noResults.style.display = 'none';
+                resultCount.textContent = `${total.toLocaleString()} skipped path${total === 1 ? '' : 's'}`;
                 resultsInfo.style.display = 'block';
-                resultsWrap.style.display = '';
+                if (resultsWrap) resultsWrap.style.display = '';
                 resultsTable.style.display = '';
 
-                resultsBody.innerHTML = data.map(row => `
+                resultsBody.innerHTML = results.map(row => `
                     <tr>
                         <td class="path" title="${escapeHtml(row.path)}">${escapeHtml(row.path)}</td>
                         <td class="text-danger">${escapeHtml(row.error || row.reason || '—')}</td>
                     </tr>
                 `).join('');
+
+                const totalPages = Math.max(1, Math.ceil(total / (data.per_page || PER_PAGE)));
+                if (totalPages > 1) {
+                    pagination.style.display = 'flex';
+                    pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                    prevBtn.disabled = currentPage <= 1;
+                    nextBtn.disabled = currentPage >= totalPages;
+                } else {
+                    pagination.style.display = 'none';
+                }
             } catch (err) {
                 noResults.style.display = 'block';
                 noResults.querySelector('.empty-state__title').textContent = 'Failed to load';
                 noResults.querySelector('.empty-state__desc').textContent = err.message;
+                pagination.style.display = 'none';
             }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('prev-page').addEventListener('click', () => {
+                if (currentPage > 1) loadPage(currentPage - 1);
+            });
+            document.getElementById('next-page').addEventListener('click', () => {
+                loadPage(currentPage + 1);
+            });
+            loadPage(1);
         });
 
         function escapeHtml(str) {

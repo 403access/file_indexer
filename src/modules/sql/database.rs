@@ -20,4 +20,6 @@ pub use super::settings::{
     get_ignore_list, get_ignore_rules, get_setting, set_ignore_list, set_ignore_rules, set_setting,
     IgnoreRule,
 };
-pub use super::skipped::{get_skipped_paths, insert_skipped_path};
+pub use super::skipped::{
+    count_skipped_paths, get_skipped_paths, get_skipped_paths_page, insert_skipped_path,
+};
