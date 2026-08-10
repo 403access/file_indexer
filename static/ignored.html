@@ -98,17 +98,13 @@
             box-sizing: border-box;
         }
 
-        main.ignored-page .page-header {
-            flex-shrink: 0;
-        }
-
         .ignored-panels {
             display: flex;
             flex-direction: column;
             flex: 1 1 auto;
             min-height: 0;
             gap: var(--space-4);
-            margin-top: var(--space-4);
+            margin-top: 0;
         }
 
         .ignored-panel {
@@ -190,13 +186,6 @@
     <nav id="sidebar-container"></nav>
 
     <main class="ignored-page">
-        <header class="page-header">
-            <div class="page-header__titles">
-                <h1 class="page-header__title">Ignored</h1>
-                <p class="page-header__subtitle">Ignore rules and paths skipped by them</p>
-            </div>
-        </header>
-
         <div class="ignored-panels">
             <section class="ignored-panel" aria-labelledby="rules-heading">
                 <div class="ignored-panel__header">
