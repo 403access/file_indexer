@@ -138,12 +138,17 @@
 
 .process-card-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   padding: 0.85rem 1rem;
   background: var(--bg-muted);
   border-bottom: 1px solid var(--border-subtle);
-  gap: 1rem;
+  gap: 0.65rem;
+}
+
+.process-card-header__main {
+  min-width: 0;
+  width: 100%;
 }
 
 .process-card-name {
@@ -151,6 +156,10 @@
   font-size: var(--font-size-md);
   color: var(--text-primary);
   letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .process-card-meta {
@@ -166,6 +175,7 @@
   gap: 0.35rem;
   flex-shrink: 0;
   flex-wrap: wrap;
+  width: 100%;
 }
 
 .process-action-btn {

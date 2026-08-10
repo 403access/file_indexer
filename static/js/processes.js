@@ -131,8 +131,8 @@ function renderProcesses(processes, totalAll = processes.length) {
 
                 return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}" onclick="openProcessSidebar(${p.id})">
                 <div class="process-card-header">
-                    <div>
-                        <div class="process-card-name">${escapeHtml(p.name)}</div>
+                    <div class="process-card-header__main">
+                        <div class="process-card-name" title="${escapeHtml(p.name)}">${escapeHtml(p.name)}</div>
                         <div class="process-card-meta">
                             <span class="category-badge">${escapeHtml(p.category)}</span>
                             <span class="status-badge ${p.status}">${p.status}${p.paused ? ' (paused)' : ''}</span>
