@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 use crate::modules::file_entry::_types::FileEntry;
+use crate::api::offload;
 use crate::modules::sql::database::get_connection;
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
@@ -49,6 +50,7 @@ pub async fn duplicates_handler(
     State(state): State<AppState>,
     Query(params): Query<DuplicatesParams>,
 ) -> Result<Json<DuplicatesResponse>, (axum::http::StatusCode, String)> {
+    offload(move || {
     let _guard = IndexerPauseGuard::new(&state);
 
     let conn = get_connection(&state.db)
@@ -166,4 +168,5 @@ pub async fn duplicates_handler(
         page: params.page,
         per_page: params.per_page,
     }))
+    }).await
 }

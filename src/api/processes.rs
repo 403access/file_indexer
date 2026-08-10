@@ -2,6 +2,7 @@ use axum::Json;
 use axum::extract::{Path, Query, State};
 use serde::{Deserialize, Serialize};
 
+use crate::api::offload;
 use crate::modules::processes::{self, Process};
 use crate::modules::sql::database::{get_connection, refresh_dashboard_stats};
 
@@ -38,29 +39,34 @@ pub async fn process_logs_handler(
     Path(id): Path<u64>,
     Query(params): Query<ProcessLogsParams>,
 ) -> Result<Json<Vec<crate::modules::logging::LogEntry>>, (axum::http::StatusCode, String)> {
-    let _guard = IndexerPauseGuard::new(&state);
-    let conn = get_connection(&state.db)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
     let limit = params.limit.unwrap_or(1000);
-    let mut stmt = conn.prepare(
-        "SELECT timestamp, level, message FROM logs WHERE process_id = ?1 ORDER BY timestamp DESC LIMIT ?2"
-    ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    offload(move || {
+        let _guard = IndexerPauseGuard::new(&state);
+        let conn = get_connection(&state.db)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let logs: Vec<crate::modules::logging::LogEntry> = stmt
-        .query_map(rusqlite::params![id, limit], |row| {
-            Ok(crate::modules::logging::LogEntry {
-                timestamp: row.get(0)?,
-                level: row.get(1)?,
-                message: row.get(2)?,
-                files: None,
+        let mut stmt = conn
+            .prepare(
+                "SELECT timestamp, level, message FROM logs WHERE process_id = ?1 ORDER BY timestamp DESC LIMIT ?2",
+            )
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+        let logs: Vec<crate::modules::logging::LogEntry> = stmt
+            .query_map(rusqlite::params![id, limit], |row| {
+                Ok(crate::modules::logging::LogEntry {
+                    timestamp: row.get(0)?,
+                    level: row.get(1)?,
+                    message: row.get(2)?,
+                    files: None,
+                })
             })
-        })
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .filter_map(|r| r.ok())
-        .collect();
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            .filter_map(|r| r.ok())
+            .collect();
 
-    Ok(Json(logs))
+        Ok(Json(logs))
+    })
+    .await
 }
 
 pub async fn trigger_process_handler(
@@ -73,62 +79,50 @@ pub async fn trigger_process_handler(
         format!("Process #{} not found", id),
     ))?;
 
-    let name = process.name.as_str();
-    let category = process.category.as_str();
+    let name = process.name.clone();
+    let category = process.category.clone();
 
-    let new_id = match category {
-        "dashboard" => {
-            let process_id = processes::register_controllable(
-                &format!("Manual {} ({})", name, category),
-                category,
-                Some("Manual trigger"),
-            );
-
-            let conn = get_connection(&state.db)
-                .map_err(|e| {
-                    processes::fail(process_id, &e.to_string());
-                    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                })?;
-
-            refresh_dashboard_stats(&conn);
-
-            let _last_refreshed: f64 = conn
-                .query_row(
-                    "SELECT value FROM dashboard_stats WHERE key = 'last_refreshed'",
-                    [],
-                    |row| row.get::<_, String>(0),
-                )
-                .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(0.0);
-
-            processes::complete(process_id, Some("Dashboard stats refreshed"));
-            process_id
-        }
-        "duplicate-folders" => {
-            let process_id = processes::register_controllable(
-                &format!("Manual {} ({})", name, category),
-                category,
-                Some("Manual trigger"),
-            );
-
-            let conn = get_connection(&state.db)
-                .map_err(|e| {
-                    processes::fail(process_id, &e.to_string());
-                    (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
-                })?;
-
-            crate::modules::sql::database::refresh_duplicate_folder_groups(&conn);
-            processes::complete(process_id, Some("Duplicate folder groups refreshed"));
-            process_id
-        }
+    match category.as_str() {
+        "dashboard" | "duplicate-folders" => {}
         _ => {
             return Err((
                 axum::http::StatusCode::BAD_REQUEST,
                 format!("Cannot manually trigger process category: {}", category),
             ));
         }
-    };
+    }
+
+    let category_for_job = category.clone();
+    let name_for_job = name.clone();
+
+    // Heavy DB work off the async runtime; return immediately after kickoff would
+    // be nicer, but keep sync completion semantics for the UI.
+    let new_id = offload(move || {
+        let process_id = processes::register_controllable(
+            &format!("Manual {} ({})", name_for_job, category_for_job),
+            &category_for_job,
+            Some("Manual trigger"),
+        );
+
+        let conn = get_connection(&state.db).map_err(|e| {
+            processes::fail(process_id, &e.to_string());
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
+
+        match category_for_job.as_str() {
+            "dashboard" => {
+                refresh_dashboard_stats(&conn);
+                processes::complete(process_id, Some("Dashboard stats refreshed"));
+            }
+            "duplicate-folders" => {
+                crate::modules::sql::database::refresh_duplicate_folder_groups(&conn);
+                processes::complete(process_id, Some("Duplicate folder groups refreshed"));
+            }
+            _ => unreachable!(),
+        }
+        Ok(process_id)
+    })
+    .await?;
 
     Ok(Json(ProcessActionResponse {
         ok: true,

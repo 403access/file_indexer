@@ -2,6 +2,7 @@ use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
+use crate::api::offload;
 use crate::modules::commands::command_search_file::{OrderKind, PatternKind, TargetKind};
 use crate::modules::file_entry::_types::FileEntry;
 use crate::modules::sql::database::get_connection;
@@ -44,55 +45,62 @@ pub async fn search_handler(
     State(state): State<AppState>,
     Query(params): Query<SearchParams>,
 ) -> Result<Json<SearchResponse>, (axum::http::StatusCode, String)> {
-    let _guard = IndexerPauseGuard::new(&state);
+    offload(move || {
+        let _guard = IndexerPauseGuard::new(&state);
 
-    let name = params.name.unwrap_or_default();
-    let target_kind = match params.r#type.as_str() {
-        "files" => TargetKind::Files,
-        "folders" => TargetKind::Folders,
-        _ => TargetKind::Both,
-    };
-    let pattern_kind = match params.pattern.as_str() {
-        "exact" => PatternKind::Exact,
-        "starts_with" => PatternKind::StartsWith,
-        "ends_with" => PatternKind::EndsWith,
-        _ => PatternKind::Contains,
-    };
-    let order_kind = match params.order.as_str() {
-        "desc" => OrderKind::Desc,
-        _ => OrderKind::Asc,
-    };
+        let name = params.name.unwrap_or_default();
+        let target_kind = match params.r#type.as_str() {
+            "files" => TargetKind::Files,
+            "folders" => TargetKind::Folders,
+            _ => TargetKind::Both,
+        };
+        let pattern_kind = match params.pattern.as_str() {
+            "exact" => PatternKind::Exact,
+            "starts_with" => PatternKind::StartsWith,
+            "ends_with" => PatternKind::EndsWith,
+            _ => PatternKind::Contains,
+        };
+        let order_kind = match params.order.as_str() {
+            "desc" => OrderKind::Desc,
+            _ => OrderKind::Asc,
+        };
 
-    let mut conn = get_connection(&state.db)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    let tx = conn.transaction()
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let mut conn = get_connection(&state.db)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let tx = conn
+            .transaction()
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let mut entries = search_file(&tx, &name, target_kind, pattern_kind, order_kind)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    tx.commit()
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let mut entries = search_file(&tx, &name, target_kind, pattern_kind, order_kind)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        tx.commit()
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    // Sort by the requested column
-    match params.sort.as_str() {
-        "size" => entries.sort_by(|a, b| a.size.cmp(&b.size)),
-        "modified" => entries.sort_by(|a, b| a.modified.cmp(&b.modified)),
-        "path" => entries.sort_by(|a, b| a.path.cmp(&b.path)),
-        _ => entries.sort_by(|a, b| a.name.cmp(&b.name)),
-    }
-    if params.order == "desc" {
-        entries.reverse();
-    }
+        match params.sort.as_str() {
+            "size" => entries.sort_by(|a, b| a.size.cmp(&b.size)),
+            "modified" => entries.sort_by(|a, b| a.modified.cmp(&b.modified)),
+            "path" => entries.sort_by(|a, b| a.path.cmp(&b.path)),
+            _ => entries.sort_by(|a, b| a.name.cmp(&b.name)),
+        }
+        if params.order == "desc" {
+            entries.reverse();
+        }
 
-    let total = entries.len();
-    let start = ((params.page - 1) * params.per_page) as usize;
-    let end = (start + params.per_page as usize).min(total);
-    let paginated = if start < total { entries[start..end].to_vec() } else { vec![] };
+        let total = entries.len();
+        let start = ((params.page - 1) * params.per_page) as usize;
+        let end = (start + params.per_page as usize).min(total);
+        let paginated = if start < total {
+            entries[start..end].to_vec()
+        } else {
+            vec![]
+        };
 
-    Ok(Json(SearchResponse {
-        results: paginated,
-        total,
-        page: params.page,
-        per_page: params.per_page,
-    }))
+        Ok(Json(SearchResponse {
+            results: paginated,
+            total,
+            page: params.page,
+            per_page: params.per_page,
+        }))
+    })
+    .await
 }

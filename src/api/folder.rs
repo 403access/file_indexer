@@ -2,6 +2,7 @@ use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
+use crate::api::offload;
 use crate::modules::sql::database::get_connection;
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
@@ -36,6 +37,7 @@ pub async fn folder_handler(
     State(state): State<AppState>,
     Query(params): Query<FolderParams>,
 ) -> Result<Json<FolderResponse>, (axum::http::StatusCode, String)> {
+    offload(move || {
     let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -97,4 +99,5 @@ pub async fn folder_handler(
         folder_count,
         files: entries,
     }))
+    }).await
 }

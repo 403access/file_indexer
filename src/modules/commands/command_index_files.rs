@@ -1,6 +1,6 @@
 use std::io;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use indicatif::ProgressBar;
 
@@ -23,7 +23,7 @@ struct InsertResult {
     inserted_hashes: Vec<String>,
 }
 
-pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<AtomicBool>>) -> io::Result<()> {
+pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<AtomicUsize>>) -> io::Result<()> {
     {
         let mut conn = get_connection(db_path).map_err(|e| {
             logging::error(&format!("Failed to connect to database: {}", e));
@@ -106,10 +106,10 @@ pub fn index_directory(db_path: &str, root_dir: &str, pause_flag: Option<Arc<Ato
     loop {
         let mut new_paths: Vec<String> = Vec::new();
         for path in &paths {
-            // Pause if web requests are waiting
+            // Pause if web requests are waiting (refcount > 0)
             if let Some(ref flag) = pause_flag {
-                while flag.load(Ordering::SeqCst) {
-                    std::thread::sleep(std::time::Duration::from_millis(50));
+                while flag.load(Ordering::SeqCst) > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(25));
                 }
             }
 

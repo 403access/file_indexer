@@ -47,13 +47,23 @@ pub fn log(level: &str, message: &str) {
 pub fn log_with_process(level: &str, message: &str, process_id: Option<u64>) {
     eprintln!("[{}] {}", level, message);
 
+    // DEBUG floods the DB during resume/indexing and contends with the web UI.
+    // Keep DEBUG on stderr only.
+    if level.eq_ignore_ascii_case("DEBUG") {
+        return;
+    }
+
     let path = DB_PATH.lock().unwrap();
     if path.is_empty() {
         return;
     }
     drop(path);
 
-    let guard = LOGGER_CONN.lock().unwrap();
+    // Don't hold the logger mutex across long DB waits — use a short critical section.
+    let guard = match LOGGER_CONN.lock() {
+        Ok(g) => g,
+        Err(_) => return,
+    };
     if let Some(ref conn) = *guard {
         let timestamp = chrono::Utc::now().to_rfc3339();
         let _ = conn.execute(

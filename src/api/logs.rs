@@ -2,7 +2,8 @@ use axum::extract::{Query, State};
 use axum::Json;
 use serde::Deserialize;
 
-use crate::modules::logging::{LogEntry, FileSummary};
+use crate::api::offload;
+use crate::modules::logging::{FileSummary, LogEntry};
 use crate::modules::sql::database::{get_connection, get_logs};
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
@@ -20,37 +21,57 @@ const MAX_ENRICHED_ENTRIES: usize = 50;
 pub async fn logs_handler(
     State(state): State<AppState>,
     Query(params): Query<LogsParams>,
-) -> Json<Vec<LogEntry>> {
-    let _guard = IndexerPauseGuard::new(&state);
+) -> Result<Json<Vec<LogEntry>>, (axum::http::StatusCode, String)> {
     let limit = params.limit.unwrap_or(1000);
-    let level = params.level.as_deref().filter(|l| *l != "all");
-    let search = params.search.as_deref().filter(|s| !s.is_empty());
+    let level = params.level.filter(|l| l != "all");
+    let search = params.search.filter(|s| !s.is_empty());
     let sort_asc = params.sort.as_deref() == Some("asc");
 
-    let conn = get_connection(&state.db).unwrap();
-    let logs = get_logs(&conn, limit, level, search, sort_asc).unwrap_or_default();
+    offload(move || {
+        let _guard = IndexerPauseGuard::new(&state);
+        let conn = get_connection(&state.db).map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            )
+        })?;
+        let logs = get_logs(
+            &conn,
+            limit,
+            level.as_deref(),
+            search.as_deref(),
+            sort_asc,
+        )
+        .unwrap_or_default();
 
-    let mut entries: Vec<LogEntry> = Vec::with_capacity(logs.len());
-    let mut enriched_count = 0usize;
+        let mut entries: Vec<LogEntry> = Vec::with_capacity(logs.len());
+        let mut enriched_count = 0usize;
 
-    for (timestamp, level, message) in logs {
-        let files = if enriched_count < MAX_ENRICHED_ENTRIES
-            && level == "INFO"
-            && message.starts_with("Indexed '")
-        {
-            extract_indexed_path(&message)
-                .and_then(|path| get_files_for_dir(&conn, &path))
-                .map(|f| {
-                    enriched_count += 1;
-                    f
-                })
-        } else {
-            None
-        };
-        entries.push(LogEntry { timestamp, level, message, files });
-    }
+        for (timestamp, level, message) in logs {
+            let files = if enriched_count < MAX_ENRICHED_ENTRIES
+                && level == "INFO"
+                && message.starts_with("Indexed '")
+            {
+                extract_indexed_path(&message)
+                    .and_then(|path| get_files_for_dir(&conn, &path))
+                    .map(|f| {
+                        enriched_count += 1;
+                        f
+                    })
+            } else {
+                None
+            };
+            entries.push(LogEntry {
+                timestamp,
+                level,
+                message,
+                files,
+            });
+        }
 
-    Json(entries)
+        Ok(Json(entries))
+    })
+    .await
 }
 
 fn extract_indexed_path(message: &str) -> Option<String> {
@@ -62,8 +83,6 @@ fn extract_indexed_path(message: &str) -> Option<String> {
 
 fn get_files_for_dir(conn: &rusqlite::Connection, dir_path: &str) -> Option<Vec<FileSummary>> {
     let normalized = dir_path.replace("//", "/");
-
-    // Use parent_path index for direct children lookup
     let parent_path = normalized.trim_end_matches('/');
 
     let mut stmt = conn

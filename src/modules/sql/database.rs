@@ -1,7 +1,7 @@
 // Re-export facade for backward compatibility.
 // Prefer importing directly from the specific submodules.
 
-pub use super::connection::get_connection;
+pub use super::connection::{get_connection, run_blocking};
 pub use super::dashboard::{recompute_dashboard_stats, refresh_dashboard_stats};
 pub use super::duplicate_folders_materialized::{
     create_duplicate_folder_groups_table, refresh_duplicate_folder_groups,

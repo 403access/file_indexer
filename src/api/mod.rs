@@ -38,6 +38,23 @@ pub mod skipped;
 pub mod status;
 pub mod tree;
 
+/// Run synchronous SQLite / filesystem work off the async runtime so HTTP
+/// stays responsive under indexing and heavy queries.
+pub(crate) async fn offload<T, F>(f: F) -> Result<T, (axum::http::StatusCode, String)>
+where
+    T: Send + 'static,
+    F: FnOnce() -> Result<T, (axum::http::StatusCode, String)> + Send + 'static,
+{
+    tokio::task::spawn_blocking(f)
+        .await
+        .map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            )
+        })?
+}
+
 pub fn create_router(state: AppState) -> Router {
     Router::new()
         .route("/api/dashboard/refresh", post(refresh_handler))

@@ -2,6 +2,7 @@ use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 
+use crate::api::offload;
 use crate::modules::sql::database::get_connection;
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
@@ -69,6 +70,7 @@ pub async fn duplicate_folders_handler(
     State(state): State<AppState>,
     Query(params): Query<DuplicateFoldersParams>,
 ) -> Result<Json<DuplicateFoldersResponse>, (axum::http::StatusCode, String)> {
+    offload(move || {
     let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -252,13 +254,15 @@ pub async fn duplicate_folders_handler(
         page: params.page,
         per_page: params.per_page,
     }))
-}
+
+    }).await}
 
 /// Load files for a specific folder in a duplicate group.
 pub async fn folder_files_handler(
     State(state): State<AppState>,
     Query(params): Query<FolderFilesParams>,
 ) -> Result<Json<FolderFilesResponse>, (axum::http::StatusCode, String)> {
+    offload(move || {
     let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -305,7 +309,8 @@ pub async fn folder_files_handler(
     };
 
     Ok(Json(FolderFilesResponse { files }))
-}
+
+    }).await}
 
 #[derive(Deserialize)]
 pub struct FolderFilesParams {
@@ -373,6 +378,7 @@ pub struct AvailableFileTypesResponse {
 pub async fn available_file_types_handler(
     State(state): State<AppState>,
 ) -> Result<Json<AvailableFileTypesResponse>, (axum::http::StatusCode, String)> {
+    offload(move || {
     let _guard = IndexerPauseGuard::new(&state);
     let conn = get_connection(&state.db)
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -402,4 +408,5 @@ pub async fn available_file_types_handler(
     drop(stmt);
 
     Ok(Json(AvailableFileTypesResponse { types: set.into_iter().collect() }))
-}
+
+    }).await}
