@@ -15,6 +15,13 @@
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'dark');
         }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
       })();
     </script>
 

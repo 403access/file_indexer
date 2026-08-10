@@ -89,6 +89,7 @@
 
   /* Layout */
   --sidebar-width: 260px;
+  --topbar-height: 56px;
   --drawer-width: 460px;
   --drawer-width-lg: 560px;
   --main-max: 1280px;

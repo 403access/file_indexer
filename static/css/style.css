@@ -408,6 +408,302 @@ main {
 }
 
 /* =============================================================================
+   Topbar navigation layout
+   ============================================================================= */
+
+html[data-nav-layout="topbar"] .mobile-bar {
+  display: none;
+}
+
+html[data-nav-layout="topbar"] main {
+  margin-left: 0;
+  padding-top: calc(var(--topbar-height) + 1.25rem);
+}
+
+@media (min-width: 769px) {
+  html[data-nav-layout="topbar"] main {
+    margin-left: 0;
+    padding: calc(var(--topbar-height) + 1.25rem) 2rem 3rem;
+  }
+}
+
+@media (max-width: 768px) {
+  html[data-nav-layout="topbar"] main {
+    padding: calc(var(--topbar-height) + 0.75rem) 1rem 2.5rem;
+  }
+}
+
+.topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  height: var(--topbar-height);
+  background: var(--bg-sidebar);
+  color: var(--text-sidebar);
+  border-bottom: 1px solid var(--border-sidebar);
+  box-shadow: var(--shadow-xs);
+}
+
+.topbar__inner {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  height: 100%;
+  max-width: calc(var(--main-max) + 4rem);
+  margin: 0 auto;
+  padding: 0 1rem;
+  min-width: 0;
+}
+
+.topbar-brand {
+  flex-shrink: 0;
+}
+
+.topbar-brand .sidebar-brand__tag {
+  display: none;
+}
+
+.topbar-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-sidebar);
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  flex-shrink: 0;
+  transition:
+    background var(--duration-fast) var(--ease-in-out),
+    color var(--duration-fast) var(--ease-in-out),
+    border-color var(--duration-fast) var(--ease-in-out);
+}
+
+.topbar-toggle:hover {
+  background: var(--bg-sidebar-hover);
+  color: var(--text-sidebar-strong);
+  border-color: var(--border-sidebar);
+}
+
+.topbar-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.topbar-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  overscroll-behavior-x: contain;
+}
+
+.topbar-nav::-webkit-scrollbar {
+  display: none;
+}
+
+.topbar-nav__section {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
+  flex-shrink: 0;
+}
+
+.topbar-nav__section-label {
+  display: none;
+}
+
+.topbar-nav__divider {
+  width: 1px;
+  height: 1.25rem;
+  background: var(--border-sidebar);
+  margin: 0 0.35rem;
+  flex-shrink: 0;
+  opacity: 0.8;
+}
+
+.topbar-nav__item {
+  margin-bottom: 0;
+  padding: 0.4rem 0.55rem;
+  white-space: nowrap;
+}
+
+.topbar-nav__item.active::before {
+  left: 50%;
+  right: auto;
+  top: auto;
+  bottom: 0;
+  width: 40%;
+  height: 2px;
+  transform: translateX(-50%);
+  border-radius: 2px 2px 0 0;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.topbar-actions .sidebar-footer__status {
+  gap: 0.4rem;
+}
+
+.topbar-status-text {
+  font-size: var(--font-size-xs);
+  color: var(--text-sidebar-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.topbar-panel__close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-sidebar);
+  cursor: pointer;
+  padding: 0;
+  border-radius: var(--radius-sm);
+  line-height: 1;
+  flex-shrink: 0;
+  transition:
+    background var(--duration-fast) var(--ease-in-out),
+    color var(--duration-fast) var(--ease-in-out),
+    border-color var(--duration-fast) var(--ease-in-out);
+}
+
+.topbar-panel__close:hover {
+  background: var(--bg-sidebar-hover);
+  color: var(--text-sidebar-strong);
+  border-color: var(--border-sidebar);
+}
+
+.topbar-panel__close svg {
+  width: 18px;
+  height: 18px;
+}
+
+.topbar-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg-overlay);
+  z-index: 99;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--duration-normal) var(--ease-in-out),
+    visibility var(--duration-normal) var(--ease-in-out);
+  backdrop-filter: blur(2px);
+}
+
+.topbar-overlay.open {
+  opacity: 1;
+  visibility: visible;
+}
+
+.topbar-panel {
+  display: none;
+}
+
+/* Topbar — narrow viewports: hamburger + slide-out panel */
+@media (max-width: 1100px) {
+  .topbar-nav {
+    display: none;
+  }
+
+  .topbar-actions__theme {
+    display: none;
+  }
+
+  .topbar-status-text {
+    display: none;
+  }
+
+  .topbar-toggle {
+    display: inline-flex;
+  }
+
+  .topbar-panel {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: min(320px, 88vw);
+    height: 100vh;
+    background: var(--bg-sidebar);
+    color: var(--text-sidebar);
+    border-left: 1px solid var(--border-sidebar);
+    z-index: 110;
+    transform: translateX(100%);
+    transition: transform var(--duration-slow) var(--ease-out);
+    box-shadow: var(--shadow-drawer);
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  .topbar-panel.open {
+    transform: translateX(0);
+    pointer-events: auto;
+    visibility: visible;
+  }
+
+  .topbar-panel__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: 0.85rem 1rem;
+    min-height: var(--topbar-height);
+    border-bottom: 1px solid var(--border-sidebar);
+  }
+
+  .topbar-panel__title {
+    font-size: var(--font-size-md);
+    font-weight: 600;
+    color: var(--text-sidebar-strong);
+  }
+
+  .topbar-panel__nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.85rem 0.65rem;
+    overscroll-behavior: contain;
+  }
+
+  .topbar-panel__footer {
+    padding: 0.85rem 0.9rem;
+    border-top: 1px solid var(--border-sidebar);
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+}
+
+/* Hide brand tag on very small screens in topbar */
+@media (max-width: 480px) {
+  .topbar-brand .sidebar-brand__text {
+    display: none;
+  }
+}
+
+/* =============================================================================
    Folder sidebar (legacy class names → drawer tokens)
    Kept for app.js compatibility; prefer .drawer going forward
    ============================================================================= */

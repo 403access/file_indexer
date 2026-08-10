@@ -1,5 +1,6 @@
 /**
- * App navigation sidebar — single source of truth for menu structure.
+ * App navigation — single source of truth for menu structure.
+ * Supports sidebar and topbar layouts (preference: localStorage fi-nav-layout).
  * Injects into #sidebar-container on every page.
  */
 
@@ -56,6 +57,48 @@ const SIDEBAR_ITEMS = [
   },
 ];
 
+const NAV_LAYOUT_KEY = 'fi-nav-layout';
+const NAV_LAYOUTS = ['sidebar', 'topbar'];
+
+function getNavLayout() {
+  try {
+    const v = localStorage.getItem(NAV_LAYOUT_KEY);
+    return NAV_LAYOUTS.includes(v) ? v : 'sidebar';
+  } catch {
+    return 'sidebar';
+  }
+}
+
+function applyNavLayout(layout) {
+  const value = NAV_LAYOUTS.includes(layout) ? layout : 'sidebar';
+  document.documentElement.setAttribute('data-nav-layout', value);
+  try {
+    localStorage.setItem(NAV_LAYOUT_KEY, value);
+  } catch {
+    /* ignore */
+  }
+  document.dispatchEvent(
+    new CustomEvent('navlayoutchange', { detail: { layout: value } })
+  );
+  return value;
+}
+
+function setNavLayout(layout) {
+  const value = applyNavLayout(layout);
+  injectSidebar();
+  updateNavLayoutSwitcherUI(value);
+  return value;
+}
+
+function updateNavLayoutSwitcherUI(layout) {
+  const current = layout || getNavLayout();
+  document.querySelectorAll('[data-nav-layout-option]').forEach((btn) => {
+    const isActive = btn.getAttribute('data-nav-layout-option') === current;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+  });
+}
+
 function getActiveHref() {
   const path = window.location.pathname;
   if (path === '' || path === '/index.html') return '/';
@@ -68,6 +111,45 @@ function isActiveLink(href, activeHref) {
   return false;
 }
 
+function escapeSidebarHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function buildNavLink(link, activeHref, extraClass) {
+  const active = isActiveLink(link.href, activeHref) ? ' active' : '';
+  const icon = SIDEBAR_ICONS[link.icon] || '';
+  const cls = extraClass || 'nav-item';
+  return `          <a href="${link.href}" class="${cls}${active}"${active ? ' aria-current="page"' : ''}>
+            <span class="nav-item__icon" aria-hidden="true">${icon}</span>
+            <span class="nav-item__label">${link.label}</span>
+          </a>`;
+}
+
+function buildThemeSwitcher() {
+  return `<div class="theme-switcher" role="group" aria-label="Color theme">
+          <button type="button" class="theme-switcher__btn" data-theme-option="light" title="Light" aria-label="Light theme">
+            ${SIDEBAR_ICONS.sun}
+          </button>
+          <button type="button" class="theme-switcher__btn" data-theme-option="dark" title="Dark" aria-label="Dark theme">
+            ${SIDEBAR_ICONS.moon}
+          </button>
+          <button type="button" class="theme-switcher__btn" data-theme-option="system" title="System" aria-label="System theme">
+            ${SIDEBAR_ICONS.system}
+          </button>
+        </div>`;
+}
+
+function buildStatusBlock(textClass) {
+  return `<div class="sidebar-footer__status">
+            <span id="status-dot" class="status-dot idle" title="Idle"></span>
+            <span class="${textClass || 'sidebar-footer-text'}">System idle</span>
+          </div>`;
+}
+
 function buildSidebar() {
   const activeHref = getActiveHref();
   const pageTitle =
@@ -75,14 +157,7 @@ function buildSidebar() {
 
   const sectionsHtml = SIDEBAR_ITEMS.map(({ section, links }) => {
     const linksHtml = links
-      .map((link) => {
-        const active = isActiveLink(link.href, activeHref) ? ' active' : '';
-        const icon = SIDEBAR_ICONS[link.icon] || '';
-        return `          <a href="${link.href}" class="nav-item${active}"${active ? ' aria-current="page"' : ''}>
-            <span class="nav-item__icon" aria-hidden="true">${icon}</span>
-            <span class="nav-item__label">${link.label}</span>
-          </a>`;
-      })
+      .map((link) => buildNavLink(link, activeHref))
       .join('\n');
     return `        <div class="nav-section">
           <div class="nav-section-title">${section}</div>
@@ -115,53 +190,122 @@ ${sectionsHtml}
       </nav>
       <div class="sidebar-footer">
         <div class="sidebar-footer__row">
-          <div class="sidebar-footer__status">
-            <span id="status-dot" class="status-dot idle" title="Idle"></span>
-            <span class="sidebar-footer-text">System idle</span>
-          </div>
+          ${buildStatusBlock()}
         </div>
-        <div class="theme-switcher" role="group" aria-label="Color theme">
-          <button type="button" class="theme-switcher__btn" data-theme-option="light" title="Light" aria-label="Light theme">
-            ${SIDEBAR_ICONS.sun}
-          </button>
-          <button type="button" class="theme-switcher__btn" data-theme-option="dark" title="Dark" aria-label="Dark theme">
-            ${SIDEBAR_ICONS.moon}
-          </button>
-          <button type="button" class="theme-switcher__btn" data-theme-option="system" title="System" aria-label="System theme">
-            ${SIDEBAR_ICONS.system}
-          </button>
-        </div>
+        ${buildThemeSwitcher()}
       </div>
     </aside>
     <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>`;
 }
 
-function escapeSidebarHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+function buildTopbar() {
+  const activeHref = getActiveHref();
+  const pageTitle =
+    document.title?.replace(/\s*[-–|].*$/, '').trim() || 'File Indexer';
+
+  const sectionsHtml = SIDEBAR_ITEMS.map(({ section, links }, idx) => {
+    const linksHtml = links
+      .map((link) => buildNavLink(link, activeHref, 'nav-item topbar-nav__item'))
+      .join('\n');
+    const divider =
+      idx > 0 ? '<span class="topbar-nav__divider" aria-hidden="true"></span>' : '';
+    return `${divider}
+        <div class="topbar-nav__section" data-section="${escapeSidebarHtml(section)}">
+          <span class="topbar-nav__section-label">${section}</span>
+${linksHtml}
+        </div>`;
+  }).join('\n');
+
+  // Mobile panel: full list with section titles (same structure as sidebar)
+  const mobileSectionsHtml = SIDEBAR_ITEMS.map(({ section, links }) => {
+    const linksHtml = links
+      .map((link) => buildNavLink(link, activeHref))
+      .join('\n');
+    return `        <div class="nav-section">
+          <div class="nav-section-title">${section}</div>
+${linksHtml}
+        </div>`;
+  }).join('\n');
+
+  return `
+    <header class="topbar" id="topbar" aria-label="Main navigation">
+      <div class="topbar__inner">
+        <a href="/" class="topbar-brand sidebar-brand">
+          <span class="sidebar-brand__mark" aria-hidden="true">${SIDEBAR_ICONS.brand}</span>
+          <span class="sidebar-brand__text">
+            <span class="sidebar-brand__title">File Indexer</span>
+            <span class="sidebar-brand__tag">Local library</span>
+          </span>
+        </a>
+        <nav class="topbar-nav" aria-label="Primary">
+${sectionsHtml}
+        </nav>
+        <div class="topbar-actions">
+          ${buildStatusBlock('topbar-status-text')}
+          <div class="topbar-actions__theme">
+            ${buildThemeSwitcher()}
+          </div>
+          <button type="button" class="topbar-toggle" onclick="toggleTopbarMenu()" aria-label="Open menu" aria-expanded="false" aria-controls="topbar-panel">
+            ${SIDEBAR_ICONS.menu}
+          </button>
+        </div>
+      </div>
+      <div class="topbar-panel" id="topbar-panel">
+        <div class="topbar-panel__header">
+          <span class="topbar-panel__title">${escapeSidebarHtml(pageTitle)}</span>
+          <button type="button" class="topbar-panel__close" onclick="toggleTopbarMenu()" aria-label="Close menu">
+            ${SIDEBAR_ICONS.menu}
+          </button>
+        </div>
+        <nav class="topbar-panel__nav">
+${mobileSectionsHtml}
+        </nav>
+        <div class="topbar-panel__footer">
+          ${buildThemeSwitcher()}
+        </div>
+      </div>
+    </header>
+    <div class="topbar-overlay" id="topbar-overlay" onclick="toggleTopbarMenu()"></div>`;
+}
+
+function wireStatusText(container) {
+  const dot = document.getElementById('status-dot');
+  if (!dot) return;
+  const textEls = container.querySelectorAll('.sidebar-footer-text, .topbar-status-text');
+  if (!textEls.length) return;
+  const sync = () => {
+    let label = 'System idle';
+    if (dot.classList.contains('indexing')) label = 'Indexing…';
+    else if (dot.classList.contains('error')) label = 'Unreachable';
+    textEls.forEach((el) => {
+      el.textContent = label;
+    });
+  };
+  const obs = new MutationObserver(sync);
+  obs.observe(dot, { attributes: true, attributeFilter: ['class', 'title'] });
+  sync();
 }
 
 function injectSidebar() {
   const container = document.getElementById('sidebar-container');
   if (!container) return;
-  container.innerHTML = buildSidebar();
 
-  // Reflect live status text next to the dot
-  const dot = document.getElementById('status-dot');
-  if (dot) {
-    const textEl = container.querySelector('.sidebar-footer-text');
-    const sync = () => {
-      if (!textEl) return;
-      if (dot.classList.contains('indexing')) textEl.textContent = 'Indexing…';
-      else if (dot.classList.contains('error')) textEl.textContent = 'Unreachable';
-      else textEl.textContent = 'System idle';
-    };
-    const obs = new MutationObserver(sync);
-    obs.observe(dot, { attributes: true, attributeFilter: ['class', 'title'] });
-    sync();
+  const layout = getNavLayout();
+  applyNavLayout(layout);
+  document.body.style.overflow = '';
+
+  container.innerHTML = layout === 'topbar' ? buildTopbar() : buildSidebar();
+  wireStatusText(container);
+  updateNavLayoutSwitcherUI(layout);
+
+  // Keep theme switcher active state in sync after re-inject
+  if (window.Theme && typeof window.Theme.get === 'function') {
+    const pref = window.Theme.get().preference;
+    document.querySelectorAll('[data-theme-option]').forEach((btn) => {
+      const isActive = btn.getAttribute('data-theme-option') === pref;
+      btn.classList.toggle('active', isActive);
+      btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    });
   }
 }
 
@@ -175,11 +319,54 @@ function toggleSidebar() {
   document.body.style.overflow = !isOpen ? 'hidden' : '';
 }
 
-document.addEventListener('DOMContentLoaded', injectSidebar);
+function toggleTopbarMenu() {
+  const panel = document.getElementById('topbar-panel');
+  const overlay = document.getElementById('topbar-overlay');
+  const toggle = document.querySelector('.topbar-toggle');
+  if (!panel) return;
+  const isOpen = panel.classList.contains('open');
+  panel.classList.toggle('open', !isOpen);
+  if (overlay) overlay.classList.toggle('open', !isOpen);
+  if (toggle) toggle.setAttribute('aria-expanded', !isOpen ? 'true' : 'false');
+  document.body.style.overflow = !isOpen ? 'hidden' : '';
+}
 
-// Close mobile sidebar on Escape
-document.addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape') return;
+function closeMobileNav() {
   const sidebar = document.getElementById('sidebar');
   if (sidebar?.classList.contains('open')) toggleSidebar();
+  const panel = document.getElementById('topbar-panel');
+  if (panel?.classList.contains('open')) toggleTopbarMenu();
+}
+
+// Apply layout attribute early (also set from inline head script)
+applyNavLayout(getNavLayout());
+
+document.addEventListener('DOMContentLoaded', () => {
+  injectSidebar();
+  updateNavLayoutSwitcherUI(getNavLayout());
 });
+
+// Close mobile nav on Escape
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  closeMobileNav();
+});
+
+// Delegate clicks on nav-layout switcher buttons
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-nav-layout-option]');
+  if (!btn) return;
+  e.preventDefault();
+  setNavLayout(btn.getAttribute('data-nav-layout-option'));
+});
+
+window.NavLayout = {
+  get: getNavLayout,
+  set: setNavLayout,
+  apply: applyNavLayout,
+  layouts: NAV_LAYOUTS.slice(),
+};
+
+// Keep legacy global for onclick handlers
+window.toggleSidebar = toggleSidebar;
+window.toggleTopbarMenu = toggleTopbarMenu;

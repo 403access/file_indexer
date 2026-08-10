@@ -15,6 +15,13 @@
         } catch (e) {
           document.documentElement.setAttribute('data-theme', 'dark');
         }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
       })();
     </script>
 
@@ -212,6 +219,23 @@
                 <p class="page-header__subtitle">Configure indexing and background processes</p>
             </div>
         </header>
+
+        <div class="settings-card">
+            <h2>Appearance</h2>
+            <p class="desc">Choose how main navigation is displayed. Applies immediately on this device.</p>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.6rem 0.75rem;background:var(--bg-muted);border-radius:var(--radius-sm);border:1px solid var(--border-subtle);flex-wrap:wrap;">
+                    <div>
+                        <strong style="font-size:0.9rem;color:var(--text-primary);">Navigation layout</strong>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">Sidebar on the left, or a horizontal top bar.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Navigation layout">
+                        <button type="button" class="segmented__btn" data-nav-layout-option="sidebar">Sidebar</button>
+                        <button type="button" class="segmented__btn" data-nav-layout-option="topbar">Top bar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <div class="settings-card">
             <h2>Background Processes</h2>
