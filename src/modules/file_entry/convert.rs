@@ -206,3 +206,11 @@ fn system_time_to_unix_secs(time: std::io::Result<std::time::SystemTime>) -> Opt
         .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
         .map(|d| d.as_secs())
 }
+
+/// Sub-second Unix timestamp (fractional seconds). Used as the reconcile key:
+/// a directory whose stored mtime matches its disk mtime needs no re-read.
+pub fn system_time_to_unix_f64(time: std::io::Result<std::time::SystemTime>) -> Option<f64> {
+    time.ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs_f64())
+}

@@ -1,4 +1,6 @@
 use std::env::temp_dir;
+use std::fs;
+use std::io::Write;
 
 use crate::modules::commands::command_index_files::index_directory;
 use crate::modules::commands::command_search_file::{OrderKind, PatternKind, TargetKind};
@@ -232,6 +234,172 @@ fn index_static_sample_directory_matches_dynamic() {
 
     let indexed_file_count = count_files(&db);
     assert_eq!(static_file_count as i64, indexed_file_count);
+
+    cleanup(&db, &temp);
+}
+
+// --- Re-scan / reconcile behavior ---
+
+/// Re-indexing without changes keeps the tree intact and leaves rows untouched.
+#[test]
+fn reindex_unchanged_tree_keeps_entries() {
+    let temp = create_test_data();
+    let db = setup(&temp);
+    assert_eq!(count_all(&db), 32);
+
+    let before: Vec<String> = {
+        let conn = get_connection(db.to_str().unwrap()).unwrap();
+        let mut stmt = conn.prepare("SELECT path FROM files ORDER BY path").unwrap();
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    };
+    let first_hashes: Vec<Option<String>> = {
+        let conn = get_connection(db.to_str().unwrap()).unwrap();
+        let mut stmt = conn
+            .prepare("SELECT hash FROM files WHERE is_file = 1 ORDER BY path")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |r| r.get::<_, Option<String>>(0))
+            .unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    };
+
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+
+    assert_eq!(count_all(&db), 32);
+    let after: Vec<String> = {
+        let conn = get_connection(db.to_str().unwrap()).unwrap();
+        let mut stmt = conn.prepare("SELECT path FROM files ORDER BY path").unwrap();
+        let rows = stmt.query_map([], |r| r.get::<_, String>(0)).unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    };
+    assert_eq!(before, after, "unchanged re-scan should not alter rows");
+
+    let after_hashes: Vec<Option<String>> = {
+        let conn = get_connection(db.to_str().unwrap()).unwrap();
+        let mut stmt = conn
+            .prepare("SELECT hash FROM files WHERE is_file = 1 ORDER BY path")
+            .unwrap();
+        let rows = stmt
+            .query_map([], |r| r.get::<_, Option<String>>(0))
+            .unwrap();
+        rows.map(|r| r.unwrap()).collect()
+    };
+    assert_eq!(first_hashes, after_hashes, "hashes should be preserved");
+
+    cleanup(&db, &temp);
+}
+
+/// Adding a file to an already-indexed folder is picked up on the next run.
+#[test]
+fn reindex_picks_up_new_file() {
+    let temp = create_test_data();
+    let db = setup(&temp);
+    assert_eq!(count_files(&db), 20);
+
+    let mut f = fs::File::create(temp.join("file-new")).unwrap();
+    f.write_all(b"brand new").unwrap();
+    f.flush().unwrap();
+
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+    assert_eq!(count_files(&db), 21);
+
+    let results = search(&temp, &db, "file-new", TargetKind::Files, PatternKind::Exact, OrderKind::Asc);
+    assert_eq!(results.len(), 1);
+
+    cleanup(&db, &temp);
+}
+
+/// Removing a file is reflected in the DB on the next run.
+#[test]
+fn reindex_removes_deleted_file() {
+    let temp = create_test_data();
+    let db = setup(&temp);
+    assert_eq!(count_files(&db), 20);
+
+    fs::remove_file(temp.join("folder-f/file-f")).unwrap();
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+
+    assert_eq!(count_files(&db), 19);
+    let results = search(&temp, &db, "file-f", TargetKind::Files, PatternKind::Exact, OrderKind::Asc);
+    assert_eq!(results.len(), 0);
+
+    cleanup(&db, &temp);
+}
+
+/// Removing a folder removes the folder and its whole subtree from the DB.
+#[test]
+fn reindex_removes_deleted_folder_tree() {
+    let temp = create_test_data();
+    let db = setup(&temp);
+
+    fs::remove_dir_all(temp.join("folder-c")).unwrap();
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+
+    // folder-c subtree: folder-c + folder-d + folder-d/folder-a + folder-d/folder-b = 4 dirs;
+    // files in it: file-a-1, file-c-1, file-c-2, file-c-3, folder-d/folder-a/file-a-1,
+    // folder-d/folder-a/file-a-2, folder-d/folder-b/file-b-1 = 7 files
+    assert_eq!(count_dirs(&db), 8);
+    assert_eq!(count_files(&db), 13);
+
+    let conn = get_connection(db.to_str().unwrap()).unwrap();
+    let remaining: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM files WHERE path LIKE ?1",
+            [format!("{}%", temp.join("folder-c").to_str().unwrap())],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(remaining, 0, "folder-c subtree should be fully removed");
+
+    cleanup(&db, &temp);
+}
+
+/// A folder whose mtime changed (re-created) gets re-read and re-traversed.
+#[test]
+fn interrupted_folder_is_resumed() {
+    let temp = create_test_data();
+    let db = setup(&temp);
+
+    // Simulate an interrupted index: un-mark one folder as traversed.
+    {
+        let conn = get_connection(db.to_str().unwrap()).unwrap();
+        conn.execute(
+            "UPDATE files SET traversed = 0 WHERE path = ?1",
+            [temp.join("folder-e").to_str().unwrap()],
+        )
+        .unwrap();
+    }
+
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+
+    let conn = get_connection(db.to_str().unwrap()).unwrap();
+    let traversed: i32 = conn
+        .query_row(
+            "SELECT traversed FROM files WHERE path = ?1",
+            [temp.join("folder-e").to_str().unwrap()],
+            |r| r.get(0),
+        )
+        .unwrap();
+    assert_eq!(traversed, 1, "interrupted folder should be re-marked traversed");
+    assert_eq!(count_all(&db), 32);
+
+    cleanup(&db, &temp);
+}
+
+/// A new empty folder is indexed, marked traversed, and kept by re-runs.
+#[test]
+fn reindex_picks_up_new_folder() {
+    let temp = create_test_data();
+    let db = setup(&temp);
+    assert_eq!(count_dirs(&db), 12);
+
+    fs::create_dir(temp.join("folder-new")).unwrap();
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+    assert_eq!(count_dirs(&db), 13);
+
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+    assert_eq!(count_dirs(&db), 13, "fresh empty folder stays indexed");
 
     cleanup(&db, &temp);
 }

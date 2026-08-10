@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -7,11 +8,12 @@ use indicatif::ProgressBar;
 use crate::{
     modules::{
         file_entry::_types::FileEntry,
+        file_entry::convert::system_time_to_unix_f64,
         logging,
         processes,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{get_connection, get_ignore_rules, get_child_directories, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, is_directory_indexed, mark_directory_traversed, update_duplicate_hashes_incremental, IgnoreRule},
+        sql::database::{delete_directory_tree, delete_stale_children, get_connection, get_ignore_rules, get_child_directories, get_directory_metadata, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, mark_directory_traversed_and_modified, update_duplicate_hashes_incremental, upsert_file, IgnoreRule},
     },
     states::app_state,
 };
@@ -21,7 +23,8 @@ struct InsertResult {
     file_count: usize,
     folder_count: usize,
     skipped: Option<(String, String)>,
-    inserted_hashes: Vec<String>,
+    // Hashes that need a duplicate-hash recheck (newly inserted or changed).
+    rechecked_hashes: Vec<String>,
 }
 
 /// Index `root_dir` into the database.
@@ -113,43 +116,85 @@ pub fn index_directory(
     let mut names: Vec<(String, i64)> = vec![];
     let mut paths: Vec<String> = vec![root];
     let mut total_entries = 0usize;
+    let mut up_to_date_dirs = 0usize;
+    let mut reconciled_dirs = 0usize;
     loop {
         let mut new_paths: Vec<String> = Vec::new();
         for path in &paths {
             // Honor pause/stop from web traffic and the processes UI
             wait_if_paused(pause_flag.as_ref(), process_id)?;
 
-            // Check if this directory was already traversed
-            let already_traversed = {
-                let conn = get_connection(db_path).map_err(|e| {
-                    logging::error(&format!("Failed to connect to database: {}", e));
-                    io::Error::new(io::ErrorKind::Other, e.to_string())
-                })?;
-                is_directory_indexed(&conn, path)
+            let trimmed = path.trim_end_matches('/').to_string();
+
+            // Disk mtime decides whether this folder's contents could have changed.
+            let disk_mtime = match std::fs::metadata(&trimmed) {
+                Ok(md) => system_time_to_unix_f64(md.modified()),
+                Err(_) => {
+                    // Folder no longer exists on disk — purge it (and its subtree).
+                    let mut conn = get_connection(db_path).map_err(|e| {
+                        logging::error(&format!("Failed to connect to database: {}", e));
+                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                    })?;
+                    let tx = conn.transaction().map_err(|e| {
+                        logging::error(&format!("Failed to start transaction: {}", e));
+                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                    })?;
+                    let removed = delete_directory_tree(&tx, &trimmed).map_err(|e| {
+                        logging::error(&format!("Failed to purge '{}': {}", trimmed, e));
+                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                    })?;
+                    tx.commit().map_err(|e| {
+                        logging::error(&format!("Failed to commit transaction: {}", e));
+                        io::Error::new(io::ErrorKind::Other, e.to_string())
+                    })?;
+                    if removed > 0 {
+                        logging::info(&format!(
+                            "Removed '{}' from index (folder gone on disk, {} rows)",
+                            trimmed, removed
+                        ));
+                    }
+                    continue;
+                }
             };
 
-            if already_traversed {
-                // Directory already processed — queue its children from DB
+            // If this folder was fully indexed and its mtime is unchanged, it is
+            // still current — queue its known subfolders and move on silently.
+            let stored = {
                 let conn = get_connection(db_path).map_err(|e| {
                     logging::error(&format!("Failed to connect to database: {}", e));
                     io::Error::new(io::ErrorKind::Other, e.to_string())
                 })?;
-                let children = get_child_directories(&conn, path.trim_end_matches('/')).unwrap_or_default();
-                for child in children {
-                    let child_with_slash = format!("{}/", child);
-                    let child_name = child_with_slash.trim_start_matches(path.trim_end_matches('/')).trim_start_matches('/').trim_end_matches('/');
-                    let parent_path = std::path::Path::new(path.trim_end_matches('/'));
-                    let should_skip = ignore_rules.iter().any(|rule| {
-                        rule.name == child_name && rule.should_skip(parent_path)
-                    });
-                    if !should_skip {
-                        new_paths.push(child_with_slash);
+                get_directory_metadata(&conn, &trimmed).unwrap_or(None)
+            };
+            if let Some(meta) = stored {
+                if meta.traversed && meta.modified == disk_mtime {
+                    let children = {
+                        let conn = get_connection(db_path).map_err(|e| {
+                            logging::error(&format!("Failed to connect to database: {}", e));
+                            io::Error::new(io::ErrorKind::Other, e.to_string())
+                        })?;
+                        get_child_directories(&conn, &trimmed).unwrap_or_default()
+                    };
+                    for child in children {
+                        let child_with_slash = format!("{}/", child);
+                        let child_name = child_with_slash
+                            .trim_start_matches(&trimmed)
+                            .trim_start_matches('/')
+                            .trim_end_matches('/');
+                        let parent_path = std::path::Path::new(&trimmed);
+                        let should_skip = ignore_rules.iter().any(|rule| {
+                            rule.name == child_name && rule.should_skip(parent_path)
+                        });
+                        if !should_skip {
+                            new_paths.push(child_with_slash);
+                        }
                     }
+                    up_to_date_dirs += 1;
+                    continue;
                 }
-                logging::debug(&format!("Resume: skipping already-traversed '{}'", path.trim_end_matches('/')));
-                continue;
             }
 
+            // Contents may have changed (or folder is new/untraversed) — re-read.
             let result = {
                 let mut conn = get_connection(db_path).map_err(|e| {
                     logging::error(&format!("Failed to connect to database: {}", e));
@@ -178,10 +223,10 @@ pub fn index_directory(
                     io::Error::new(io::ErrorKind::Other, e.to_string())
                 })?;
 
-                // Incrementally update duplicate hashes for newly inserted files
+                // Incrementally update duplicate hashes for new/changed files
                 if let Ok(ref r) = result {
-                    if !r.inserted_hashes.is_empty() {
-                        update_duplicate_hashes_incremental(&conn, &r.inserted_hashes);
+                    if !r.rechecked_hashes.is_empty() {
+                        update_duplicate_hashes_incremental(&conn, &r.rechecked_hashes);
                     }
                 }
 
@@ -190,7 +235,8 @@ pub fn index_directory(
 
             match result {
                 Ok(r) => {
-                    // Mark this directory as traversed
+                    // Mark this directory as traversed and record its mtime so
+                    // subsequent runs can skip it when nothing changed.
                     {
                         let mut conn = get_connection(db_path).map_err(|e| {
                             logging::error(&format!("Failed to connect to database: {}", e));
@@ -200,7 +246,7 @@ pub fn index_directory(
                             logging::error(&format!("Failed to start transaction: {}", e));
                             io::Error::new(io::ErrorKind::Other, e.to_string())
                         })?;
-                        let _ = mark_directory_traversed(&tx, path.trim_end_matches('/'));
+                        let _ = mark_directory_traversed_and_modified(&tx, &trimmed, disk_mtime);
                         tx.commit().map_err(|e| {
                             logging::error(&format!("Failed to commit transaction: {}", e));
                             io::Error::new(io::ErrorKind::Other, e.to_string())
@@ -209,13 +255,14 @@ pub fn index_directory(
 
                     logging::info(&format!(
                         "Indexed '{}' — {} files, {} folders",
-                        path.trim_end_matches('/'),
+                        trimmed,
                         r.file_count,
                         r.folder_count
                     ));
+                    reconciled_dirs += 1;
                     total_entries += r.file_count + r.folder_count;
                     for d in &r.directories {
-                        let parent_path = std::path::Path::new(path.trim_end_matches('/'));
+                        let parent_path = std::path::Path::new(&trimmed);
                         if let Some(rule) = ignore_rules
                             .iter()
                             .find(|rule| rule.name == d.name && rule.should_skip(parent_path))
@@ -227,7 +274,7 @@ pub fn index_directory(
                             ));
                             continue;
                         }
-                        new_paths.push(format!("{}/{}/", path.trim_end_matches('/'), d.name));
+                        new_paths.push(format!("{}/{}/", trimmed, d.name));
                     }
                 }
                 Err(e) => {
@@ -244,6 +291,13 @@ pub fn index_directory(
 
         paths.clear();
         paths.extend(new_paths);
+    }
+
+    if up_to_date_dirs > 0 {
+        logging::info(&format!(
+            "{} directories already current (mtime unchanged), {} reconciled",
+            up_to_date_dirs, reconciled_dirs
+        ));
     }
     Ok(())
 }
@@ -306,18 +360,25 @@ fn get_and_insert_entries(
     let mut directories: Vec<FileEntry> = Vec::new();
     let mut file_count = 0usize;
     let mut folder_count = 0usize;
-    let mut inserted_hashes: Vec<String> = Vec::new();
+    let mut rechecked_hashes: Vec<String> = Vec::new();
 
     for entry in &entries {
         let file_name_id = get_file_id(transaction, names, &entry.name);
 
-        match insert_file(&transaction, &entry, file_name_id.unwrap(), parent_path) {
-            Ok(id) => {
-                if id > 0 {
-                    // New file inserted (not a duplicate key)
+        match upsert_file(&transaction, &entry, file_name_id.unwrap(), parent_path) {
+            Ok(result) => {
+                if result.inserted {
+                    // New row inserted
+                    if let (false, Some(hash)) = (entry.is_directory, entry.hash.as_ref()) {
+                        if !hash.is_empty() {
+                            rechecked_hashes.push(hash.clone());
+                        }
+                    }
+                } else if result.hash_updated {
+                    // Existing row whose hash changed (content updated)
                     if let Some(hash) = &entry.hash {
                         if !hash.is_empty() {
-                            inserted_hashes.push(hash.clone());
+                            rechecked_hashes.push(hash.clone());
                         }
                     }
                 }
@@ -340,12 +401,28 @@ fn get_and_insert_entries(
         }
     }
 
+    // Remove rows for children that no longer exist on disk.
+    let keep_paths: HashSet<String> = entries
+        .iter()
+        .filter_map(|e| e.path.clone())
+        .collect();
+    if let Some(parent) = parent_path {
+        let removed = delete_stale_children(transaction, parent, &keep_paths)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e.to_string()))?;
+        if removed > 0 {
+            logging::debug(&format!(
+                "Purged {} stale rows from '{}' (no longer on disk)",
+                removed, parent
+            ));
+        }
+    }
+
     Ok(InsertResult {
         directories,
         file_count,
         folder_count,
         skipped: None,
-        inserted_hashes,
+        rechecked_hashes,
     })
 }
 
