@@ -18,6 +18,7 @@ pub struct DuplicateFoldersParams {
     pub min_shared: Option<u32>,
     #[serde(default)]
     pub min_folders: Option<u32>,
+    /// Reserved: materialization does not store per-hash extensions yet.
     #[serde(default)]
     pub file_types: Option<String>,
     #[serde(default = "default_sort")]
@@ -26,10 +27,18 @@ pub struct DuplicateFoldersParams {
     pub order: String,
 }
 
-fn default_page() -> u32 { 1 }
-fn default_per_page() -> u32 { 20 }
-fn default_sort() -> String { "shared".to_string() }
-fn default_order() -> String { "desc".to_string() }
+fn default_page() -> u32 {
+    1
+}
+fn default_per_page() -> u32 {
+    20
+}
+fn default_sort() -> String {
+    "shared".to_string()
+}
+fn default_order() -> String {
+    "desc".to_string()
+}
 
 #[derive(Serialize)]
 pub struct FolderInfo {
@@ -50,6 +59,9 @@ pub struct DuplicateFoldersResponse {
     pub total_groups: usize,
     pub page: u32,
     pub per_page: u32,
+    /// True when the materialization table is empty (run a refresh process).
+    #[serde(default)]
+    pub needs_refresh: bool,
 }
 
 #[derive(Serialize)]
@@ -66,196 +78,263 @@ pub struct FolderFile {
     pub is_duplicate: bool,
 }
 
+/// Serve duplicate folder groups from the **materialized** table.
+///
+/// Previously this recomputed clusters from every duplicate file on each request
+/// (O(n²) over folders) which hung the API on large indexes.
 pub async fn duplicate_folders_handler(
     State(state): State<AppState>,
     Query(params): Query<DuplicateFoldersParams>,
 ) -> Result<Json<DuplicateFoldersResponse>, (axum::http::StatusCode, String)> {
     offload(move || {
-    let _guard = IndexerPauseGuard::new(&state);
-    let conn = get_connection(&state.db)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let _guard = IndexerPauseGuard::new(&state);
+        let conn = get_connection(&state.db).map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            )
+        })?;
 
-    // Single query: get all files that have duplicate hashes, with their folder info
-    let mut stmt = conn.prepare(
-        "SELECT f.path, fn.name, f.hash
-         FROM files f
-         JOIN file_names fn ON f.file_name_id = fn.id
-         WHERE f.hash IN (SELECT hash FROM duplicate_hashes)
-           AND f.hash IS NOT NULL AND f.hash != ''"
-    ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let mut folder_hashes: std::collections::HashMap<String, std::collections::HashSet<String>> =
-        std::collections::HashMap::new();
-    let mut folder_names: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-    let mut folder_file_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
-    let mut hash_extension: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-
-    let rows = stmt.query_map([], |row| {
-        Ok((
-            row.get::<_, String>(0)?,
-            row.get::<_, String>(1)?,
-            row.get::<_, String>(2)?,
-        ))
-    }).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    for row in rows {
-        let (path, name, hash) = row.map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let normalized = path.replace("//", "/");
-        // Remember the extension of this duplicate file (for file-type filtering)
-        let ext = name.rsplit_once('.').map(|(_, e)| e.to_lowercase()).unwrap_or_default();
-        hash_extension.entry(hash.clone()).or_insert(ext);
-        if let Some(parent) = normalized.rsplit_once('/') {
-            let folder = parent.0.to_string();
-            folder_hashes.entry(folder.clone()).or_default().insert(hash.clone());
-            if let Some(display) = folder.rsplit_once('/') {
-                folder_names.entry(folder.clone()).or_insert_with(|| display.1.to_string());
-            }
-            *folder_file_counts.entry(folder.clone()).or_insert(0) += 1;
-        }
-    }
-    drop(stmt);
-
-    // Phase 3: Group folders by shared hashes
-    let mut folder_list: Vec<(String, std::collections::HashSet<String>)> = folder_hashes.into_iter().collect();
-    folder_list.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
-
-    let mut groups: Vec<Vec<(String, std::collections::HashSet<String>)>> = Vec::new();
-    let mut used: std::collections::HashSet<usize> = std::collections::HashSet::new();
-
-    for i in 0..folder_list.len() {
-        if used.contains(&i) {
-            continue;
-        }
-        let mut group = vec![folder_list[i].clone()];
-        used.insert(i);
-
-        for j in (i + 1)..folder_list.len() {
-            if used.contains(&j) {
-                continue;
-            }
-            let shares = group.iter().any(|g| g.1.intersection(&folder_list[j].1).next().is_some());
-            if shares {
-                group.push(folder_list[j].clone());
-                used.insert(j);
-            }
-        }
-
-        if group.len() >= 2 {
-            groups.push(group);
-        }
-    }
-
-    // Build metadata for every group so we can filter and sort before paginating
-    struct GroupMeta {
-        idx: usize,
-        shared_count: usize,
-        folder_count: usize,
-        name: String,
-        file_count: usize,
-    }
-
-    let q = params.q.as_ref().map(|s| s.to_lowercase());
-    let min_shared = params.min_shared.unwrap_or(0) as usize;
-    let min_folders = params.min_folders.unwrap_or(0) as usize;
-
-    // Parsed list of requested file extensions for filtering (lowercased)
-    let file_types: std::collections::HashSet<String> = params.file_types.as_ref()
-        .map(|s| s.split(',').map(|x| x.trim().to_lowercase()).filter(|x| !x.is_empty()).collect())
-        .unwrap_or_default();
-
-    let mut metas: Vec<GroupMeta> = Vec::new();
-    for (gi, group) in groups.iter().enumerate() {
-        // Number of hashes shared across every folder in the group
-        let shared_count = if let Some(first) = group.first() {
-            group.iter().skip(1).fold(first.1.clone(), |acc, f| {
-                acc.intersection(&f.1).cloned().collect()
-            }).len()
+        let page = params.page.max(1);
+        let per_page = params.per_page.clamp(1, 100);
+        let offset = (page - 1).saturating_mul(per_page);
+        let min_shared = params.min_shared.unwrap_or(0) as i64;
+        let min_folders = params.min_folders.unwrap_or(2).max(2) as i64; // groups need ≥2 folders
+        // If client sends min_folders=0 treat as 2
+        let min_folders = if params.min_folders.unwrap_or(0) == 0 {
+            2
         } else {
-            0
+            min_folders
         };
-        let folder_count = group.len();
-        let file_count: usize = group.iter()
-            .map(|(path, _)| folder_file_counts.get(path).copied().unwrap_or(0))
-            .sum();
-        let name = group.get(0)
-            .and_then(|(path, _)| folder_names.get(path))
-            .cloned()
-            .unwrap_or_default();
 
-        // Text filter: any folder name or path must contain the query
-        if let Some(q) = &q {
-            let matched = group.iter().any(|(path, _)| {
-                let nm = folder_names.get(path).map(|s| s.to_lowercase()).unwrap_or_default();
-                let p = path.to_lowercase();
-                nm.contains(q) || p.contains(q)
-            });
-            if !matched {
-                continue;
-            }
-        }
+        let q = params
+            .q
+            .as_ref()
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+        let q_pat = q.as_ref().map(|s| format!("%{s}%"));
 
-        // File-type filter: at least one duplicate file in the group must match
-        // one of the requested extensions
-        if !file_types.is_empty() {
-            let has_match = group.iter().any(|(_, hashes)| hashes.iter().any(|h| {
-                hash_extension.get(h).map(|e| file_types.contains(e)).unwrap_or(false)
+        // Quick empty check
+        let row_count: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM duplicate_folder_groups",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap_or(0);
+
+        if row_count == 0 {
+            return Ok(Json(DuplicateFoldersResponse {
+                groups: vec![],
+                total_groups: 0,
+                page,
+                per_page,
+                needs_refresh: true,
             }));
-            if !has_match {
-                continue;
+        }
+
+        let order = if params.order == "asc" { "ASC" } else { "DESC" };
+        let sort_expr = match params.sort.as_str() {
+            "folders" => "folder_count",
+            "name" => "name COLLATE NOCASE",
+            "files" => "file_count",
+            _ => "shared_count",
+        };
+
+        // Filter groups that match q on any folder path/name, then aggregate.
+        // Using a CTE keeps the plan readable and lets SQLite paginate groups only.
+        let (count_sql, list_sql) = if q_pat.is_some() {
+            (
+                format!(
+                    "SELECT COUNT(*) FROM (
+                        SELECT g.group_id
+                        FROM duplicate_folder_groups g
+                        WHERE g.group_id IN (
+                            SELECT group_id FROM duplicate_folder_groups
+                            WHERE folder_name LIKE ?1 COLLATE NOCASE
+                               OR folder_path LIKE ?1 COLLATE NOCASE
+                        )
+                        GROUP BY g.group_id
+                        HAVING MAX(g.shared_count) >= ?2 AND COUNT(*) >= ?3
+                    )"
+                ),
+                format!(
+                    "SELECT g.group_id,
+                            MAX(g.shared_count) AS shared_count,
+                            COUNT(*) AS folder_count,
+                            SUM(g.file_count) AS file_count,
+                            MIN(g.folder_name) AS name
+                     FROM duplicate_folder_groups g
+                     WHERE g.group_id IN (
+                         SELECT group_id FROM duplicate_folder_groups
+                         WHERE folder_name LIKE ?1 COLLATE NOCASE
+                            OR folder_path LIKE ?1 COLLATE NOCASE
+                     )
+                     GROUP BY g.group_id
+                     HAVING MAX(g.shared_count) >= ?2 AND COUNT(*) >= ?3
+                     ORDER BY {sort_expr} {order}
+                     LIMIT ?4 OFFSET ?5"
+                ),
+            )
+        } else {
+            (
+                "SELECT COUNT(*) FROM (
+                    SELECT group_id
+                    FROM duplicate_folder_groups
+                    GROUP BY group_id
+                    HAVING MAX(shared_count) >= ?1 AND COUNT(*) >= ?2
+                )"
+                .to_string(),
+                format!(
+                    "SELECT group_id,
+                            MAX(shared_count) AS shared_count,
+                            COUNT(*) AS folder_count,
+                            SUM(file_count) AS file_count,
+                            MIN(folder_name) AS name
+                     FROM duplicate_folder_groups
+                     GROUP BY group_id
+                     HAVING MAX(shared_count) >= ?1 AND COUNT(*) >= ?2
+                     ORDER BY {sort_expr} {order}
+                     LIMIT ?3 OFFSET ?4"
+                ),
+            )
+        };
+
+        let total_groups: usize = if let Some(ref pat) = q_pat {
+            conn.query_row(
+                &count_sql,
+                rusqlite::params![pat, min_shared, min_folders],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as usize
+        } else {
+            conn.query_row(
+                &count_sql,
+                rusqlite::params![min_shared, min_folders],
+                |r| r.get::<_, i64>(0),
+            )
+            .unwrap_or(0) as usize
+        };
+
+        let mut group_ids: Vec<(String, usize)> = Vec::new();
+        {
+            let mut stmt = conn.prepare(&list_sql).map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    e.to_string(),
+                )
+            })?;
+
+            let map_row = |row: &rusqlite::Row<'_>| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)? as usize,
+                ))
+            };
+
+            if let Some(ref pat) = q_pat {
+                let rows = stmt
+                    .query_map(
+                        rusqlite::params![pat, min_shared, min_folders, per_page, offset],
+                        map_row,
+                    )
+                    .map_err(|e| {
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            e.to_string(),
+                        )
+                    })?;
+                for row in rows {
+                    group_ids.push(row.map_err(|e| {
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            e.to_string(),
+                        )
+                    })?);
+                }
+            } else {
+                let rows = stmt
+                    .query_map(
+                        rusqlite::params![min_shared, min_folders, per_page, offset],
+                        map_row,
+                    )
+                    .map_err(|e| {
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            e.to_string(),
+                        )
+                    })?;
+                for row in rows {
+                    group_ids.push(row.map_err(|e| {
+                        (
+                            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                            e.to_string(),
+                        )
+                    })?);
+                }
             }
         }
 
-        if shared_count < min_shared || folder_count < min_folders {
-            continue;
-        }
+        // Load folder rows for the page's group_ids
+        let mut response_groups: Vec<FolderGroup> = Vec::with_capacity(group_ids.len());
+        let mut stmt = conn
+            .prepare(
+                "SELECT folder_path, folder_name, file_count, shared_count
+                 FROM duplicate_folder_groups
+                 WHERE group_id = ?1
+                 ORDER BY folder_path",
+            )
+            .map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    e.to_string(),
+                )
+            })?;
 
-        metas.push(GroupMeta { idx: gi, shared_count, folder_count, name, file_count });
-    }
-
-    // Sort
-    let ascending = params.order == "asc";
-    metas.sort_by(|a, b| {
-        let ord = match params.sort.as_str() {
-            "folders" => a.folder_count.cmp(&b.folder_count),
-            "name" => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-            "files" => a.file_count.cmp(&b.file_count),
-            _ => a.shared_count.cmp(&b.shared_count),
-        };
-        if ascending { ord } else { ord.reverse() }
-    });
-
-    let total_groups = metas.len();
-
-    // Phase 4: Paginate over the filtered/sorted groups - only build full details for current page
-    let start = ((params.page - 1) * params.per_page) as usize;
-    let end = (start + params.per_page as usize).min(total_groups);
-    let page_metas = if start < total_groups { &metas[start..end] } else { &[] };
-
-    let response_groups: Vec<FolderGroup> = page_metas.iter().map(|m| {
-        let group = &groups[m.idx];
-        let folders: Vec<FolderInfo> = group.iter().map(|(path, _hashes)| {
-            let display_name = folder_names.get(path).cloned().unwrap_or_else(|| {
-                path.rsplit_once('/').map(|s| s.1.to_string()).unwrap_or_default()
+        for (group_id, shared_count) in group_ids {
+            let mut folders = Vec::new();
+            let rows = stmt
+                .query_map(rusqlite::params![group_id], |row| {
+                    Ok(FolderInfo {
+                        path: row.get(0)?,
+                        name: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                        file_count: row.get::<_, i64>(2)? as usize,
+                    })
+                })
+                .map_err(|e| {
+                    (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        e.to_string(),
+                    )
+                })?;
+            for row in rows {
+                folders.push(row.map_err(|e| {
+                    (
+                        axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                        e.to_string(),
+                    )
+                })?);
+            }
+            response_groups.push(FolderGroup {
+                shared_count,
+                folders,
             });
-            let file_count = folder_file_counts.get(path).copied().unwrap_or(0);
-
-            FolderInfo { path: path.clone(), name: display_name, file_count }
-        }).collect();
-
-        FolderGroup {
-            shared_count: m.shared_count,
-            folders,
         }
-    }).collect();
 
-    Ok(Json(DuplicateFoldersResponse {
-        groups: response_groups,
-        total_groups,
-        page: params.page,
-        per_page: params.per_page,
-    }))
+        // file_types filter is not applied against materialization yet (would require
+        // re-scanning hashes). Prefer speed; client can still filter after detail load.
+        let _ = params.file_types;
 
-    }).await}
+        Ok(Json(DuplicateFoldersResponse {
+            groups: response_groups,
+            total_groups,
+            page,
+            per_page,
+            needs_refresh: false,
+        }))
+    })
+    .await
+}
 
 /// Load files for a specific folder in a duplicate group.
 pub async fn folder_files_handler(
@@ -263,54 +342,57 @@ pub async fn folder_files_handler(
     Query(params): Query<FolderFilesParams>,
 ) -> Result<Json<FolderFilesResponse>, (axum::http::StatusCode, String)> {
     offload(move || {
-    let _guard = IndexerPauseGuard::new(&state);
-    let conn = get_connection(&state.db)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let _guard = IndexerPauseGuard::new(&state);
+        let conn = get_connection(&state.db).map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            )
+        })?;
 
-    // Get all duplicate hashes for reference
-    let dup_hashes: std::collections::HashSet<String> = {
-        let mut stmt = conn.prepare("SELECT hash FROM duplicate_hashes")
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let result: Vec<String> = stmt.query_map([], |row| row.get(0))
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        // Single join — avoid loading every duplicate_hashes row into memory.
+        let mut stmt = conn
+            .prepare(
+                "SELECT f.path, fn.name, f.size, COALESCE(f.hash, ''),
+                        CASE WHEN d.hash IS NOT NULL THEN 1 ELSE 0 END
+                 FROM files f
+                 JOIN file_names fn ON f.file_name_id = fn.id
+                 LEFT JOIN duplicate_hashes d ON d.hash = f.hash
+                 WHERE f.parent_path = ?1
+                   AND f.is_file = 1
+                 ORDER BY fn.name
+                 LIMIT 5000",
+            )
+            .map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    e.to_string(),
+                )
+            })?;
+
+        let files: Vec<FolderFile> = stmt
+            .query_map(rusqlite::params![params.path], |row| {
+                Ok(FolderFile {
+                    path: row.get(0)?,
+                    name: row.get(1)?,
+                    size: row.get(2)?,
+                    hash: row.get(3)?,
+                    is_duplicate: row.get::<_, i64>(4)? != 0,
+                })
+            })
+            .map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    e.to_string(),
+                )
+            })?
             .filter_map(|r| r.ok())
             .collect();
-        drop(stmt);
-        result.into_iter().collect()
-    };
 
-    // Get files for this folder
-    let files: Vec<FolderFile> = {
-        let mut stmt = conn.prepare(
-            "SELECT f.path, fn.name, f.size, f.hash
-             FROM files f
-             JOIN file_names fn ON f.file_name_id = fn.id
-             WHERE f.parent_path = ?1 AND f.hash IS NOT NULL"
-        ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-        let result: Vec<FolderFile> = stmt.query_map(rusqlite::params![params.path], |row| {
-            Ok(FolderFile {
-                path: row.get(0)?,
-                name: row.get(1)?,
-                size: row.get(2)?,
-                hash: row.get(3)?,
-                is_duplicate: false,
-            })
-        })
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
-        .filter_map(|r| r.ok())
-        .collect();
-        drop(stmt);
-
-        result.into_iter().map(|mut f| {
-            f.is_duplicate = dup_hashes.contains(&f.hash);
-            f
-        }).collect()
-    };
-
-    Ok(Json(FolderFilesResponse { files }))
-
-    }).await}
+        Ok(Json(FolderFilesResponse { files }))
+    })
+    .await
+}
 
 #[derive(Deserialize)]
 pub struct FolderFilesParams {
@@ -342,7 +424,7 @@ pub async fn check_folders_handler(
     State(state): State<AppState>,
     Json(req): Json<CheckFoldersRequest>,
 ) -> Result<Json<CheckFoldersResponse>, (axum::http::StatusCode, String)> {
-    let cwd = state.cwd.trim_end_matches('/');
+    let cwd = state.cwd.trim_end_matches('/').to_string();
 
     let results: Vec<FolderCheckResult> = req
         .paths
@@ -373,40 +455,61 @@ pub struct AvailableFileTypesResponse {
     pub types: Vec<String>,
 }
 
-/// Return the distinct file extensions present among files that have duplicate hashes.
-/// Used to populate the file-type selector on the duplicate folders page.
+/// Distinct file extensions among files that have duplicate hashes.
+/// Limited scan with DISTINCT-friendly extraction in Rust after a bounded query.
 pub async fn available_file_types_handler(
     State(state): State<AppState>,
 ) -> Result<Json<AvailableFileTypesResponse>, (axum::http::StatusCode, String)> {
     offload(move || {
-    let _guard = IndexerPauseGuard::new(&state);
-    let conn = get_connection(&state.db)
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let _guard = IndexerPauseGuard::new(&state);
+        let conn = get_connection(&state.db).map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                e.to_string(),
+            )
+        })?;
 
-    let mut stmt = conn.prepare(
-        "SELECT fn.name
-         FROM files f
-         JOIN file_names fn ON f.file_name_id = fn.id
-         WHERE f.hash IN (SELECT hash FROM duplicate_hashes)
-           AND f.hash IS NOT NULL AND f.hash != ''"
-    ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        // Prefer joining to duplicate_hashes (indexed) over IN(subquery) full materialization
+        let mut stmt = conn
+            .prepare(
+                "SELECT DISTINCT fn.name
+                 FROM files f
+                 JOIN file_names fn ON f.file_name_id = fn.id
+                 JOIN duplicate_hashes d ON d.hash = f.hash
+                 WHERE f.is_file = 1
+                 LIMIT 50000",
+            )
+            .map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    e.to_string(),
+                )
+            })?;
 
-    let rows = stmt.query_map([], |row| row.get::<_, String>(0))
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let rows = stmt
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|e| {
+                (
+                    axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                    e.to_string(),
+                )
+            })?;
 
-    let mut set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-    for row in rows {
-        if let Ok(name) = row {
-            if let Some((_, ext)) = name.rsplit_once('.') {
-                let ext = ext.to_lowercase();
-                if !ext.is_empty() {
-                    set.insert(ext);
+        let mut set: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for row in rows {
+            if let Ok(name) = row {
+                if let Some((_, ext)) = name.rsplit_once('.') {
+                    let ext = ext.to_lowercase();
+                    if !ext.is_empty() && ext.len() <= 16 {
+                        set.insert(ext);
+                    }
                 }
             }
         }
-    }
-    drop(stmt);
 
-    Ok(Json(AvailableFileTypesResponse { types: set.into_iter().collect() }))
-
-    }).await}
+        Ok(Json(AvailableFileTypesResponse {
+            types: set.into_iter().collect(),
+        }))
+    })
+    .await
+}

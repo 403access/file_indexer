@@ -42,7 +42,6 @@
       let i = Math.floor(Math.log(n) / Math.log(base));
       i = Math.max(0, Math.min(i, UNITS.length - 1));
       const value = n / Math.pow(base, i);
-      // Prefer one decimal for non-bytes; trim trailing .0
       const text =
         i === 0
           ? String(Math.round(value))
@@ -101,7 +100,6 @@
     updateUI: updateSwitcherUI,
   };
 
-  // Global helper used across pages
   window.formatSize = function formatSizeGlobal(bytes) {
     return formatSize(bytes);
   };

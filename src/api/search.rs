@@ -6,7 +6,7 @@ use crate::api::offload;
 use crate::modules::commands::command_search_file::{OrderKind, PatternKind, TargetKind};
 use crate::modules::file_entry::_types::FileEntry;
 use crate::modules::sql::database::get_connection;
-use crate::modules::sql::search::search_file;
+use crate::modules::sql::search::{count_search_file, search_file_page};
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Deserialize)]
@@ -26,12 +26,24 @@ pub struct SearchParams {
     pub per_page: u32,
 }
 
-fn default_type() -> String { "both".to_string() }
-fn default_pattern() -> String { "contains".to_string() }
-fn default_sort() -> String { "name".to_string() }
-fn default_order() -> String { "asc".to_string() }
-fn default_page() -> u32 { 1 }
-fn default_per_page() -> u32 { 20 }
+fn default_type() -> String {
+    "both".to_string()
+}
+fn default_pattern() -> String {
+    "contains".to_string()
+}
+fn default_sort() -> String {
+    "name".to_string()
+}
+fn default_order() -> String {
+    "asc".to_string()
+}
+fn default_page() -> u32 {
+    1
+}
+fn default_per_page() -> u32 {
+    20
+}
 
 #[derive(Serialize)]
 pub struct SearchResponse {
@@ -65,41 +77,37 @@ pub async fn search_handler(
             _ => OrderKind::Asc,
         };
 
-        let mut conn = get_connection(&state.db)
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        let tx = conn
-            .transaction()
+        let page = params.page.max(1);
+        let per_page = params.per_page.clamp(1, 200);
+        let offset = (page - 1).saturating_mul(per_page);
+
+        let conn = get_connection(&state.db)
             .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-        let mut entries = search_file(&tx, &name, target_kind, pattern_kind, order_kind)
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        tx.commit()
-            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        // Apply PRAGMA query_only for this read path (extra safety)
+        let _ = conn.execute_batch("PRAGMA query_only=ON;");
 
-        match params.sort.as_str() {
-            "size" => entries.sort_by(|a, b| a.size.cmp(&b.size)),
-            "modified" => entries.sort_by(|a, b| a.modified.cmp(&b.modified)),
-            "path" => entries.sort_by(|a, b| a.path.cmp(&b.path)),
-            _ => entries.sort_by(|a, b| a.name.cmp(&b.name)),
-        }
-        if params.order == "desc" {
-            entries.reverse();
-        }
+        let total = count_search_file(&conn, &name, target_kind, pattern_kind)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            as usize;
 
-        let total = entries.len();
-        let start = ((params.page - 1) * params.per_page) as usize;
-        let end = (start + params.per_page as usize).min(total);
-        let paginated = if start < total {
-            entries[start..end].to_vec()
-        } else {
-            vec![]
-        };
+        let entries = search_file_page(
+            &conn,
+            &name,
+            target_kind,
+            pattern_kind,
+            order_kind,
+            &params.sort,
+            per_page,
+            offset,
+        )
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
         Ok(Json(SearchResponse {
-            results: paginated,
+            results: entries,
             total,
-            page: params.page,
-            per_page: params.per_page,
+            page,
+            per_page,
         }))
     })
     .await

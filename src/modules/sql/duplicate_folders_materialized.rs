@@ -26,6 +26,14 @@ pub fn create_duplicate_folder_groups_table(conn: &Connection) -> rusqlite::Resu
         );",
         [],
     )?;
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dfg_group_id ON duplicate_folder_groups(group_id);",
+        [],
+    );
+    let _ = conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dfg_shared_count ON duplicate_folder_groups(shared_count);",
+        [],
+    );
     Ok(())
 }
 

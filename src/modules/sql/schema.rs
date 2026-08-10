@@ -72,6 +72,9 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
     let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_is_file ON files(is_file);", []);
     let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_is_dir ON files(is_directory);", []);
     let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_modified ON files(modified);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_parent_path ON files(parent_path);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_files_file_name_id ON files(file_name_id);", []);
+    let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_file_names_name ON file_names(name);", []);
     let _ = tx.execute("CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level);", []);
 
     let skipped_table_result = tx.execute(
@@ -150,6 +153,18 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
         logging::error(&format!("Failed to create 'duplicate_folder_groups' table: {:?}", duplicate_folder_groups_result));
         return Err(duplicate_folder_groups_result.unwrap_err());
     }
+    let _ = tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dfg_group_id ON duplicate_folder_groups(group_id);",
+        [],
+    );
+    let _ = tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dfg_shared_count ON duplicate_folder_groups(shared_count);",
+        [],
+    );
+    let _ = tx.execute(
+        "CREATE INDEX IF NOT EXISTS idx_dfg_folder_name ON duplicate_folder_groups(folder_name);",
+        [],
+    );
 
     // Materialized dashboard timeline buckets
     let dashboard_timeline_result = tx.execute(

@@ -8,14 +8,14 @@ use crate::{
 
 use inquire::{Confirm, Select, Text};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum TargetKind {
     Files,
     Folders,
     Both,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum PatternKind {
     Exact,
     StartsWith,
@@ -23,7 +23,7 @@ pub enum PatternKind {
     Contains,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum OrderKind {
     Asc,
     Desc,
