@@ -21,5 +21,6 @@ pub use super::settings::{
     IgnoreRule,
 };
 pub use super::skipped::{
-    count_skipped_paths, get_skipped_paths, get_skipped_paths_page, insert_skipped_path,
+    count_skipped_paths, count_skipped_paths_filtered, get_skipped_paths, get_skipped_paths_page,
+    get_skipped_paths_page_filtered, insert_skipped_path, SkippedMatchField, SkippedSortField,
 };
