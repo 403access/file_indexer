@@ -45,8 +45,9 @@ pub async fn folder_handler(
     let path = params.path.replace("//", "/");
     let path = path.trim_end_matches('/');
 
-    // Get folder metadata
-    let folder = conn.query_row(
+    // Get folder metadata. The configured root may not be stored as a folder
+    // row (only its contents are), so synthesize metadata for it.
+    let folder = match conn.query_row(
         "SELECT f.path, fn.name, f.size, f.modified
          FROM files f
          JOIN file_names fn ON f.file_name_id = fn.id
@@ -60,7 +61,23 @@ pub async fn folder_handler(
                 row.get::<_, Option<f64>>(3)?.map(|v| v as u64),
             ))
         },
-    ).map_err(|e| (axum::http::StatusCode::NOT_FOUND, format!("Folder not found: {}", e)))?;
+    ) {
+        Ok(f) => f,
+        Err(_) => {
+            if path == state.cwd.trim_end_matches('/') {
+                let name = std::path::Path::new(path)
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| path.to_string());
+                (path.to_string(), name, 0u64, None)
+            } else {
+                return Err((
+                    axum::http::StatusCode::NOT_FOUND,
+                    format!("Folder not found"),
+                ));
+            }
+        }
+    };
 
     // Get children
     let mut stmt = conn.prepare(

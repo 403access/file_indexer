@@ -128,8 +128,77 @@
         .explorer-table td.path {
             max-width: 420px;
         }
-        #table-view, #tree-view {
+        #table-view, #tree-view, #folders-view {
             min-height: 200px;
+        }
+        .folders-toolbar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            margin-bottom: var(--space-2);
+        }
+        .folders-toolbar .breadcrumb {
+            flex: 1;
+            min-width: 0;
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .folders-toolbar .summary {
+            padding: 0;
+        }
+        .folder-items {
+            display: flex;
+            flex-direction: column;
+        }
+        .folder-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0.75rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .folder-item:hover {
+            background: var(--bg-hover);
+        }
+        .folder-item__icon {
+            font-size: 1.1rem;
+            width: 1.4rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .folder-item__name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .folder-item__name.dir {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .folder-item__name.file {
+            color: var(--text-secondary);
+        }
+        .folder-item__chevron {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .folder-item:hover .folder-item__chevron {
+            color: var(--accent);
+        }
+        .folder-item__meta {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            white-space: nowrap;
+            flex-shrink: 0;
         }
         #explorer-pagination .page-btn {
             padding: 0.35rem 0.7rem;
@@ -202,6 +271,7 @@
             </div>
             <div class="page-header__actions">
                 <div class="segmented" role="group" aria-label="Explorer view">
+                    <button type="button" class="segmented__btn" id="view-folders" onclick="setView('folders')">Folders</button>
                     <button type="button" class="segmented__btn" id="view-table" onclick="setView('table')">Table</button>
                     <button type="button" class="segmented__btn" id="view-tree" onclick="setView('tree')">Tree</button>
                 </div>
@@ -209,6 +279,19 @@
         </header>
         <div class="card">
         <div class="card__body">
+        <div id="folders-view" style="display:none;">
+            <div class="folders-toolbar">
+                <button type="button" class="btn btn--secondary btn--sm" id="folders-up" onclick="folderGoUp()" disabled>&#8593; Up</button>
+                <button type="button" class="btn btn--secondary btn--sm" onclick="folderOpen(folderPath)">&#8635; Refresh</button>
+                <div class="breadcrumb" id="folders-breadcrumb"></div>
+                <span class="summary" id="folders-summary"></span>
+            </div>
+            <div class="folder-items" id="folder-items"></div>
+            <div id="folders-no-results" class="empty-state" style="display:none;">
+                <div class="empty-state__title">Empty folder</div>
+                <p class="empty-state__desc">Nothing indexed in this directory</p>
+            </div>
+        </div>
         <div id="table-view" style="display:none;">
             <div class="explorer-table-toolbar">
                 <input type="search" id="table-search" class="input" placeholder="Filter by name…">
@@ -404,7 +487,7 @@
         function getStoredView() {
             try {
                 const v = localStorage.getItem(EXPLORER_VIEW_KEY);
-                return v === 'table' || v === 'tree' ? v : 'table';
+                return v === 'table' || v === 'tree' || v === 'folders' ? v : 'table';
             } catch {
                 return 'table';
             }
@@ -425,8 +508,10 @@
         function setView(view) {
             explorerView = view;
             setStoredView(view);
+            document.getElementById('view-folders').classList.toggle('active', view === 'folders');
             document.getElementById('view-table').classList.toggle('active', view === 'table');
             document.getElementById('view-tree').classList.toggle('active', view === 'tree');
+            document.getElementById('folders-view').style.display = view === 'folders' ? '' : 'none';
             document.getElementById('table-view').style.display = view === 'table' ? '' : 'none';
             document.getElementById('tree-view').style.display = view === 'tree' ? '' : 'none';
             if (view === 'table') {
@@ -435,8 +520,10 @@
                 } else {
                     loadTable();
                 }
-            } else if (!treeLoaded) {
-                loadTree();
+            } else if (view === 'tree') {
+                if (!treeLoaded) loadTree();
+            } else if (view === 'folders') {
+                if (!folderStarted) folderStart();
             }
         }
 
@@ -619,6 +706,118 @@
                 renderNode(node, tree, 0);
             }
             treeLoaded = true;
+        }
+
+        // --- Folders view (click-through browser) --------------------------------
+
+        let folderRoot = null;
+        let folderPath = null;
+        let folderStarted = false;
+
+        function folderParentPath(path) {
+            if (!path) return null;
+            const trimmed = path.replace(/\/+$/, '');
+            const idx = trimmed.lastIndexOf('/');
+            if (idx <= 0) return null;
+            return trimmed.slice(0, idx);
+        }
+
+        function folderBreadcrumbHtml(path) {
+            const parts = (path || '').split('/').filter(Boolean);
+            const crumbs = [];
+            let acc = '';
+            parts.forEach((seg, i) => {
+                acc += '/' + seg;
+                const isLast = i === parts.length - 1;
+                if (isLast) {
+                    crumbs.push(`<span class="current" title="${escapeHtml(acc)}">${escapeHtml(seg)}</span>`);
+                } else {
+                    crumbs.push(`<span onclick="folderOpen('${acc.replace(/'/g, "\\'")}')">${escapeHtml(seg)}</span>`);
+                    crumbs.push('<span class="sep">/</span>');
+                }
+            });
+            if (parts.length === 0) {
+                crumbs.push('<span class="current">Root</span>');
+            }
+            return crumbs.join('');
+        }
+
+        async function folderStart() {
+            folderStarted = true;
+            try {
+                const res = await fetch('/api/config');
+                if (!res.ok) return;
+                const config = await res.json();
+                folderRoot = (config.cwd || '').replace(/\/+$/, '');
+                if (!folderPath) folderPath = folderRoot;
+                await folderOpen(folderPath);
+            } catch (err) {
+                console.error('Failed to start folder view', err);
+            }
+        }
+
+        async function folderOpen(path) {
+            const res = await fetch('/api/folder?path=' + encodeURIComponent(path));
+            if (!res.ok) return;
+            const data = await res.json();
+            folderPath = data.path;
+            folderRender(data);
+        }
+
+        function folderRender(data) {
+            const items = data.files || [];
+
+            document.getElementById('folders-breadcrumb').innerHTML = folderBreadcrumbHtml(data.path);
+
+            const upBtn = document.getElementById('folders-up');
+            const parent = folderParentPath(data.path);
+            upBtn.disabled = !parent || data.path === folderRoot;
+            if (upBtn.disabled) {
+                upBtn.title = '';
+            } else {
+                upBtn.title = parent;
+            }
+
+            document.getElementById('folders-summary').textContent =
+                `${data.folder_count} folder${data.folder_count === 1 ? '' : 's'}, ${data.file_count} file${data.file_count === 1 ? '' : 's'}`;
+
+            const container = document.getElementById('folder-items');
+            const noResults = document.getElementById('folders-no-results');
+
+            if (items.length === 0) {
+                container.innerHTML = '';
+                noResults.style.display = 'block';
+                return;
+            }
+            noResults.style.display = 'none';
+
+            const dirs = items.filter((i) => i.is_directory);
+            const files = items.filter((i) => !i.is_directory);
+
+            container.innerHTML = dirs.concat(files).map((item) => {
+                const isDir = item.is_directory;
+                const icon = isDir ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
+                const safePath = (item.path || '').replace(/'/g, "\\'");
+                const safeName = (item.name || '').replace(/'/g, "\\'");
+                const click = isDir
+                    ? `folderOpen('${safePath}')`
+                    : `FileViewer.open('${safePath}', '${safeName}')`;
+                return `<div class="folder-item" onclick="${click}">
+                    <span class="folder-item__icon">${icon}</span>
+                    <span class="folder-item__name ${isDir ? 'dir' : 'file'}">${escapeHtml(item.name)}</span>
+                    ${isDir
+                        ? '<span class="folder-item__meta">Folder</span>'
+                        : `<span class="folder-item__meta">${formatSize(item.size)}</span>`}
+                    ${isDir ? '<span class="folder-item__chevron">\u203A</span>' : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function folderGoUp() {
+            const parent = folderParentPath(folderPath);
+            if (parent && folderPath !== folderRoot) {
+                folderOpen(parent);
+            }
         }
 
         let explorerView = getStoredView();
