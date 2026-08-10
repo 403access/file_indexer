@@ -14,7 +14,7 @@ fn write_file(dir: &PathBuf, name: &str, content: &[u8]) {
 
 fn index(temp: &PathBuf) -> rusqlite::Connection {
     let db_path = temp.join("file_index.db");
-    index_directory(db_path.to_str().unwrap(), temp.to_str().unwrap(), None).unwrap();
+    index_directory(db_path.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
     let conn = get_connection(db_path.to_str().unwrap()).unwrap();
     conn
 }

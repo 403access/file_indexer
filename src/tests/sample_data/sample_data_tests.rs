@@ -39,12 +39,12 @@ fn sample_directory_matches_create_test_data() {
     // Index the real on-disk sample directory
     let root = sample_path();
     let real_db = db_path();
-    index_directory(real_db.to_str().unwrap(), root.to_str().unwrap(), None).unwrap();
+    index_directory(real_db.to_str().unwrap(), root.to_str().unwrap(), None, None).unwrap();
 
     // Index the synthetic copy from arrange.rs
     let temp = create_test_data();
     let synth_db = db_path();
-    index_directory(synth_db.to_str().unwrap(), temp.to_str().unwrap(), None).unwrap();
+    index_directory(synth_db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
 
     // The real directory has .DS_Store; the synthetic copy does not.
     // Account for that one extra file.

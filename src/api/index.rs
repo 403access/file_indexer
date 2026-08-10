@@ -24,11 +24,12 @@ pub async fn index_handler(
     let db = state.db.clone();
     let pause = state.pause_indexer.clone();
 
-    let process_id = processes::register("Manual re-index", "indexing", Some(&cwd));
+    let process_id =
+        processes::register_controllable("Manual re-index", "indexing", Some(&cwd));
     progress::start(0);
 
     let result = tokio::task::spawn_blocking(move || {
-        let result = index_directory(&db, &cwd, Some(pause));
+        let result = index_directory(&db, &cwd, Some(pause), Some(process_id));
         progress::finish();
         match result {
             Ok(()) => {
@@ -58,7 +59,11 @@ pub async fn index_handler(
             }))
         }
         Err(e) => {
-            processes::fail(process_id, &e);
+            if e.contains("stopped by user") {
+                processes::fail(process_id, "Stopped by user");
+            } else {
+                processes::fail(process_id, &e);
+            }
             Err((axum::http::StatusCode::INTERNAL_SERVER_ERROR, e))
         }
     }
@@ -75,7 +80,7 @@ pub fn count_entries(db_path: &str) -> usize {
 
 pub fn ensure_indexed(db_path: &str, cwd: &str) {
     logging::info(&format!("Indexing {}...", cwd));
-    match index_directory(db_path, cwd, None) {
+    match index_directory(db_path, cwd, None, None) {
         Ok(()) => {
             let count = count_entries(db_path);
             logging::info(&format!("Indexed {} entries.", count));
@@ -90,20 +95,29 @@ pub async fn ensure_indexed_async(
     pause_flag: Arc<AtomicUsize>,
 ) {
     logging::info(&format!("Indexing {} in background...", cwd));
-    let process_id = processes::register("Startup indexing", "indexing", Some(&cwd));
+    let process_id =
+        processes::register_controllable("Startup indexing", "indexing", Some(&cwd));
     progress::start(0);
     // Fire-and-forget on the blocking pool so the async runtime stays free.
-    let _ = tokio::task::spawn_blocking(move || match index_directory(&db_path, &cwd, Some(pause_flag)) {
-        Ok(()) => {
-            let count = count_entries(&db_path);
-            progress::finish();
-            processes::complete(process_id, Some(&format!("Indexed {} entries", count)));
-            logging::info(&format!("Indexed {} entries.", count));
-        }
-        Err(e) => {
-            progress::finish();
-            processes::fail(process_id, &e.to_string());
-            logging::error(&format!("Auto-index failed: {}", e));
+    let _ = tokio::task::spawn_blocking(move || {
+        match index_directory(&db_path, &cwd, Some(pause_flag), Some(process_id)) {
+            Ok(()) => {
+                let count = count_entries(&db_path);
+                progress::finish();
+                processes::complete(process_id, Some(&format!("Indexed {} entries", count)));
+                logging::info(&format!("Indexed {} entries.", count));
+            }
+            Err(e) => {
+                progress::finish();
+                let msg = e.to_string();
+                if msg.contains("stopped by user") {
+                    processes::fail(process_id, "Stopped by user");
+                    logging::info("Startup indexing stopped by user");
+                } else {
+                    processes::fail(process_id, &msg);
+                    logging::error(&format!("Auto-index failed: {}", msg));
+                }
+            }
         }
     });
 }

@@ -156,7 +156,20 @@ pub fn set_paused(id: u64, paused: bool) {
         c.pause.store(paused, Ordering::SeqCst);
         if let Some(p) = PROCESSES.lock().unwrap().iter_mut().find(|p| p.id == id) {
             p.paused = paused;
+            if paused {
+                p.message = Some("Paused by user".to_string());
+            } else if p.message.as_deref() == Some("Paused by user") {
+                p.message = Some("Resumed".to_string());
+            }
         }
+        logging::info_with_process(
+            if paused {
+                "Process paused"
+            } else {
+                "Process resumed"
+            },
+            id,
+        );
     }
 }
 

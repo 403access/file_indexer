@@ -40,7 +40,7 @@ fn count_files(db: &std::path::Path) -> i64 {
 
 fn setup(temp: &std::path::Path) -> std::path::PathBuf {
     let db = db_path_for(temp);
-    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None).unwrap();
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
     db
 }
 
