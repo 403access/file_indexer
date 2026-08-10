@@ -191,7 +191,18 @@
                 foldersBorder: '#8b5cf6',
                 size: 'rgba(16, 185, 129, 0.85)',
                 sizeBorder: '#10b981',
+                sizeCum: 'rgba(245, 158, 11, 0.85)',
+                sizeCumBorder: '#f59e0b',
             };
+        }
+
+        /** Running total of file size across timeline buckets (in order). */
+        function cumulativeSizes() {
+            let sum = 0;
+            return timelineData.map((b) => {
+                sum += Number(b.size) || 0;
+                return sum;
+            });
         }
 
         document.addEventListener('DOMContentLoaded', fetchDashboard);
@@ -288,7 +299,7 @@
                 }
                 if (currentMetric === 'size' || currentMetric === 'all') {
                     datasets.push({
-                        label: 'Size (bytes)',
+                        label: 'Size (period)',
                         data: timelineData.map(b => b.size),
                         backgroundColor: currentChartType === 'line' ? 'rgba(16, 185, 129, 0.12)' : c.size,
                         borderColor: c.sizeBorder,
@@ -298,6 +309,22 @@
                         pointRadius: 2,
                         pointHoverRadius: 5,
                         yAxisID: 'y1',
+                    });
+                    // Always draw accumulated total as a line (readable on bar charts too)
+                    datasets.push({
+                        type: 'line',
+                        label: 'Total size (accumulated)',
+                        data: cumulativeSizes(),
+                        backgroundColor: 'rgba(245, 158, 11, 0.08)',
+                        borderColor: c.sizeCumBorder,
+                        borderWidth: 2.5,
+                        borderDash: [6, 4],
+                        fill: false,
+                        tension: 0.25,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        yAxisID: 'y1',
+                        order: 0,
                     });
                 }
             }
@@ -337,7 +364,7 @@
                     interaction: { mode: 'index', intersect: false },
                     plugins: {
                         legend: {
-                            display: currentMetric === 'all' || isPie,
+                            display: currentMetric === 'all' || currentMetric === 'size' || isPie,
                             labels: { color: c.text, boxWidth: 12, usePointStyle: true },
                         },
                         tooltip: {
@@ -345,7 +372,10 @@
                                 label: (ctx) => {
                                     if (isPie) return `${ctx.label}: ${ctx.parsed.toLocaleString()}`;
                                     const val = ctx.parsed.y ?? ctx.parsed;
-                                    if (ctx.dataset.label === 'Size (bytes)') return `Size: ${formatSize(val)}`;
+                                    if (ctx.dataset.label === 'Size (period)') return `Size (period): ${formatSize(val)}`;
+                                    if (ctx.dataset.label === 'Total size (accumulated)') {
+                                        return `Total size (accumulated): ${formatSize(val)}`;
+                                    }
                                     return `${ctx.dataset.label}: ${val.toLocaleString()}`;
                                 }
                             }
