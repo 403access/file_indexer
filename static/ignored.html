@@ -110,7 +110,54 @@
             font-weight: 600;
             letter-spacing: var(--tracking-tight);
             color: var(--text-primary);
-            margin: var(--space-5) 0 var(--space-3);
+            margin: 0 0 var(--space-3);
+        }
+
+        /* Stacked by default; side-by-side on large desktops */
+        .ignored-panels {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-6);
+            margin-top: var(--space-2);
+        }
+
+        .ignored-panel {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+
+        .ignored-panel__header {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+        }
+
+        .ignored-panel .results-info {
+            margin: 0;
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+        }
+
+        .ignored-panel .pagination {
+            margin-top: var(--space-3);
+        }
+
+        .ignored-panel .table-wrap {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+
+        @media (min-width: 1280px) {
+            .ignored-panels {
+                display: grid;
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+                gap: var(--space-6);
+                align-items: start;
+            }
         }
     </style>
 </head>
@@ -136,52 +183,62 @@
             </div>
         </section>
 
-        <h2 class="section-heading">Ignore Rules</h2>
-        <section class="results">
-            <div id="no-rules" class="empty-state" style="display:none;">
-                <div class="empty-state__title">No ignore rules configured</div>
-                <p class="empty-state__desc">Add rules in Settings</p>
-            </div>
-            <div class="table-wrap" id="rules-wrap" style="display:none;">
-                <table id="rules-table" class="table">
-                    <thead>
-                        <tr>
-                            <th>Folder Name</th>
-                            <th>Condition File</th>
-                            <th>Description</th>
-                            <th>Ignored Count</th>
-                        </tr>
-                    </thead>
-                    <tbody id="rules-body"></tbody>
-                </table>
-            </div>
-        </section>
+        <div class="ignored-panels">
+            <section class="ignored-panel" aria-labelledby="rules-heading">
+                <div class="ignored-panel__header">
+                    <h2 class="section-heading" id="rules-heading">Ignore Rules</h2>
+                </div>
+                <div class="results">
+                    <div id="no-rules" class="empty-state" style="display:none;">
+                        <div class="empty-state__title">No ignore rules configured</div>
+                        <p class="empty-state__desc">Add rules in Settings</p>
+                    </div>
+                    <div class="table-wrap" id="rules-wrap" style="display:none;">
+                        <table id="rules-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>Folder Name</th>
+                                    <th>Condition File</th>
+                                    <th>Description</th>
+                                    <th>Ignored Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rules-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
 
-        <h2 class="section-heading">Skipped Paths</h2>
-        <section class="results-info" id="skipped-info" style="display:none;">
-            <span id="skipped-count"></span>
-        </section>
-        <section class="results">
-            <div id="no-skipped" class="empty-state" style="display:none;">
-                <div class="empty-state__title">No skipped paths</div>
-            </div>
-            <div class="table-wrap" id="skipped-wrap" style="display:none;">
-                <table id="skipped-table" class="table">
-                    <thead>
-                        <tr>
-                            <th>Path</th>
-                            <th>Error</th>
-                        </tr>
-                    </thead>
-                    <tbody id="skipped-body"></tbody>
-                </table>
-            </div>
-        </section>
-        <section class="pagination" id="skipped-pagination" style="display:none;">
-            <button type="button" id="skipped-prev" class="btn btn--secondary btn--sm" disabled>Previous</button>
-            <span id="skipped-page-info"></span>
-            <button type="button" id="skipped-next" class="btn btn--secondary btn--sm" disabled>Next</button>
-        </section>
+            <section class="ignored-panel" aria-labelledby="skipped-heading">
+                <div class="ignored-panel__header">
+                    <h2 class="section-heading" id="skipped-heading">Skipped Paths</h2>
+                    <div class="results-info" id="skipped-info" style="display:none;">
+                        <span id="skipped-count"></span>
+                    </div>
+                </div>
+                <div class="results">
+                    <div id="no-skipped" class="empty-state" style="display:none;">
+                        <div class="empty-state__title">No skipped paths</div>
+                    </div>
+                    <div class="table-wrap" id="skipped-wrap" style="display:none;">
+                        <table id="skipped-table" class="table">
+                            <thead>
+                                <tr>
+                                    <th>Path</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody id="skipped-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="pagination" id="skipped-pagination" style="display:none;">
+                    <button type="button" id="skipped-prev" class="btn btn--secondary btn--sm" disabled>Previous</button>
+                    <span id="skipped-page-info"></span>
+                    <button type="button" id="skipped-next" class="btn btn--secondary btn--sm" disabled>Next</button>
+                </div>
+            </section>
+        </div>
     </main>
 
     <script src="/js/theme.js"></script>
