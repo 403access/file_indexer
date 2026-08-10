@@ -16,7 +16,6 @@ fn static_page_aliases() -> Router {
         ("/duplicate-folders.html", "static/pages/duplicate-folders.html"),
         ("/skipped.html", "static/pages/skipped.html"),
         ("/ignored.html", "static/pages/ignored.html"),
-        ("/status.html", "static/pages/status.html"),
         ("/processes.html", "static/pages/processes.html"),
         ("/logs.html", "static/pages/logs.html"),
         ("/settings.html", "static/pages/settings.html"),

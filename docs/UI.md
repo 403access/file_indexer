@@ -505,7 +505,6 @@ Prefer **`Drawer.create`** for new detail panels so behavior (Escape, scroll loc
 | `/pages/duplicate-folders.html` | Duplicate folder groups / merge |
 | `/pages/skipped.html` | Paths skipped during indexing |
 | `/pages/ignored.html` | Ignore rules + skipped-by-rule stats |
-| `/pages/status.html` | Live indexing status |
 | `/pages/processes.html` | Background process monitor |
 | `/pages/logs.html` | Log stream |
 | `/pages/settings.html` | Process toggles, refresh interval, ignore rules |
