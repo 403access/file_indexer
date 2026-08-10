@@ -167,7 +167,14 @@
         <section class="duplicate-controls toolbar">
             <input type="text" id="dup-search" placeholder="Search by name or path...">
             <label>Min size:
-                <input type="number" id="dup-min-size" min="0" value="0" placeholder="Bytes">
+                <input type="number" id="dup-min-size" min="0" value="0" placeholder="Size">
+                <select id="dup-min-size-unit">
+                    <option value="1">B</option>
+                    <option value="1024">KB</option>
+                    <option value="1048576">MB</option>
+                    <option value="1073741824">GB</option>
+                    <option value="1099511627776">TB</option>
+                </select>
             </label>
             <label>Extension:
                 <input type="text" id="dup-ext" placeholder="e.g. pdf,zip">
@@ -225,6 +232,7 @@
         async function loadDuplicates(page = 1) {
             const q = document.getElementById('dup-search').value.trim();
             const minSize = document.getElementById('dup-min-size').value;
+            const minSizeUnit = document.getElementById('dup-min-size-unit').value;
             const ext = document.getElementById('dup-ext').value.trim();
             const sort = document.getElementById('dup-sort').value;
             const order = document.getElementById('dup-order').value;
@@ -233,7 +241,7 @@
             params.set('page', page);
             params.set('per_page', perPage);
             if (q) params.set('q', q);
-            if (minSize && parseInt(minSize, 10) > 0) params.set('min_size', minSize);
+            if (minSize && parseInt(minSize, 10) > 0) params.set('min_size', parseInt(minSize, 10) * parseInt(minSizeUnit, 10));
             if (ext) params.set('ext', ext);
             if (sort) params.set('sort', sort);
             if (order) params.set('order', order);
@@ -492,6 +500,11 @@
         });
 
         document.getElementById('dup-order').addEventListener('change', () => {
+            currentPage = 1;
+            loadDuplicates(1);
+        });
+
+        document.getElementById('dup-min-size-unit').addEventListener('change', () => {
             currentPage = 1;
             loadDuplicates(1);
         });
