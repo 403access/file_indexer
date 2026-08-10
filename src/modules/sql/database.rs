@@ -14,7 +14,7 @@ pub use super::files::{
     get_child_directories, get_or_insert_file_name, insert_file, insert_file_name,
     is_directory_indexed, mark_directory_traversed,
 };
-pub use super::logs::{count_ignore_events, get_logs, insert_log};
+pub use super::logs::{count_ignore_events, count_logs, get_logs, insert_log};
 pub use super::schema::init_db;
 pub use super::settings::{
     get_ignore_list, get_ignore_rules, get_setting, set_ignore_list, set_ignore_rules, set_setting,

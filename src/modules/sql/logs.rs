@@ -9,43 +9,63 @@ pub fn insert_log(conn: &Connection, level: &str, message: &str) -> rusqlite::Re
     Ok(())
 }
 
-pub fn get_logs(
-    conn: &Connection,
-    limit: i64,
+fn push_filter(
+    sql: &mut String,
+    params: &mut Vec<Box<dyn rusqlite::types::ToSql>>,
     level: Option<&str>,
     search: Option<&str>,
-    sort_asc: bool,
-) -> rusqlite::Result<Vec<(String, String, String)>> {
-    let order = if sort_asc { "ASC" } else { "DESC" };
-
-    let mut sql = format!(
-        "SELECT timestamp, level, message FROM logs WHERE 1=1"
-    );
-    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-
+) {
     if let Some(l) = level {
-        sql.push_str(" AND level = ?1");
+        sql.push_str(&format!(" AND level = ?{}", params.len() + 1));
         params.push(Box::new(l.to_string()));
     }
 
     if let Some(s) = search {
         if s.ends_with('*') {
             let prefix = s.trim_end_matches('*');
-            let idx = params.len() + 1;
-            sql.push_str(&format!(" AND message LIKE ?{}", idx));
+            sql.push_str(&format!(" AND message LIKE ?{}", params.len() + 1));
             params.push(Box::new(format!("{}%", prefix)));
         } else {
-            let idx = params.len() + 1;
-            sql.push_str(&format!(" AND message = ?{}", idx));
+            sql.push_str(&format!(" AND message = ?{}", params.len() + 1));
             params.push(Box::new(s.to_string()));
         }
     }
+}
+
+/// Count logs matching the optional level / search filters.
+pub fn count_logs(
+    conn: &Connection,
+    level: Option<&str>,
+    search: Option<&str>,
+) -> rusqlite::Result<i64> {
+    let mut sql = String::from("SELECT COUNT(*) FROM logs WHERE 1=1");
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    push_filter(&mut sql, &mut params, level, search);
+
+    let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+    conn.query_row(&sql, param_refs.as_slice(), |row| row.get(0))
+}
+
+pub fn get_logs(
+    conn: &Connection,
+    limit: i64,
+    offset: i64,
+    level: Option<&str>,
+    search: Option<&str>,
+    sort_asc: bool,
+) -> rusqlite::Result<Vec<(String, String, String)>> {
+    let order = if sort_asc { "ASC" } else { "DESC" };
+
+    let mut sql = String::from("SELECT timestamp, level, message FROM logs WHERE 1=1");
+    let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+    push_filter(&mut sql, &mut params, level, search);
 
     sql.push_str(&format!(" ORDER BY id {}", order));
 
-    let idx = params.len() + 1;
-    sql.push_str(&format!(" LIMIT ?{}", idx));
+    sql.push_str(&format!(" LIMIT ?{}", params.len() + 1));
     params.push(Box::new(limit));
+    sql.push_str(&format!(" OFFSET ?{}", params.len() + 1));
+    params.push(Box::new(offset));
 
     let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
     let mut stmt = conn.prepare(&sql)?;

@@ -1,18 +1,29 @@
 use axum::extract::{Query, State};
 use axum::Json;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::api::offload;
 use crate::modules::logging::{FileSummary, LogEntry};
-use crate::modules::sql::database::{get_connection, get_logs};
+use crate::modules::sql::database::{count_logs, get_connection, get_logs};
 use crate::states::app_state::{AppState, IndexerPauseGuard};
+
+const MAX_LIMIT: i64 = 5000;
 
 #[derive(Deserialize)]
 pub struct LogsParams {
     pub limit: Option<i64>,
+    pub page: Option<i64>,
     pub level: Option<String>,
     pub search: Option<String>,
     pub sort: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct LogsResponse {
+    pub entries: Vec<LogEntry>,
+    pub total: i64,
+    pub page: i64,
+    pub limit: i64,
 }
 
 // Only enrich this many log entries with file lists (N+1 query cost)
@@ -21,8 +32,10 @@ const MAX_ENRICHED_ENTRIES: usize = 50;
 pub async fn logs_handler(
     State(state): State<AppState>,
     Query(params): Query<LogsParams>,
-) -> Result<Json<Vec<LogEntry>>, (axum::http::StatusCode, String)> {
-    let limit = params.limit.unwrap_or(1000);
+) -> Result<Json<LogsResponse>, (axum::http::StatusCode, String)> {
+    let limit = params.limit.unwrap_or(50).clamp(1, MAX_LIMIT);
+    let page = params.page.unwrap_or(1).max(1);
+    let offset = (page - 1) * limit;
     let level = params.level.filter(|l| l != "all");
     let search = params.search.filter(|s| !s.is_empty());
     let sort_asc = params.sort.as_deref() == Some("asc");
@@ -35,9 +48,11 @@ pub async fn logs_handler(
                 e.to_string(),
             )
         })?;
+        let total = count_logs(&conn, level.as_deref(), search.as_deref()).unwrap_or(0);
         let logs = get_logs(
             &conn,
             limit,
+            offset,
             level.as_deref(),
             search.as_deref(),
             sort_asc,
@@ -69,7 +84,12 @@ pub async fn logs_handler(
             });
         }
 
-        Ok(Json(entries))
+        Ok(Json(LogsResponse {
+            entries,
+            total,
+            page,
+            limit,
+        }))
     })
     .await
 }

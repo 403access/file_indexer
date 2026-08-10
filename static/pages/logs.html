@@ -145,12 +145,104 @@
             margin-top: -8px;
             margin-bottom: 10px;
         }
+
+        .logs-layout {
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 1.25rem;
+        }
+        .logs-layout > .page-header,
+        .logs-layout > .log-controls,
+        .logs-layout > .search-hint,
+        .logs-layout > .results-info,
+        .logs-layout > .pagination {
+            flex-shrink: 0;
+        }
+        .logs-layout .pagination {
+            flex-wrap: wrap;
+            row-gap: var(--space-2);
+        }
+        .logs-layout > .results {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .logs-layout .results .table-wrap {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .log-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .pagination .page-btn {
+            padding: 0.35rem 0.7rem;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            font-family: inherit;
+            line-height: 1.2;
+            cursor: pointer;
+            transition: background var(--duration-fast) var(--ease-in-out), border-color var(--duration-fast) var(--ease-in-out);
+        }
+        .pagination .page-btn:hover:not(:disabled) {
+            background: var(--bg-subtle);
+            border-color: var(--accent);
+        }
+        .pagination .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .pagination .page-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            font-weight: 600;
+        }
+        .pagination .page-ellipsis {
+            color: var(--text-muted);
+            padding: 0 0.15rem;
+            font-size: var(--font-size-sm);
+            user-select: none;
+        }
+        .pagination .page-info {
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            font-variant-numeric: tabular-nums;
+            margin-left: var(--space-2);
+        }
+        .pagination .page-jump {
+            width: 3.5rem;
+            padding: 0.2rem 0.4rem;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            font-family: inherit;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+        }
+        .pagination .page-jump:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
     </style>
 </head>
 <body>
     <nav id="sidebar-container"></nav>
 
-    <main>
+    <main class="logs-layout">
         <header class="page-header">
             <div class="page-header__titles">
                 <h1 class="page-header__title">Logs</h1>
@@ -173,8 +265,9 @@
             </label>
             <label>Limit:
                 <select id="limit-filter">
+                    <option value="50" selected>50</option>
                     <option value="100">100</option>
-                    <option value="500" selected>500</option>
+                    <option value="500">500</option>
                     <option value="1000">1000</option>
                     <option value="5000">5000</option>
                 </select>
@@ -205,24 +298,28 @@
             </table></div>
             <div id="no-results" class="empty-state" style="display:none;"><div class="empty-state__title">No logs found</div></div>
         </section>
+
+        <section class="pagination" id="pagination" style="display:none;"></section>
     </main>
 
     <script>
         let refreshInterval = null;
         let sortAsc = false;
+        let currentPage = 1;
 
         document.addEventListener('DOMContentLoaded', () => {
             fetchLogs();
-            document.getElementById('level-filter').addEventListener('change', fetchLogs);
-            document.getElementById('limit-filter').addEventListener('change', fetchLogs);
+            document.getElementById('level-filter').addEventListener('change', () => { currentPage = 1; fetchLogs(); });
+            document.getElementById('limit-filter').addEventListener('change', () => { currentPage = 1; fetchLogs(); });
             document.getElementById('search-filter').addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') fetchLogs();
+                if (e.key === 'Enter') { currentPage = 1; fetchLogs(); }
             });
         });
 
         function toggleSort() {
             sortAsc = !sortAsc;
             document.getElementById('sort-btn').textContent = sortAsc ? 'Timestamp ▲' : 'Timestamp ▼';
+            currentPage = 1;
             fetchLogs();
         }
 
@@ -233,38 +330,44 @@
             const sort = sortAsc ? 'asc' : 'desc';
 
             try {
-                const params = new URLSearchParams({ limit, sort });
+                const params = new URLSearchParams({ limit, sort, page: currentPage });
                 if (level !== 'all') params.set('level', level);
                 if (search) params.set('search', search);
 
                 const res = await fetch(`/api/logs?${params}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
                 const data = await res.json();
-                lastData = data;
+                const entries = data.entries || [];
+                const total = data.total ?? 0;
+                lastData = entries;
 
                 const resultsTable = document.getElementById('results-table');
                 const resultsBody = document.getElementById('results-body');
                 const resultsInfo = document.getElementById('results-info');
                 const resultCount = document.getElementById('result-count');
                 const noResults = document.getElementById('no-results');
+                const pagination = document.getElementById('pagination');
 
                 resultsBody.innerHTML = '';
 
                 const resultsWrap = document.getElementById('results-wrap');
-                if (data.length === 0) {
+                if (entries.length === 0) {
                     noResults.style.display = 'block';
                     resultsTable.style.display = 'none';
                     if (resultsWrap) resultsWrap.style.display = 'none';
                     resultsInfo.style.display = 'none';
+                    pagination.style.display = 'none';
+                    pagination.innerHTML = '';
                     return;
                 }
 
                 noResults.style.display = 'none';
                 resultsTable.style.display = 'table';
                 if (resultsWrap) resultsWrap.style.display = '';
-                resultCount.textContent = `${data.length} log(s)`;
+                resultCount.textContent = `${total.toLocaleString()} log${total === 1 ? '' : 's'}`;
                 resultsInfo.style.display = 'block';
 
-                data.forEach((log, idx) => {
+                entries.forEach((log, idx) => {
                     const isIndexed = log.files && log.files.length > 0;
                     const tr = document.createElement('tr');
                     if (isIndexed) {
@@ -299,19 +402,94 @@
                         resultsBody.appendChild(fileRow);
                     }
                 });
+
+                const pageSize = data.limit || parseInt(limit, 10) || 50;
+                renderPagination(total, pageSize);
             } catch (err) {
                 document.getElementById('no-results').textContent = 'Failed to load logs';
                 document.getElementById('no-results').style.display = 'block';
+                const pagination = document.getElementById('pagination');
+                if (pagination) { pagination.style.display = 'none'; pagination.innerHTML = ''; }
             }
         }
 
         function toggleAutoRefresh() {
             if (document.getElementById('auto-refresh').checked) {
-                refreshInterval = setInterval(fetchLogs, 5000);
+                refreshInterval = setInterval(() => {
+                    currentPage = 1;
+                    fetchLogs();
+                }, 5000);
             } else {
                 clearInterval(refreshInterval);
                 refreshInterval = null;
             }
+        }
+
+        const MAX_VISIBLE_PAGES = 5;
+
+        function buildPageWindow(totalPages) {
+            let startPage = Math.max(1, currentPage - Math.floor(MAX_VISIBLE_PAGES / 2));
+            let endPage = Math.min(totalPages, startPage + MAX_VISIBLE_PAGES - 1);
+            if (endPage - startPage < MAX_VISIBLE_PAGES - 1) {
+                startPage = Math.max(1, endPage - MAX_VISIBLE_PAGES + 1);
+            }
+            return { startPage, endPage };
+        }
+
+        function renderPagination(total, pageSize) {
+            const pagination = document.getElementById('pagination');
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+            if (totalPages <= 1) {
+                pagination.style.display = 'none';
+                pagination.innerHTML = '';
+                return;
+            }
+
+            pagination.style.display = 'flex';
+            const { startPage, endPage } = buildPageWindow(totalPages);
+
+            let html = '';
+            html += `<button type="button" class="page-btn" onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''} aria-label="First page">&laquo;</button>`;
+            html += `<button type="button" class="page-btn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>`;
+
+            if (startPage > 1) {
+                html += `<button type="button" class="page-btn" onclick="goToPage(1)">1</button>`;
+                if (startPage > 2) html += '<span class="page-ellipsis" aria-hidden="true">&hellip;</span>';
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button type="button" class="page-btn${i === currentPage ? ' active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += '<span class="page-ellipsis" aria-hidden="true">&hellip;</span>';
+                html += `<button type="button" class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+            }
+
+            html += `<button type="button" class="page-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>`;
+            html += `<button type="button" class="page-btn" onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''} aria-label="Last page">&raquo;</button>`;
+
+            html += `<span class="page-info">Page <input type="number" id="page-jump" class="page-jump" min="1" max="${totalPages}" value="${currentPage}" onkeydown="if (event.key === 'Enter') jumpToPage()" aria-label="Jump to page"> of ${totalPages} &middot; ${total.toLocaleString()} log${total === 1 ? '' : 's'}</span>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            const wrap = document.getElementById('results-wrap');
+            if (wrap) wrap.scrollTop = 0;
+            fetchLogs();
+        }
+
+        function jumpToPage() {
+            const input = document.getElementById('page-jump');
+            if (!input) return;
+            const raw = input.value.trim();
+            if (!/^\d+$/.test(raw)) return;
+            const page = parseInt(raw, 10);
+            const max = parseInt(input.max, 10) || 1;
+            goToPage(Math.min(Math.max(page, 1), max));
         }
 
         function escapeHtml(str) {
