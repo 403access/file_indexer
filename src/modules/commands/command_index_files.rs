@@ -13,7 +13,7 @@ use crate::{
         processes,
         progress,
         search_files::try_get_dir_entries::try_get_dir_entries,
-        sql::database::{delete_directory_tree, delete_stale_children, get_connection, get_ignore_rules, get_child_directories, get_directory_metadata, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, mark_directory_traversed_and_modified, update_duplicate_hashes_incremental, upsert_file, IgnoreRule},
+        sql::database::{delete_directory_tree, delete_stale_children, get_connection, get_ignore_rules, get_child_directories, get_directory_metadata, get_or_insert_file_name, init_db, insert_file, insert_file_name, insert_skipped_path, mark_directory_error, mark_directory_traversed_and_modified, update_duplicate_hashes_incremental, upsert_file, IgnoreRule},
     },
     states::app_state,
 };
@@ -192,6 +192,11 @@ pub fn index_directory(
                     up_to_date_dirs += 1;
                     continue;
                 }
+                // Previously unreadable and the folder has not changed on disk —
+                // skip it so we don't re-attempt (and re-log) the failure.
+                if meta.traverse_error.is_some() && meta.modified == disk_mtime {
+                    continue;
+                }
             }
 
             // Contents may have changed (or folder is new/untraversed) — re-read.
@@ -215,6 +220,7 @@ pub fn index_directory(
                     }
                     Err(e) => {
                         let _ = insert_skipped_path(&transaction, path, &e.to_string());
+                        let _ = mark_directory_error(&transaction, &trimmed, &e.to_string(), disk_mtime);
                     }
                 }
 

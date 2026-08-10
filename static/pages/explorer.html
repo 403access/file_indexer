@@ -200,6 +200,16 @@
             white-space: nowrap;
             flex-shrink: 0;
         }
+        #folders-error {
+            margin-bottom: var(--space-2);
+            padding: 0.6rem 0.75rem;
+            border-radius: var(--radius-sm);
+            background: var(--danger-muted);
+            border: 1px solid var(--danger);
+            color: var(--danger-text);
+            font-size: var(--font-size-sm);
+            word-break: break-word;
+        }
         #explorer-pagination .page-btn {
             padding: 0.35rem 0.7rem;
             border: 1px solid var(--border-default);
@@ -286,6 +296,7 @@
                 <div class="breadcrumb" id="folders-breadcrumb"></div>
                 <span class="summary" id="folders-summary"></span>
             </div>
+            <div id="folders-error" class="notice notice--error" style="display:none;"></div>
             <div class="folder-items" id="folder-items"></div>
             <div id="folders-no-results" class="empty-state" style="display:none;">
                 <div class="empty-state__title">Empty folder</div>
@@ -781,12 +792,20 @@
             document.getElementById('folders-summary').textContent =
                 `${data.folder_count} folder${data.folder_count === 1 ? '' : 's'}, ${data.file_count} file${data.file_count === 1 ? '' : 's'}`;
 
+            const foldersError = document.getElementById('folders-error');
+            if (data.traverse_error) {
+                foldersError.textContent = `This folder could not be read: ${data.traverse_error}`;
+                foldersError.style.display = 'block';
+            } else {
+                foldersError.style.display = 'none';
+            }
+
             const container = document.getElementById('folder-items');
             const noResults = document.getElementById('folders-no-results');
 
             if (items.length === 0) {
                 container.innerHTML = '';
-                noResults.style.display = 'block';
+                noResults.style.display = data.traverse_error ? 'none' : 'block';
                 return;
             }
             noResults.style.display = 'none';
@@ -796,18 +815,23 @@
 
             container.innerHTML = dirs.concat(files).map((item) => {
                 const isDir = item.is_directory;
-                const icon = isDir ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
+                const icon = isDir
+                    ? item.traverse_error ? '\u26A0\uFE0F' : '\uD83D\uDCC1'
+                    : '\uD83D\uDCC4';
                 const safePath = (item.path || '').replace(/'/g, "\\'");
                 const safeName = (item.name || '').replace(/'/g, "\\'");
                 const click = isDir
                     ? `folderOpen('${safePath}')`
                     : `FileViewer.open('${safePath}', '${safeName}')`;
+                const meta = isDir
+                    ? item.traverse_error
+                        ? `<span class="folder-item__meta badge badge--danger" title="${escapeHtml(item.traverse_error)}">Unreadable</span>`
+                        : (item.traversed ? '<span class="folder-item__meta">Folder</span>' : '<span class="folder-item__meta badge badge--warning">Not indexed</span>')
+                    : `<span class="folder-item__meta">${formatSize(item.size)}</span>`;
                 return `<div class="folder-item" onclick="${click}">
                     <span class="folder-item__icon">${icon}</span>
                     <span class="folder-item__name ${isDir ? 'dir' : 'file'}">${escapeHtml(item.name)}</span>
-                    ${isDir
-                        ? '<span class="folder-item__meta">Folder</span>'
-                        : `<span class="folder-item__meta">${formatSize(item.size)}</span>`}
+                    ${meta}
                     ${isDir ? '<span class="folder-item__chevron">\u203A</span>' : ''}
                 </div>`;
             }).join('');

@@ -403,3 +403,59 @@ fn reindex_picks_up_new_folder() {
 
     cleanup(&db, &temp);
 }
+
+/// A directory that cannot be read is flagged with `traverse_error` (distinct
+/// from "traversed") and is skipped on later runs while its disk mtime is
+/// unchanged, instead of being re-attempted and re-logged every run.
+#[cfg(unix)]
+#[test]
+fn unreadable_directory_is_flagged_and_skipped() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let temp = create_test_data();
+    let db = setup(&temp);
+
+    // A subfolder the process can `stat` (metadata works) but cannot list.
+    let locked = temp.join("folder-locked");
+    fs::create_dir(&locked).unwrap();
+    fs::write(locked.join("locked.txt"), "locked").unwrap();
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o100)).unwrap();
+
+    // Sanity: read_dir must actually fail, else the test is meaningless.
+    assert!(fs::read_dir(&locked).is_err(), "locked dir should be unreadable");
+
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+
+    let conn = get_connection(db.to_str().unwrap()).unwrap();
+    let (traversed, traverse_error): (i32, Option<String>) = conn
+        .query_row(
+            "SELECT traversed, traverse_error FROM files WHERE path = ?1",
+            [locked.to_str().unwrap()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(traversed, 0, "unreadable folder must not be marked indexed");
+    assert!(
+        traverse_error.is_some(),
+        "unreadable folder should carry a distinct traverse_error flag"
+    );
+
+    // Folders that failed to read are skipped on re-runs while unchanged.
+    index_directory(db.to_str().unwrap(), temp.to_str().unwrap(), None, None).unwrap();
+    let conn = get_connection(db.to_str().unwrap()).unwrap();
+    let (traversed, traverse_error): (i32, Option<String>) = conn
+        .query_row(
+            "SELECT traversed, traverse_error FROM files WHERE path = ?1",
+            [locked.to_str().unwrap()],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .unwrap();
+    assert_eq!(traversed, 0, "still unreadable after re-run");
+    assert!(
+        traverse_error.is_some(),
+        "still flagged with traverse_error after re-run"
+    );
+
+    fs::set_permissions(&locked, fs::Permissions::from_mode(0o755)).unwrap();
+    cleanup(&db, &temp);
+}

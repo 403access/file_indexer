@@ -65,15 +65,30 @@ pub fn mark_directory_traversed(tx: &Transaction, path: &str) -> rusqlite::Resul
 
 /// Set a folder as fully indexed AND refresh its stored mtime.
 /// The mtime is what later runs compare against to decide whether a
-/// reconcile is needed.
+/// reconcile is needed. Any prior traversal error is cleared.
 pub fn mark_directory_traversed_and_modified(
     tx: &Transaction,
     path: &str,
     modified: Option<f64>,
 ) -> rusqlite::Result<()> {
     tx.execute(
-        "UPDATE files SET traversed = 1, modified = ?1 WHERE path = ?2 AND is_directory = 1",
+        "UPDATE files SET traversed = 1, modified = ?1, traverse_error = NULL WHERE path = ?2 AND is_directory = 1",
         rusqlite::params![modified, path],
+    )?;
+    Ok(())
+}
+
+/// Mark a folder as attempted-but-unreadable, recording the error and the
+/// disk mtime seen at attempt time so later runs can skip it while unchanged.
+pub fn mark_directory_error(
+    tx: &Transaction,
+    path: &str,
+    error: &str,
+    modified: Option<f64>,
+) -> rusqlite::Result<()> {
+    tx.execute(
+        "UPDATE files SET traversed = 0, traverse_error = ?1, modified = ?2 WHERE path = ?3 AND is_directory = 1",
+        rusqlite::params![error, modified, path],
     )?;
     Ok(())
 }
@@ -81,6 +96,7 @@ pub fn mark_directory_traversed_and_modified(
 pub struct DirectoryMetadata {
     pub traversed: bool,
     pub modified: Option<f64>,
+    pub traverse_error: Option<String>,
 }
 
 pub fn is_directory_indexed(conn: &Connection, path: &str) -> bool {
@@ -95,19 +111,22 @@ pub fn is_directory_indexed(conn: &Connection, path: &str) -> bool {
 }
 
 /// Stored traversal state + mtime for a directory, so a re-run can decide
-/// whether its children need to be re-read from disk.
+/// whether its children need to be re-read from disk, or whether a previous
+/// read failed (`traverse_error`).
 pub fn get_directory_metadata(
     conn: &Connection,
     path: &str,
 ) -> rusqlite::Result<Option<DirectoryMetadata>> {
     let trimmed = path.trim_end_matches('/');
     conn.query_row(
-        "SELECT traversed, modified FROM files WHERE path = ?1 AND is_directory = 1",
+        "SELECT traversed, modified, traverse_error FROM files WHERE path = ?1 AND is_directory = 1",
         [trimmed],
         |row| {
+            let traverse_error: Option<String> = row.get(2)?;
             Ok(DirectoryMetadata {
                 traversed: row.get::<_, i32>(0)? != 0,
                 modified: row.get(1)?,
+                traverse_error,
             })
         },
     )

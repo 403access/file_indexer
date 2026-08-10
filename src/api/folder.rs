@@ -17,6 +17,8 @@ pub struct FolderResponse {
     pub name: String,
     pub size: u64,
     pub modified: Option<u64>,
+    pub traversed: bool,
+    pub traverse_error: Option<String>,
     pub file_count: usize,
     pub folder_count: usize,
     pub files: Vec<FolderEntry>,
@@ -31,6 +33,8 @@ pub struct FolderEntry {
     pub is_directory: bool,
     pub is_file: bool,
     pub hash: Option<String>,
+    pub traversed: bool,
+    pub traverse_error: Option<String>,
 }
 
 pub async fn folder_handler(
@@ -48,7 +52,7 @@ pub async fn folder_handler(
     // Get folder metadata. The configured root may not be stored as a folder
     // row (only its contents are), so synthesize metadata for it.
     let folder = match conn.query_row(
-        "SELECT f.path, fn.name, f.size, f.modified
+        "SELECT f.path, fn.name, f.size, f.modified, f.traversed, f.traverse_error
          FROM files f
          JOIN file_names fn ON f.file_name_id = fn.id
          WHERE f.path = ?1 AND f.is_directory = 1",
@@ -59,6 +63,8 @@ pub async fn folder_handler(
                 row.get::<_, String>(1)?,
                 row.get::<_, u64>(2)?,
                 row.get::<_, Option<f64>>(3)?.map(|v| v as u64),
+                row.get::<_, i32>(4)? != 0,
+                row.get(5)?,
             ))
         },
     ) {
@@ -69,7 +75,15 @@ pub async fn folder_handler(
                     .file_name()
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| path.to_string());
-                (path.to_string(), name, 0u64, None)
+                let traversed = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM files WHERE path = ?1 AND is_directory = 1 AND traversed = 1",
+                        [path],
+                        |row| row.get::<_, i64>(0),
+                    )
+                    .unwrap_or(0)
+                    > 0;
+                (path.to_string(), name, 0u64, None, traversed, None)
             } else {
                 return Err((
                     axum::http::StatusCode::NOT_FOUND,
@@ -81,7 +95,7 @@ pub async fn folder_handler(
 
     // Get children
     let mut stmt = conn.prepare(
-        "SELECT f.path, fn.name, f.size, f.modified, f.is_directory, f.is_file, f.hash
+        "SELECT f.path, fn.name, f.size, f.modified, f.is_directory, f.is_file, f.hash, f.traversed, f.traverse_error
          FROM files f
          JOIN file_names fn ON f.file_name_id = fn.id
          WHERE f.parent_path = ?1
@@ -98,6 +112,8 @@ pub async fn folder_handler(
             is_directory: row.get::<_, i32>(4)? != 0,
             is_file: row.get::<_, i32>(5)? != 0,
             hash: row.get(6)?,
+            traversed: row.get::<_, i32>(7)? != 0,
+            traverse_error: row.get(8)?,
         })
     })
     .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
@@ -112,6 +128,8 @@ pub async fn folder_handler(
         name: folder.1,
         size: folder.2,
         modified: folder.3,
+        traversed: folder.4,
+        traverse_error: folder.5,
         file_count,
         folder_count,
         files: entries,

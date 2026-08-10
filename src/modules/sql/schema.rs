@@ -32,6 +32,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
             is_symlink INTEGER,
             parent_path TEXT,
             traversed INTEGER DEFAULT 0,
+            traverse_error TEXT,
 
             FOREIGN KEY(file_name_id) REFERENCES file_names(id),
             FOREIGN KEY(parent_path) REFERENCES files(path)
@@ -47,6 +48,7 @@ pub fn init_db(tx: &Transaction) -> rusqlite::Result<()> {
     // Migration: add columns to existing databases (errors ignored if already present)
     let _ = tx.execute("ALTER TABLE files ADD COLUMN parent_path TEXT", []);
     let _ = tx.execute("ALTER TABLE files ADD COLUMN traversed INTEGER DEFAULT 0", []);
+    let _ = tx.execute("ALTER TABLE files ADD COLUMN traverse_error TEXT", []);
 
     let hash_index_result = tx.execute(
         "CREATE INDEX IF NOT EXISTS idx_files_hash ON files(hash);",

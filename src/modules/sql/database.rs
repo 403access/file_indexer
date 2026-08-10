@@ -13,8 +13,8 @@ pub use super::duplicates::{
 pub use super::files::{
     delete_directory_tree, delete_stale_children, get_child_directories, get_child_entries,
     get_directory_metadata, get_or_insert_file_name, insert_file, insert_file_name,
-    is_directory_indexed, mark_directory_traversed, mark_directory_traversed_and_modified,
-    upsert_file, DirectoryMetadata, UpsertResult,
+    is_directory_indexed, mark_directory_error, mark_directory_traversed,
+    mark_directory_traversed_and_modified, upsert_file, DirectoryMetadata, UpsertResult,
 };
 pub use super::logs::{count_ignore_events, count_logs, get_logs, insert_log};
 pub use super::schema::init_db;
