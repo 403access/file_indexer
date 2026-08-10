@@ -30,34 +30,6 @@
     <link rel="stylesheet" href="/css/components.css">
     <link rel="stylesheet" href="/css/style.css">
     <style>
-        .ignored-stats {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 24px;
-            flex-wrap: wrap;
-        }
-        .ignored-stat {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border-default);
-            border-radius: var(--radius-lg);
-            padding: 16px 24px;
-            text-align: center;
-            min-width: 160px;
-        }
-        .ignored-stat .value {
-            font-size: 32px;
-            font-weight: 700;
-            color: var(--text-primary);
-            margin-bottom: 4px;
-        }
-        .ignored-stat .label {
-            font-size: 13px;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .ignored-stat.rules .value { color: var(--accent); }
-        .ignored-stat.skipped .value { color: var(--danger); }
         .section-title {
             font-size: 18px;
             font-weight: 600;
@@ -126,13 +98,8 @@
             box-sizing: border-box;
         }
 
-        main.ignored-page .page-header,
-        main.ignored-page .ignored-stats {
+        main.ignored-page .page-header {
             flex-shrink: 0;
-        }
-
-        main.ignored-page .ignored-stats {
-            margin-bottom: 0;
         }
 
         .ignored-panels {
@@ -230,17 +197,6 @@
             </div>
         </header>
 
-        <section class="ignored-stats stat-grid">
-            <div class="stat-card stat-card--accent">
-                <div class="stat-card__value" id="stat-rules">-</div>
-                <div class="stat-card__label">Ignore Rules</div>
-            </div>
-            <div class="stat-card stat-card--danger">
-                <div class="stat-card__value" id="stat-skipped">-</div>
-                <div class="stat-card__label">Skipped Paths</div>
-            </div>
-        </section>
-
         <div class="ignored-panels">
             <section class="ignored-panel" aria-labelledby="rules-heading">
                 <div class="ignored-panel__header">
@@ -332,7 +288,6 @@
             const nextBtn = document.getElementById('rules-next');
 
             const total = allRules.length;
-            document.getElementById('stat-rules').textContent = total.toLocaleString();
 
             if (total === 0) {
                 noRules.style.display = 'block';
@@ -403,8 +358,6 @@
                 const results = data.results || [];
                 const total = data.total ?? 0;
                 skippedPage = data.page || page;
-
-                document.getElementById('stat-skipped').textContent = total.toLocaleString();
 
                 if (total === 0) {
                     noSkipped.style.display = 'block';
