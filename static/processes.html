@@ -47,6 +47,53 @@
 
         <div class="results-info" id="processes-summary"></div>
 
+        <div class="processes-toolbar" role="search" aria-label="Filter processes">
+            <label class="toolbar-field toolbar-field--grow" title="Search">
+                <span class="toolbar-field__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                </span>
+                <input type="search" id="processes-search" placeholder="Search name, category, message, id…" autocomplete="off" aria-label="Search processes">
+            </label>
+            <label class="toolbar-field toolbar-field--select" title="Filter">
+                <span class="toolbar-field__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 5h16l-6.5 7.5V19l-3 1.5v-8L4 5z"/></svg>
+                </span>
+                <select id="processes-filter" aria-label="Filter by status">
+                    <option value="all">All statuses</option>
+                    <option value="active">Running</option>
+                    <option value="pending">Pending</option>
+                    <option value="completed">Completed</option>
+                    <option value="failed">Failed</option>
+                    <option value="paused">Paused</option>
+                </select>
+            </label>
+            <label class="toolbar-field toolbar-field--select" title="Category">
+                <span class="toolbar-field__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h10M4 18h14"/><circle cx="18" cy="12" r="2"/><circle cx="20" cy="18" r="2"/></svg>
+                </span>
+                <select id="processes-category" aria-label="Filter by category">
+                    <option value="all">All categories</option>
+                </select>
+            </label>
+            <label class="toolbar-field toolbar-field--select" title="Sort">
+                <span class="toolbar-field__icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M8 6v12M4.5 9.5 8 6l3.5 3.5M16 18V6M12.5 14.5 16 18l3.5-3.5"/></svg>
+                </span>
+                <select id="processes-sort" aria-label="Sort processes">
+                    <option value="id-desc">ID high–low</option>
+                    <option value="id-asc">ID low–high</option>
+                    <option value="name-asc">Name A–Z</option>
+                    <option value="name-desc">Name Z–A</option>
+                    <option value="status-asc">Status A–Z</option>
+                    <option value="status-desc">Status Z–A</option>
+                    <option value="category-asc">Category A–Z</option>
+                    <option value="category-desc">Category Z–A</option>
+                    <option value="started-desc">Started newest</option>
+                    <option value="started-asc">Started oldest</option>
+                </select>
+            </label>
+        </div>
+
         <div class="processes-layout">
             <div class="processes-cards-col">
                 <div id="process-cards"></div>

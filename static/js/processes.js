@@ -1,38 +1,135 @@
+let allProcesses = [];
+
 async function loadProcesses() {
     try {
         const res = await fetch('/api/processes');
         if (!res.ok) throw new Error('Failed to load processes');
         const data = await res.json();
-        renderProcesses(data.processes || []);
+        allProcesses = data.processes || [];
+        updateCategoryOptions(allProcesses);
+        applyProcessFilters();
     } catch (e) {
         document.getElementById('processes-tbody').innerHTML =
             `<tr><td colspan="8" class="empty-msg">Failed to load: ${escapeHtml(e.message)}</td></tr>`;
     }
 }
 
-function renderProcesses(processes) {
+function getProcessQuery() {
+    const searchEl = document.getElementById('processes-search');
+    const filterEl = document.getElementById('processes-filter');
+    const categoryEl = document.getElementById('processes-category');
+    const sortEl = document.getElementById('processes-sort');
+    return {
+        q: (searchEl?.value || '').trim().toLowerCase(),
+        status: filterEl?.value || 'all',
+        category: categoryEl?.value || 'all',
+        sort: sortEl?.value || 'id-desc',
+    };
+}
+
+function updateCategoryOptions(processes) {
+    const select = document.getElementById('processes-category');
+    if (!select) return;
+    const current = select.value || 'all';
+    const cats = [...new Set(processes.map((p) => p.category).filter(Boolean))].sort((a, b) =>
+        a.localeCompare(b)
+    );
+    select.innerHTML =
+        '<option value="all">All categories</option>' +
+        cats.map((c) => `<option value="${escapeAttr(c)}">${escapeHtml(c)}</option>`).join('');
+    if (cats.includes(current) || current === 'all') {
+        select.value = current;
+    } else {
+        select.value = 'all';
+    }
+}
+
+function applyProcessFilters() {
+    const { q, status, category, sort } = getProcessQuery();
+    let list = allProcesses.slice();
+
+    if (status === 'paused') {
+        list = list.filter((p) => p.paused);
+    } else if (status !== 'all') {
+        list = list.filter((p) => p.status === status);
+    }
+
+    if (category !== 'all') {
+        list = list.filter((p) => p.category === category);
+    }
+
+    if (q) {
+        list = list.filter((p) => {
+            const hay = [
+                String(p.id),
+                p.name || '',
+                p.category || '',
+                p.status || '',
+                p.message || '',
+            ]
+                .join(' ')
+                .toLowerCase();
+            return hay.includes(q);
+        });
+    }
+
+    const [field, dir] = sort.split('-');
+    const mult = dir === 'desc' ? -1 : 1;
+    list.sort((a, b) => {
+        if (field === 'id') {
+            return ((a.id || 0) - (b.id || 0)) * mult;
+        }
+        if (field === 'started') {
+            const at = a.started_at ? Date.parse(a.started_at) || 0 : 0;
+            const bt = b.started_at ? Date.parse(b.started_at) || 0 : 0;
+            return (at - bt) * mult;
+        }
+        const av = String(a[field] || '').toLowerCase();
+        const bv = String(b[field] || '').toLowerCase();
+        return av.localeCompare(bv) * mult;
+    });
+
+    renderProcesses(list, allProcesses.length);
+}
+
+function renderProcesses(processes, totalAll = processes.length) {
     const tbody = document.getElementById('processes-tbody');
     const summary = document.getElementById('processes-summary');
     const cardsContainer = document.getElementById('process-cards');
 
-    const running = processes.filter(p => p.status === 'active').length;
-    const pending = processes.filter(p => p.status === 'pending').length;
-    const completed = processes.filter(p => p.status === 'completed').length;
-    const failed = processes.filter(p => p.status === 'failed').length;
+    const source = allProcesses;
+    const running = source.filter((p) => p.status === 'active').length;
+    const pending = source.filter((p) => p.status === 'pending').length;
+    const completed = source.filter((p) => p.status === 'completed').length;
+    const failed = source.filter((p) => p.status === 'failed').length;
 
-    summary.textContent = `${processes.length} total • ${running} running • ${pending} upcoming • ${completed} completed • ${failed} failed`;
+    const hasFilter = processes.length !== totalAll
+        || (document.getElementById('processes-search')?.value || '').trim() !== ''
+        || (document.getElementById('processes-filter')?.value || 'all') !== 'all'
+        || (document.getElementById('processes-category')?.value || 'all') !== 'all';
 
-    const active = processes.filter(p => p.status === 'active' || p.status === 'pending');
+    if (hasFilter) {
+        summary.textContent =
+            `Showing ${processes.length} of ${totalAll} • ${running} running • ${pending} upcoming • ${completed} completed • ${failed} failed`;
+    } else {
+        summary.textContent =
+            `${totalAll} total • ${running} running • ${pending} upcoming • ${completed} completed • ${failed} failed`;
+    }
+
+    // Active cards still only show running/pending from the *filtered* set
+    const active = processes.filter((p) => p.status === 'active' || p.status === 'pending');
 
     if (active.length === 0) {
         cardsContainer.innerHTML = '';
     } else {
-        cardsContainer.innerHTML = active.map(p => {
-            const progressHtml = p.progress !== null && p.progress !== undefined
-                ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
-                : '<span class="process-mono">—</span>';
+        cardsContainer.innerHTML = active
+            .map((p) => {
+                const progressHtml =
+                    p.progress !== null && p.progress !== undefined
+                        ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
+                        : '<span class="process-mono">—</span>';
 
-            return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}" onclick="openProcessSidebar(${p.id})">
+                return `<div class="process-card ${p.status}${p.paused ? ' paused' : ''}" onclick="openProcessSidebar(${p.id})">
                 <div class="process-card-header">
                     <div>
                         <div class="process-card-name">${escapeHtml(p.name)}</div>
@@ -43,9 +140,10 @@ function renderProcesses(processes) {
                     </div>
                     <div class="process-card-actions" onclick="event.stopPropagation()">
                         <button type="button" class="process-action-btn trigger-btn" onclick="event.stopPropagation(); triggerProcess(${p.id})" title="Run this process immediately">▶ Trigger</button>
-                        ${p.paused
-                            ? `<button type="button" class="process-action-btn resume-btn" onclick="event.stopPropagation(); resumeProcess(${p.id})" title="Resume the paused process">▶ Resume</button>`
-                            : `<button type="button" class="process-action-btn pause-btn" onclick="event.stopPropagation(); pauseProcess(${p.id})" title="Temporarily suspend; you can resume later">⏸ Pause</button>`
+                        ${
+                            p.paused
+                                ? `<button type="button" class="process-action-btn resume-btn" onclick="event.stopPropagation(); resumeProcess(${p.id})" title="Resume the paused process">▶ Resume</button>`
+                                : `<button type="button" class="process-action-btn pause-btn" onclick="event.stopPropagation(); pauseProcess(${p.id})" title="Temporarily suspend; you can resume later">⏸ Pause</button>`
                         }
                         <button type="button" class="process-action-btn stop-btn" onclick="event.stopPropagation(); stopProcess(${p.id})" title="Permanently terminate this process">⏹ Stop</button>
                     </div>
@@ -59,20 +157,25 @@ function renderProcesses(processes) {
                     <span class="process-mono">#${p.id}</span>
                 </div>
             </div>`;
-        }).join('');
+            })
+            .join('');
     }
 
     if (processes.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-msg">No processes tracked yet</td></tr>';
+        tbody.innerHTML = hasFilter
+            ? '<tr><td colspan="8" class="empty-msg">No processes match your search or filters</td></tr>'
+            : '<tr><td colspan="8" class="empty-msg">No processes tracked yet</td></tr>';
         return;
     }
 
-    tbody.innerHTML = processes.map(p => {
-        const progressHtml = p.progress !== null && p.progress !== undefined
-            ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
-            : '<span class="process-mono">—</span>';
+    tbody.innerHTML = processes
+        .map((p) => {
+            const progressHtml =
+                p.progress !== null && p.progress !== undefined
+                    ? `<div class="progress-bar-bg"><div class="progress-bar-fill${p.status === 'active' && !p.paused ? ' active' : ''}" style="width:${Math.min(100, Math.max(0, p.progress))}%"></div></div><div class="process-mono">${p.progress.toFixed(0)}%</div>`
+                    : '<span class="process-mono">—</span>';
 
-        return `<tr onclick="openProcessSidebar(${p.id})" style="cursor:pointer">
+            return `<tr onclick="openProcessSidebar(${p.id})" style="cursor:pointer">
             <td class="process-mono">#${p.id}</td>
             <td><strong>${escapeHtml(p.name)}</strong></td>
             <td><span class="category-badge">${escapeHtml(p.category)}</span></td>
@@ -82,7 +185,8 @@ function renderProcesses(processes) {
             <td class="process-mono">${formatDate(p.started_at)}</td>
             <td class="process-mono">${formatDate(p.finished_at)}</td>
         </tr>`;
-    }).join('');
+        })
+        .join('');
 }
 
 function formatDate(ts) {
@@ -94,6 +198,18 @@ function formatDate(ts) {
     } catch (e) {
         return ts;
     }
+}
+
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function escapeAttr(str) {
+    return escapeHtml(str).replace(/'/g, '&#39;');
 }
 
 async function triggerProcess(id) {
@@ -150,6 +266,11 @@ let processesInterval = null;
 let currentSidebarProcessId = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('processes-search')?.addEventListener('input', applyProcessFilters);
+    document.getElementById('processes-filter')?.addEventListener('change', applyProcessFilters);
+    document.getElementById('processes-category')?.addEventListener('change', applyProcessFilters);
+    document.getElementById('processes-sort')?.addEventListener('change', applyProcessFilters);
+
     loadProcesses();
     processesInterval = setInterval(loadProcesses, 2000);
 });
@@ -169,12 +290,12 @@ async function openProcessSidebar(processId) {
     try {
         const [processRes, logsRes] = await Promise.all([
             fetch('/api/processes'),
-            fetch(`/api/processes/${processId}/logs?limit=500`)
+            fetch(`/api/processes/${processId}/logs?limit=500`),
         ]);
 
         if (!processRes.ok) throw new Error('Failed to load process');
         const processData = await processRes.json();
-        const process = processData.processes.find(p => p.id === processId);
+        const process = processData.processes.find((p) => p.id === processId);
 
         let logs = [];
         if (logsRes.ok) {
@@ -229,8 +350,9 @@ function renderProcessSidebar(process, logs) {
     if (!logs || logs.length === 0) {
         html += '<div class="empty-msg">No logs found for this process</div>';
     } else {
-        html += '<table class="process-logs-table"><thead><tr><th style="width:160px">Timestamp</th><th style="width:60px">Level</th><th>Message</th></tr></thead><tbody>';
-        logs.forEach(log => {
+        html +=
+            '<table class="process-logs-table"><thead><tr><th style="width:160px">Timestamp</th><th style="width:60px">Level</th><th>Message</th></tr></thead><tbody>';
+        logs.forEach((log) => {
             html += `<tr>
                 <td class="log-timestamp">${escapeHtml(log.timestamp)}</td>
                 <td class="log-level-${log.level.toLowerCase()}">${escapeHtml(log.level)}</td>
