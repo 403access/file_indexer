@@ -20,11 +20,20 @@ const API = {
     }
 };
 
+// Prefer shared SizeFormat (format.js); keep a fallback for load-order safety.
 function formatSize(bytes) {
+    if (window.SizeFormat && typeof window.SizeFormat.format === 'function') {
+        return window.SizeFormat.format(bytes);
+    }
     if (bytes === 0) return '0 B';
     const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+    const i = Math.min(
+        Math.floor(Math.log(Math.max(bytes, 1)) / Math.log(1024)),
+        units.length - 1
+    );
+    const value = bytes / Math.pow(1024, i);
+    const text = i === 0 ? String(Math.round(value)) : value.toFixed(2).replace(/\.?0+$/, '');
+    return `${text} ${units[i]}`;
 }
 
 function formatDate(timestamp) {

@@ -164,6 +164,14 @@
                         <button type="button" class="segmented__btn" data-type="pie" onclick="setChartType('pie')">Pie</button>
                         <button type="button" class="segmented__btn" data-type="doughnut" onclick="setChartType('doughnut')">Doughnut</button>
                     </div>
+                    <div class="segmented" role="group" aria-label="Size unit" id="chart-size-unit">
+                        <button type="button" class="segmented__btn" data-size-unit-option="auto">Auto</button>
+                        <button type="button" class="segmented__btn" data-size-unit-option="B">B</button>
+                        <button type="button" class="segmented__btn" data-size-unit-option="KB">KB</button>
+                        <button type="button" class="segmented__btn" data-size-unit-option="MB">MB</button>
+                        <button type="button" class="segmented__btn" data-size-unit-option="GB">GB</button>
+                        <button type="button" class="segmented__btn" data-size-unit-option="TB">TB</button>
+                    </div>
                 </div>
             </div>
             <div class="chart-container">
@@ -205,15 +213,74 @@
             });
         }
 
-        document.addEventListener('DOMContentLoaded', fetchDashboard);
+        /**
+         * Resolve a single unit for the whole chart so the scale is consistent.
+         * Auto picks the largest unit based on max period/cumulative size.
+         */
+        function chartSizeScale() {
+            const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
+            const base = 1024;
+            const pref = (window.SizeFormat && SizeFormat.get()) || 'auto';
+            const period = timelineData.map((b) => Number(b.size) || 0);
+            const cum = cumulativeSizes();
+            const maxBytes = Math.max(1, ...period, ...cum);
+
+            let idx;
+            if (pref === 'auto') {
+                idx = Math.floor(Math.log(maxBytes) / Math.log(base));
+                idx = Math.max(0, Math.min(idx, UNITS.length - 1));
+            } else {
+                idx = Math.max(0, UNITS.indexOf(pref));
+                if (idx < 0) idx = 0;
+            }
+            return {
+                unit: UNITS[idx],
+                divisor: Math.pow(base, idx),
+            };
+        }
+
+        function bytesToChartUnit(bytes, scale) {
+            return (Number(bytes) || 0) / scale.divisor;
+        }
+
+        function formatChartSize(valueInUnit, scale) {
+            const n = Number(valueInUnit) || 0;
+            if (scale.unit === 'B') return `${Math.round(n).toLocaleString()} B`;
+            const text = n >= 100
+                ? n.toFixed(1).replace(/\.0$/, '')
+                : n.toFixed(2).replace(/\.?0+$/, '');
+            return `${text} ${scale.unit}`;
+        }
+
+        function refreshSizeDisplays() {
+            // Re-format stat cards if we already have last payload
+            if (lastDashboard) {
+                document.getElementById('stat-size').textContent = formatSize(lastDashboard.total_size);
+                document.getElementById('stat-db').textContent = formatSize(lastDashboard.db_size);
+                document.getElementById('stat-wasted').textContent = formatSize(lastDashboard.wasted_file_bytes);
+            }
+            if (timelineData.length) renderChart();
+            if (window.SizeFormat) SizeFormat.updateUI(SizeFormat.get());
+        }
+
+        let lastDashboard = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.SizeFormat) SizeFormat.updateUI(SizeFormat.get());
+            fetchDashboard();
+        });
         document.addEventListener('themechange', () => {
             if (timelineData.length) renderChart();
+        });
+        document.addEventListener('sizeunitchange', () => {
+            refreshSizeDisplays();
         });
 
         async function fetchDashboard() {
             try {
                 const res = await fetch(`/api/dashboard?interval=${currentInterval}`);
                 const data = await res.json();
+                lastDashboard = data;
 
                 document.getElementById('stat-files').textContent = data.total_files.toLocaleString();
                 document.getElementById('stat-folders').textContent = data.total_folders.toLocaleString();
@@ -260,10 +327,12 @@
             const c = chartColors();
             const labels = timelineData.map(b => b.label);
             const isPie = currentChartType === 'pie' || currentChartType === 'doughnut';
+            const sizeScale = chartSizeScale();
+            const showSize = currentMetric === 'size' || currentMetric === 'all';
 
             let datasets;
             if (isPie) {
-                const metricData = getMetricData(currentMetric);
+                const metricData = getMetricData(currentMetric, sizeScale);
                 datasets = [{
                     data: metricData,
                     backgroundColor: generateColors(metricData.length),
@@ -297,10 +366,12 @@
                         pointHoverRadius: 5,
                     });
                 }
-                if (currentMetric === 'size' || currentMetric === 'all') {
+                if (showSize) {
+                    const periodSized = timelineData.map((b) => bytesToChartUnit(b.size, sizeScale));
+                    const cumSized = cumulativeSizes().map((b) => bytesToChartUnit(b, sizeScale));
                     datasets.push({
-                        label: 'Size (period)',
-                        data: timelineData.map(b => b.size),
+                        label: `Size (period) · ${sizeScale.unit}`,
+                        data: periodSized,
                         backgroundColor: currentChartType === 'line' ? 'rgba(16, 185, 129, 0.12)' : c.size,
                         borderColor: c.sizeBorder,
                         borderWidth: 2,
@@ -308,13 +379,13 @@
                         tension: 0.35,
                         pointRadius: 2,
                         pointHoverRadius: 5,
-                        yAxisID: 'y1',
+                        yAxisID: currentMetric === 'all' ? 'y1' : 'y',
+                        isSize: true,
                     });
-                    // Always draw accumulated total as a line (readable on bar charts too)
                     datasets.push({
                         type: 'line',
-                        label: 'Total size (accumulated)',
-                        data: cumulativeSizes(),
+                        label: `Total size (accumulated) · ${sizeScale.unit}`,
+                        data: cumSized,
                         backgroundColor: 'rgba(245, 158, 11, 0.08)',
                         borderColor: c.sizeCumBorder,
                         borderWidth: 2.5,
@@ -323,11 +394,32 @@
                         tension: 0.25,
                         pointRadius: 2,
                         pointHoverRadius: 5,
-                        yAxisID: 'y1',
+                        yAxisID: currentMetric === 'all' ? 'y1' : 'y',
                         order: 0,
+                        isSize: true,
                     });
                 }
             }
+
+            const sizeAxis = {
+                beginAtZero: true,
+                position: currentMetric === 'all' ? 'right' : 'left',
+                grid: currentMetric === 'all' ? { drawOnChartArea: false } : { color: c.grid },
+                border: { color: c.grid },
+                title: {
+                    display: true,
+                    text: sizeScale.unit,
+                    color: c.text,
+                },
+                ticks: {
+                    color: c.text,
+                    callback: (v) => {
+                        if (sizeScale.unit === 'B') return Number(v).toLocaleString();
+                        const n = Number(v);
+                        return n >= 100 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, '');
+                    },
+                },
+            };
 
             const scales = isPie ? {} : {
                 x: {
@@ -335,24 +427,18 @@
                     grid: { color: c.grid },
                     border: { color: c.grid },
                 },
-                y: {
-                    beginAtZero: true,
-                    position: 'left',
-                    ticks: { color: c.text },
-                    grid: { color: c.grid },
-                    border: { color: c.grid },
-                },
-                ...(currentMetric === 'size' || currentMetric === 'all'
-                    ? {
-                        y1: {
+                ...(currentMetric === 'size'
+                    ? { y: sizeAxis }
+                    : {
+                        y: {
                             beginAtZero: true,
-                            position: 'right',
-                            grid: { drawOnChartArea: false },
+                            position: 'left',
                             ticks: { color: c.text },
+                            grid: { color: c.grid },
                             border: { color: c.grid },
                         },
-                    }
-                    : {}),
+                        ...(showSize ? { y1: sizeAxis } : {}),
+                    }),
             };
 
             chart = new Chart(ctx, {
@@ -370,11 +456,15 @@
                         tooltip: {
                             callbacks: {
                                 label: (ctx) => {
-                                    if (isPie) return `${ctx.label}: ${ctx.parsed.toLocaleString()}`;
+                                    if (isPie) {
+                                        if (currentMetric === 'size') {
+                                            return `${ctx.label}: ${formatChartSize(ctx.parsed, sizeScale)}`;
+                                        }
+                                        return `${ctx.label}: ${ctx.parsed.toLocaleString()}`;
+                                    }
                                     const val = ctx.parsed.y ?? ctx.parsed;
-                                    if (ctx.dataset.label === 'Size (period)') return `Size (period): ${formatSize(val)}`;
-                                    if (ctx.dataset.label === 'Total size (accumulated)') {
-                                        return `Total size (accumulated): ${formatSize(val)}`;
+                                    if (ctx.dataset.isSize) {
+                                        return `${ctx.dataset.label.split(' · ')[0]}: ${formatChartSize(val, sizeScale)}`;
                                     }
                                     return `${ctx.dataset.label}: ${val.toLocaleString()}`;
                                 }
@@ -386,10 +476,13 @@
             });
         }
 
-        function getMetricData(metric) {
+        function getMetricData(metric, sizeScale) {
             if (metric === 'files') return timelineData.map(b => b.files);
             if (metric === 'folders') return timelineData.map(b => b.folders);
-            if (metric === 'size') return timelineData.map(b => b.size);
+            if (metric === 'size') {
+                const scale = sizeScale || chartSizeScale();
+                return timelineData.map((b) => bytesToChartUnit(b.size, scale));
+            }
             return timelineData.map(b => b.files + b.folders);
         }
 
@@ -420,10 +513,15 @@
         }
 
         function formatSize(bytes) {
-            if (bytes === 0) return '0 B';
+            if (window.SizeFormat) return window.SizeFormat.format(bytes);
+            if (bytes === 0 || bytes === '0') return '0 B';
+            const n = Number(bytes);
+            if (!Number.isFinite(n) || n < 0) return '—';
             const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-            const i = Math.floor(Math.log(bytes) / Math.log(1024));
-            return (bytes / Math.pow(1024, i)).toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
+            const i = Math.min(Math.floor(Math.log(Math.max(n, 1)) / Math.log(1024)), units.length - 1);
+            const value = n / Math.pow(1024, i);
+            const text = i === 0 ? String(Math.round(value)) : value.toFixed(2).replace(/\.?0+$/, '');
+            return text + ' ' + units[i];
         }
 
         async function refreshDashboard() {
@@ -443,6 +541,7 @@
         }
     </script>
     <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
     <script src="/assets/js/core/drawer.js"></script>
     <script src="/assets/js/core/sidebar.js"></script>
     <script src="/assets/js/core/status.js"></script>

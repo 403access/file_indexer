@@ -61,11 +61,16 @@
     }
 
     function formatSize(bytes) {
-        if (bytes === 0) return '0 B';
-        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(1024));
-        return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
-    }
+            if (window.SizeFormat) return window.SizeFormat.format(bytes);
+            if (bytes === 0 || bytes === '0') return '0 B';
+            const n = Number(bytes);
+            if (!Number.isFinite(n) || n < 0) return '—';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.min(Math.floor(Math.log(Math.max(n, 1)) / Math.log(1024)), units.length - 1);
+            const value = n / Math.pow(1024, i);
+            const text = i === 0 ? String(Math.round(value)) : value.toFixed(2).replace(/\.?0+$/, '');
+            return text + ' ' + units[i];
+        }
 
     function formatDate(ts) {
         if (!ts) return '-';
