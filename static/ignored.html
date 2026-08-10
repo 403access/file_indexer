@@ -245,6 +245,9 @@
             <section class="ignored-panel" aria-labelledby="rules-heading">
                 <div class="ignored-panel__header">
                     <h2 class="section-heading" id="rules-heading">Ignore Rules</h2>
+                    <div class="results-info" id="rules-info" style="display:none;">
+                        <span id="rules-count"></span>
+                    </div>
                 </div>
                 <div class="results">
                     <div id="no-rules" class="empty-state" style="display:none;">
@@ -264,6 +267,11 @@
                             <tbody id="rules-body"></tbody>
                         </table>
                     </div>
+                </div>
+                <div class="pagination" id="rules-pagination" style="display:none;">
+                    <button type="button" id="rules-prev" class="btn btn--secondary btn--sm" disabled>Previous</button>
+                    <span id="rules-page-info"></span>
+                    <button type="button" id="rules-next" class="btn btn--secondary btn--sm" disabled>Next</button>
                 </div>
             </section>
 
@@ -305,8 +313,76 @@
     <script src="/js/status.js"></script>
 
     <script>
+        const RULES_PER_PAGE = 50;
         const SKIPPED_PER_PAGE = 50;
+        let allRules = [];
+        let rulesPage = 1;
         let skippedPage = 1;
+
+        function renderRulesPage(page = 1) {
+            const noRules = document.getElementById('no-rules');
+            const rulesTable = document.getElementById('rules-table');
+            const rulesBody = document.getElementById('rules-body');
+            const rulesWrap = document.getElementById('rules-wrap');
+            const rulesInfo = document.getElementById('rules-info');
+            const rulesCount = document.getElementById('rules-count');
+            const pagination = document.getElementById('rules-pagination');
+            const pageInfo = document.getElementById('rules-page-info');
+            const prevBtn = document.getElementById('rules-prev');
+            const nextBtn = document.getElementById('rules-next');
+
+            const total = allRules.length;
+            document.getElementById('stat-rules').textContent = total.toLocaleString();
+
+            if (total === 0) {
+                noRules.style.display = 'block';
+                rulesTable.style.display = 'none';
+                if (rulesWrap) rulesWrap.style.display = 'none';
+                rulesInfo.style.display = 'none';
+                pagination.style.display = 'none';
+                rulesBody.innerHTML = '';
+                return;
+            }
+
+            const totalPages = Math.max(1, Math.ceil(total / RULES_PER_PAGE));
+            rulesPage = Math.min(Math.max(1, page), totalPages);
+            const start = (rulesPage - 1) * RULES_PER_PAGE;
+            const pageRules = allRules.slice(start, start + RULES_PER_PAGE);
+
+            noRules.style.display = 'none';
+            rulesTable.style.display = 'table';
+            if (rulesWrap) rulesWrap.style.display = '';
+            rulesInfo.style.display = 'block';
+            rulesCount.textContent = `${total.toLocaleString()} rule${total === 1 ? '' : 's'}`;
+
+            rulesBody.innerHTML = '';
+            pageRules.forEach((r) => {
+                const tr = document.createElement('tr');
+                const condition = r.condition
+                    ? `<span class="condition-tag">${escapeHtml(r.condition)}</span>`
+                    : '<span style="color:var(--text-muted)">—</span>';
+                const desc = r.condition
+                    ? `Skip ${escapeHtml(r.name)} if ${escapeHtml(r.condition)} exists`
+                    : `Skip all ${escapeHtml(r.name)} folders`;
+                tr.innerHTML = `
+                    <td><code>${escapeHtml(r.name)}</code></td>
+                    <td>${condition}</td>
+                    <td>${desc}</td>
+                    <td>${(r.ignore_count || 0).toLocaleString()}</td>
+                `;
+                tr.addEventListener('click', () => openRuleSidebar(r));
+                rulesBody.appendChild(tr);
+            });
+
+            if (totalPages > 1) {
+                pagination.style.display = 'flex';
+                pageInfo.textContent = `Page ${rulesPage} of ${totalPages}`;
+                prevBtn.disabled = rulesPage <= 1;
+                nextBtn.disabled = rulesPage >= totalPages;
+            } else {
+                pagination.style.display = 'none';
+            }
+        }
 
         async function loadSkippedPage(page = 1) {
             const noSkipped = document.getElementById('no-skipped');
@@ -369,53 +445,32 @@
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
-            const noRules = document.getElementById('no-rules');
-            const rulesTable = document.getElementById('rules-table');
-            const rulesBody = document.getElementById('rules-body');
-
-            // Load ignore rules
-            try {
-                const res = await fetch('/api/settings');
-                const data = await res.json();
-                const rules = data.ignore_folders || [];
-
-                document.getElementById('stat-rules').textContent = rules.length;
-
-                if (rules.length === 0) {
-                    noRules.style.display = 'block';
-                } else {
-                    rulesTable.style.display = 'table';
-                    const rulesWrap = document.getElementById('rules-wrap');
-                    if (rulesWrap) rulesWrap.style.display = '';
-                    rules.forEach(r => {
-                        const tr = document.createElement('tr');
-                        const condition = r.condition
-                            ? `<span class="condition-tag">${escapeHtml(r.condition)}</span>`
-                            : '<span style="color:var(--text-muted)">—</span>';
-                        const desc = r.condition
-                            ? `Skip ${escapeHtml(r.name)} if ${escapeHtml(r.condition)} exists`
-                            : `Skip all ${escapeHtml(r.name)} folders`;
-                        tr.innerHTML = `
-                            <td><code>${escapeHtml(r.name)}</code></td>
-                            <td>${condition}</td>
-                            <td>${desc}</td>
-                            <td>${(r.ignore_count || 0).toLocaleString()}</td>
-                        `;
-                        tr.addEventListener('click', () => openRuleSidebar(r));
-                        rulesBody.appendChild(tr);
-                    });
-                }
-            } catch (err) {
-                noRules.textContent = 'Failed to load ignore rules';
-                noRules.style.display = 'block';
-            }
-
+            document.getElementById('rules-prev').addEventListener('click', () => {
+                if (rulesPage > 1) renderRulesPage(rulesPage - 1);
+            });
+            document.getElementById('rules-next').addEventListener('click', () => {
+                renderRulesPage(rulesPage + 1);
+            });
             document.getElementById('skipped-prev').addEventListener('click', () => {
                 if (skippedPage > 1) loadSkippedPage(skippedPage - 1);
             });
             document.getElementById('skipped-next').addEventListener('click', () => {
                 loadSkippedPage(skippedPage + 1);
             });
+
+            // Load ignore rules
+            try {
+                const res = await fetch('/api/settings');
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                allRules = data.ignore_folders || [];
+                renderRulesPage(1);
+            } catch (err) {
+                const noRules = document.getElementById('no-rules');
+                noRules.innerHTML = '<div class="empty-state__title">Failed to load ignore rules</div>';
+                noRules.style.display = 'block';
+                document.getElementById('rules-pagination').style.display = 'none';
+            }
 
             // Load first page of skipped paths
             loadSkippedPage(1);
