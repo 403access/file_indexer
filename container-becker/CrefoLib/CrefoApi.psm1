@@ -217,12 +217,21 @@ function Get-CrefoAccounts {
     )
     # Walk all pages of GET /api/v1/DebitorAccounts/list-debitor and collect the
     # (id, name) pairs. Pagination ends when we pass totalPages or receive a
-    # short page.
+    # short page. A safety cap guards against an API that never returns a short
+    # page nor a usable totalPages (it would otherwise loop forever).
     $all = New-Object System.Collections.Generic.List[object]
     $page = 1
     $totalPages = $null
+    $pageCap = 10000
+    $emptyPages = 0
 
-    while ($true) {
+    while ($page -le $pageCap) {
+        if ($totalPages -eq $null) {
+            Write-CrefoInfo ("Fetching account list: page {0}..." -f $page)
+        }
+        else {
+            Write-CrefoInfo ("Fetching account list: page {0}/{1}..." -f $page, $totalPages)
+        }
         $response = Invoke-CrefoApi -Config $Config -Method GET `
             -Path '/api/v1/DebitorAccounts/list-debitor' `
             -AccessToken $AccessToken `
@@ -239,6 +248,7 @@ function Get-CrefoAccounts {
                 })
             }
         }
+        Write-CrefoInfo ("Account list: page {0} returned {1} account(s), {2} total so far." -f $page, $items.Count, $all.Count)
 
         # Remember totalPages from the very first response (it is stable).
         if ($null -eq $totalPages -and $null -ne $response.header) {
@@ -247,6 +257,23 @@ function Get-CrefoAccounts {
         $page++
         if ($null -ne $totalPages -and $page -gt $totalPages) { break }
         if (@($items).Count -lt $PageSize) { break }
+
+        # Guard against degenerate APIs: several consecutive empty pages mean the
+        # pagination is not making progress, stop instead of looping forever.
+        if (@($items).Count -eq 0) {
+            $emptyPages++
+            if ($emptyPages -ge 3) {
+                Write-CrefoWarn 'Account list pagination is not making progress (3 empty pages); stopping.'
+                break
+            }
+        }
+        else {
+            $emptyPages = 0
+        }
+        if ($page -gt $pageCap) {
+            Write-CrefoWarn ("Account list pagination hit the safety cap of {0} pages; stopping." -f $pageCap)
+            break
+        }
     }
     # ToArray() avoids a PowerShell quirk where wrapping a List[object] created
     # via New-Object in @() throws "Argument types do not match".

@@ -152,7 +152,8 @@ function Write-CrefoCsv {
 }
 
 # Decides whether the account's /risk snapshot must be re-fetched for this run.
-function Test-ShouldRefreshRisk {
+# Returns [pscustomobject]@{ ShouldRefresh, Reason } so the caller can log why.
+function Get-RefreshDecision {
     [CmdletBinding()]
     param(
         [hashtable]$Cfg,
@@ -161,16 +162,33 @@ function Test-ShouldRefreshRisk {
         [object]$Decision,
         [bool]$InOpenDesires
     )
+    $D = {
+        param([bool]$Refresh, [string]$Reason)
+        return [pscustomobject]@{ ShouldRefresh = $Refresh; Reason = $Reason }
+    }
+
     # New or previously failed accounts are always fetched.
-    if ($Account.status -in @('pending', 'failed')) { return $true }
+    if ($Account.status -in @('pending', 'failed')) {
+        return & $D $true ("status '{0}'" -f $Account.status)
+    }
 
     # Accounts from a run before the snapshot feature have no stored data yet:
     # fetch only when they have a live limit context, otherwise they fall into
     # the short-circuit path below.
-    if ($null -eq $Account.limitCode) { return ($HasDecision -or $InOpenDesires) }
+    if ($null -eq $Account.limitCode) {
+        if ($HasDecision -or $InOpenDesires) {
+            return & $D $true 'fresh account, live limit context (decision or open desire)'
+        }
+        return & $D $false 'fresh account, no limit context (short-circuit row)'
+    }
 
     # RefreshAll: refetch every account with a limit context each run.
-    if ($Cfg['SyncMode'] -eq 'RefreshAll') { return ($HasDecision -or $InOpenDesires) }
+    if ($Cfg['SyncMode'] -eq 'RefreshAll') {
+        if ($HasDecision -or $InOpenDesires) {
+            return & $D $true 'RefreshAll mode, account has limit context'
+        }
+        return & $D $false 'RefreshAll mode, no limit context (short-circuit row)'
+    }
 
     # --- Incremental mode below -------------------------------------------------
     $storedCode = [string]$Account.limitCode
@@ -180,18 +198,27 @@ function Test-ShouldRefreshRisk {
 
     # Decision removed while the account previously had one: refetch, because
     # purchases may still exist and only /risk knows.
-    if (-not $HasDecision -and -not $InOpenDesires -and $storedActive) { return $true }
+    if (-not $HasDecision -and -not $InOpenDesires -and $storedActive) {
+        return & $D $true 'completed decision removed, account previously had a limit'
+    }
 
     if ($HasDecision) {
         # Limit/decision changed since our last snapshot?
         $decisionCode = [string]$Decision.limitCode
         if ([string]::IsNullOrWhiteSpace($decisionCode)) { $decisionCode = 'N' }
         $decisionLimit = [double]$Decision.currentLimit
-        if ($storedCode -ne $decisionCode -or [math]::Abs($storedLimit - $decisionLimit) -gt 0.001) { return $true }
+        if ($storedCode -ne $decisionCode) {
+            return & $D $true ("limit code changed ({0} -> {1})" -f $storedCode, $decisionCode)
+        }
+        if ([math]::Abs($storedLimit - $decisionLimit) -gt 0.001) {
+            return & $D $true ("current limit changed ({0:N2} -> {1:N2})" -f $storedLimit, $decisionLimit)
+        }
     }
     else {
         # No decision, but the account sits in the open-limit pipeline: refresh.
-        if ($InOpenDesires) { return $true }
+        if ($InOpenDesires) {
+            return & $D $true 'no completed decision, but account is in the open limit pipeline'
+        }
     }
 
     # Staleness cap: refetch everything past MaxAgeDays regardless of changes.
@@ -201,11 +228,26 @@ function Test-ShouldRefreshRisk {
             $fetchedUtc = [datetime]$Account.fetchedAt
             if ($fetchedUtc.Kind -ne 'Utc') { $fetchedUtc = $fetchedUtc.ToUniversalTime() }
             $age = (Get-Date).ToUniversalTime() - $fetchedUtc
-            if ($age.TotalDays -ge $maxAgeDays) { return $true }
+            if ($age.TotalDays -ge $maxAgeDays) {
+                return & $D $true ("snapshot older than MaxAgeDays ({0:N1} days)" -f $age.TotalDays)
+            }
         }
         catch { }
     }
-    return $false
+    return & $D $false 'snapshot fresh, decision unchanged'
+}
+
+# Boolean convenience wrapper (returns just the fetch/no-fetch decision).
+function Test-ShouldRefreshRisk {
+    [CmdletBinding()]
+    param(
+        [hashtable]$Cfg,
+        [object]$Account,
+        [bool]$HasDecision,
+        [object]$Decision,
+        [bool]$InOpenDesires
+    )
+    return (Get-RefreshDecision -Cfg $Cfg -Account $Account -HasDecision $HasDecision -Decision $Decision -InOpenDesires $InOpenDesires).ShouldRefresh
 }
 
 # ---------------------------------------------------------------------------
@@ -303,6 +345,8 @@ function Get-AppToken {
 
 # Obtain a token for this run (reuses the cache unless -ForceToken is set).
 $script:token = Get-AppToken -Force:$ForceToken
+$tokenSource = if ($ForceToken) { 're-authenticated (forced)' } elseif (Test-Path -LiteralPath $script:tokenCachePath) { 'cached' } else { 'fresh login' }
+Write-CrefoInfo ("Access token : " + $tokenSource)
 
 # Called by the API module on a 401: re-authenticate and hand back a fresh
 # token. It also updates $script:token so subsequent requests use it too.
@@ -347,6 +391,10 @@ if ($allAccounts.Count -eq 0) {
     Write-CrefoInfo 'No accounts known - nothing to do.'
     exit 0
 }
+$pendingCount = @($allAccounts | Where-Object { $_.status -eq 'pending' }).Count
+$doneCount = @($allAccounts | Where-Object { $_.status -eq 'done' }).Count
+$failedCount0 = @($allAccounts | Where-Object { $_.status -eq 'failed' }).Count
+Write-CrefoInfo ("Accounts in scope: {0} total ({1} pending, {2} done, {3} failed)." -f $allAccounts.Count, $pendingCount, $doneCount, $failedCount0)
 
 # Bulk limit-workflow endpoints. Their union defines the accounts with a live
 # limit context: only accounts in NEITHER list are safe to short-circuit to a
@@ -392,7 +440,7 @@ $rows = New-Object System.Collections.Generic.List[string]
 $refreshed = 0
 $reused = 0
 $shortCircuited = 0
-$failed = 0
+$failedCount = 0
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 foreach ($account in $allAccounts) {
@@ -402,8 +450,9 @@ foreach ($account in $allAccounts) {
         $decision = if ($hasDecision) { $limitDecisions[$id] } else { $null }
         $inOpenDesires = $openDesires.ContainsKey($id)
 
-        if (Test-ShouldRefreshRisk -Cfg $script:cfg -Account $account -HasDecision $hasDecision -Decision $decision -InOpenDesires $inOpenDesires) {
-            Write-CrefoInfo ("Fetching risk data for debitor {0} ({1})..." -f $id, $account.name)
+        $refreshDecision = Get-RefreshDecision -Cfg $script:cfg -Account $account -HasDecision $hasDecision -Decision $decision -InOpenDesires $inOpenDesires
+        if ($refreshDecision.ShouldRefresh) {
+            Write-CrefoInfo ("Fetching risk data for debitor {0} ({1}) [{2}]..." -f $id, $account.name, $refreshDecision.Reason)
             $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
             $account = Set-AccountSnapshot -Account $account -Risk $risk
             $refreshed++
@@ -411,12 +460,13 @@ foreach ($account in $allAccounts) {
         elseif ($null -eq $account.limitCode) {
             # No decision, not in the open pipeline and no stored snapshot yet:
             # write the explicit N / zero row without a risk request.
-            Write-CrefoInfo ("Debitor {0} ({1}) has no limit context; writing zero row." -f $id, $account.name)
+            Write-CrefoInfo ("Debitor {0} ({1}) - no limit context, writing zero row [{2}]." -f $id, $account.name, $refreshDecision.Reason)
             $account = Set-AccountSnapshot -Account $account -Risk $null
             $shortCircuited++
         }
         else {
             $reused++
+            Write-CrefoInfo ("Reusing snapshot for debitor {0} ({1}) [{2}]: limit {3}, code {4}." -f $id, $account.name, $refreshDecision.Reason, (ConvertTo-GermanyNumber $account.limit), $account.limitCode)
         }
 
         $rows.Add((New-CsvRowFromAccount -Cfg $script:cfg -Account $account))
@@ -427,7 +477,7 @@ foreach ($account in $allAccounts) {
         # Keep the failed account in state as 'failed' so it is retried on the
         # next run. Failed accounts keep their last snapshot but produce no row
         # in the rebuilt CSV until a later run succeeds for them.
-        $failed++
+        $failedCount++
         $account.status = 'failed'
         $account.error = $_.Exception.Message
         Write-CrefoError ("Debitor {0} failed: {1}" -f $id, $_.Exception.Message)
@@ -447,8 +497,8 @@ $stopwatch.Stop()
 # Rebuild the complete CSV from the stored snapshots (stable order by id).
 Write-CrefoCsv -Path $csvPath -Rows $rows.ToArray()
 
-Write-CrefoInfo ("Run finished: total={0} refreshed={1} reused={2} short-circuited={3} failed={4} elapsed={5:N1}s" -f $allAccounts.Count, $refreshed, $reused, $shortCircuited, $failed, $stopwatch.Elapsed.TotalSeconds)
-if ($failed -gt 0) {
+Write-CrefoInfo ("Run finished: total={0} refreshed={1} reused={2} short-circuited={3} failed={4} elapsed={5:N1}s" -f $allAccounts.Count, $refreshed, $reused, $shortCircuited, $failedCount, $stopwatch.Elapsed.TotalSeconds)
+if ($failedCount -gt 0) {
     Write-CrefoWarn 'Some accounts failed and are persisted in state. Re-run this script later to retry them.'
     exit 1
 }
