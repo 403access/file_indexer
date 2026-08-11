@@ -260,7 +260,8 @@ function Get-CrefoDebtorRisk {
         [int]$DebtorId,                     # debtor account id
         [string]$AccessToken,               # Bearer token
         [scriptblock]$AuthRefresher,        # passed through to enable 401 recovery
-        [string]$ArchiveName = ''           # optional override for the archive folder label
+        [string]$ArchiveName = '',          # optional override for the archive folder label
+        [int]$ArchiveRangeStep = 1000       # bucket size for the archive id-range grouping
     )
     # GET /api/v1/DebitorAccounts/{debitor}/risk returns an array; take the
     # first element since we query one specific debtor.
@@ -268,9 +269,13 @@ function Get-CrefoDebtorRisk {
     if ([string]::IsNullOrWhiteSpace($ArchiveName)) {
         $ArchiveName = ('debtor-{0}-risk' -f $DebtorId)
     }
+    # Risk archives are bucketed under risks/<id-range>/ by debtor id, e.g. a
+    # step of 1000 puts id 1234 into '1000-1999'.
+    $bucketStart = [int][math]::Floor($DebtorId / $ArchiveRangeStep) * $ArchiveRangeStep
+    $category = ('risks/{0}-{1}' -f $bucketStart, ($bucketStart + $ArchiveRangeStep - 1))
     $response = Invoke-CrefoApi -Config $Config -Method GET -Path $path `
         -AccessToken $AccessToken -AuthRefresher $AuthRefresher -ArchiveName $ArchiveName `
-        -ArchiveCategory 'risks'
+        -ArchiveCategory $category
     return @($response)[0]
 }
 

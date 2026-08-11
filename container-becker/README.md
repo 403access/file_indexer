@@ -109,7 +109,8 @@ Amounts are formatted German-style (decimal comma, `;` separator, UTF-8 with BOM
   - `_data.json`: the decoded/pure JSON data only (no HTTP envelope - this is the "data only" store)
 
   Endpoints are grouped in folders (`token`, `list-debitor`, ...). All per-debtor risk calls
-  are grouped under `archive/risks/debtor-<id>-risk/`.
+  are grouped under `archive/risks/<id-range>/debtor-<id>-risk/`, bucketed by debtor id in
+  1000-er steps (e.g. id 1234 lands under `archive/risks/1000-1999/debtor-1234-risk/`).
   Secrets never land in the archive: the OAuth token call is stored with credentials and
   the access token redacted, and the `Authorization` header is always written as `Bearer REDACTED`.
 

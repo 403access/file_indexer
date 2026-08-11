@@ -6,9 +6,10 @@
 #   <ArchiveDir>/<endpoint>/<timestamp>_<seq>_request.json
 #   <ArchiveDir>/<endpoint>/<timestamp>_<seq>_response.json
 #   <ArchiveDir>/<endpoint>/<timestamp>_<seq>_data.json   (decoded body only)
-# Calls can be grouped under a category subfolder via Save-ApiExchange -Category:
+# Calls can be grouped under (nested) category subfolders via Save-ApiExchange -Category:
 #   <ArchiveDir>/<category>/<endpoint>/<timestamp>_<seq>_*.json
-# (e.g. all risk calls land under <ArchiveDir>/risks/debtor-<id>-risk/).
+# (e.g. risk calls are bucketed by debtor id range:
+#   <ArchiveDir>/risks/<id-range>/debtor-<id>-risk/).
 #
 # Callers must pass already-sanitized request bodies / tokens: secrets such as
 # passwords, client secrets and access tokens are expected to be redacted
@@ -82,11 +83,16 @@ function Save-ApiExchange {
     $script:ArchiveCounter++
     $stamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
     $sequence = '{0:D5}' -f $script:ArchiveCounter
-    # Category subfolder (e.g. risks) nests below the archive root; the endpoint
-    # label itself is always sanitized so it stays a single folder level.
+    # Category subfolders (e.g. 'risks/1000-1999') nest below the archive root.
+    # Each segment is sanitized separately so a slash-separated category becomes
+    # a real nested folder path.
     $dir = $script:ArchiveRoot
     if (-not [string]::IsNullOrWhiteSpace($Category)) {
-        $dir = Join-Path $dir (ConvertTo-SafeName $Category)
+        foreach ($segment in ($Category -split '[/\\]')) {
+            if (-not [string]::IsNullOrWhiteSpace($segment)) {
+                $dir = Join-Path $dir (ConvertTo-SafeName $segment)
+            }
+        }
     }
     $dir = Join-Path $dir (ConvertTo-SafeName $Name)
     if (-not (Test-Path -LiteralPath $dir)) {
