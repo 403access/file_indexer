@@ -38,6 +38,35 @@
 7. **Retry / resume**: any account that failed keeps status `failed` and is retried on
    the next run. Failed accounts are omitted from the rebuilt CSV until a later run succeeds.
 
+## Recovery & inspection
+
+If the database or state is lost, you can rebuild both from the archive folder:
+
+```powershell
+pwsh -File container-becker/Rebuild-CrefoDatabase.ps1 `
+     -ArchiveDir "/Users/olivermolnar/Downloads/container-becker/container-becker/archive" `
+     -StateDir "/Users/olivermolnar/Downloads/container-becker/container-becker/state" `
+     -ConfigPath "/Users/olivermolnar/Downloads/container-becker/container-becker/config.psd1"
+```
+
+This reconstructs `crefo_state.json` and `crefo.db` from the archived API responses. A subsequent `Start-CrefoExport.ps1` run will then continue syncing gaps via the API (only refetching accounts whose decision changed or snapshot aged out).
+
+To inspect the database:
+
+```powershell
+pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -Stats
+pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169
+pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169 -History
+pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -Status done -Limit 20
+```
+
+To restructure an existing archive so each script execution gets its own run-stamp subfolder:
+
+```powershell
+pwsh -File container-becker/Migrate-ArchiveRunStamp.ps1 -ArchiveDir container-becker/archive -DryRun
+pwsh -File container-becker/Migrate-ArchiveRunStamp.ps1 -ArchiveDir container-becker/archive
+```
+
 ## Document exports (`Invoke-CrefoDocuments.ps1`)
 
 `Invoke-CrefoDocuments.ps1` handles the binary document endpoints separately from

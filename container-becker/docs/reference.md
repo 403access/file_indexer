@@ -49,7 +49,7 @@ reconstructable without extra storage: `archive/risks/<outer-range>/<inner-range
 
 - `state/crefo_token_cache.json` - cached access token (permissions restricted).
 - `logs/crefo_export_<timestamp>.log` - per-run log with timestamps and levels.
-- `archive/<endpoint>/<timestamp>_<seq>_request.json` / `_response.json` / `_data.json` - every API exchange stored as files:
+- `archive/<endpoint>/<run-stamp>/<stamp>_<seq>_request.json` / `_response.json` / `_data.json` - every API exchange stored as files:
   - `_request.json`: method, URL (incl. query), redacted headers, request body
   - `_response.json`: HTTP status, content type, elapsed ms, **raw** response body
   - `_data.json`: the decoded/pure JSON data only (no HTTP envelope - this is the "data only" store)

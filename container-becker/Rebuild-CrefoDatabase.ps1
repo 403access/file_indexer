@@ -239,6 +239,7 @@ Initialize-CrefoDatabase -DbPath $dbPath
 Write-CrefoInfo ("Initialized database: {0}" -f $dbPath)
 
 foreach ($acct in $accountsForState) {
+    $id = [int]$acct.id
     Save-CrefoAccount -Account $acct
     $snapshotSource = if ($acct.riskFetched) { 'archive' } else { 'short-circuit' }
     Save-CrefoRiskSnapshot -AccountId $id -Risk ([pscustomobject]@{
