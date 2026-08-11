@@ -270,4 +270,22 @@ function Get-CrefoDebtorRisk {
     return @($response)[0]
 }
 
-Export-ModuleMember -Function 'Get-CrefoAccessToken', 'Invoke-CrefoApi', 'Get-CrefoAccounts', 'Get-CrefoDebtorRisk'
+function Get-CrefoLastLimitDecisions {
+    [CmdletBinding()]
+    param(
+        [hashtable]$Config,                 # configuration
+        [string]$AccessToken,               # Bearer token
+        [scriptblock]$AuthRefresher,        # passed through to enable 401 recovery
+        [string]$ArchiveName = 'last-limit-decisions'   # archive folder label
+    )
+    # GET /api/v1/last-limit-decisions returns the current completed limit
+    # decision per debtor account (single call, no pagination). It is used as a
+    # bulk source of 'has a limit or not' so accounts without any decision can
+    # skip the per-debtor /risk request entirely.
+    $response = Invoke-CrefoApi -Config $Config -Method GET `
+        -Path '/api/v1/last-limit-decisions' `
+        -AccessToken $AccessToken -AuthRefresher $AuthRefresher -ArchiveName $ArchiveName
+    return @($response)
+}
+
+Export-ModuleMember -Function 'Get-CrefoAccessToken', 'Invoke-CrefoApi', 'Get-CrefoAccounts', 'Get-CrefoDebtorRisk', 'Get-CrefoLastLimitDecisions'

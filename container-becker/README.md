@@ -55,11 +55,16 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
 2. **List accounts** (`GET /api/v1/DebitorAccounts/list-debitor`, paged).
    Fetched account IDs are merged into the persistent state, so new debtors are picked
    up and old progress is never lost.
-3. **Risk data per debtor** (`GET /api/v1/DebitorAccounts/{debitor}/risk`) - one request
-   per account. Each response is logged, applied to the CSV, and the account is marked
-   `done` in the state. Every HTTP exchange (request, raw response, decoded data) is
-   saved as files under `archive/` when `ArchiveRequests = true`.
-4. **Retry / resume**: any account that failed keeps status `failed` and is retried on
+3. **Completed limit decisions** (`GET /api/v1/last-limit-decisions`, one bulk call).
+   Builds the set of accounts that actually have a limit decision. Accounts **without**
+   a decision have no limit and are written straight to the CSV as `0,00;N;0,00;0,00`
+   without a `/risk` request (see `UseLastLimitDecisions`). If this bulk call fails,
+   the script falls back to fetching `/risk` for every account.
+4. **Risk data per debtor with a decision** (`GET /api/v1/DebitorAccounts/{debitor}/risk`) -
+   one request per such account. Each response is logged, applied to the CSV, and the account
+   is marked `done` in the state. Every HTTP exchange (request, raw response, decoded data)
+   is saved as files under `archive/` when `ArchiveRequests = true`.
+5. **Retry / resume**: any account that failed keeps status `failed` and is retried on
    the next run. Existing `done` rows are not re-written, so CSV rows are never duplicated.
 
 ## Field mapping (API -> CSV)
@@ -88,6 +93,7 @@ Amounts are formatted German-style (decimal comma, `;` separator, UTF-8 with BOM
 | `LogLevel`            | `INFO`                         | `DEBUG`, `INFO`, `WARN`, `ERROR` |
 | `RefreshAccountList`  | `true`                         | Re-fetch the account list each run to discover new debtors |
 | `FreeLineFromBalance` | `false`                        | `true` = freie Linie = limit - balance, otherwise limit - purchased |
+| `UseLastLimitDecisions` | `true`                       | Skip `/risk` for accounts without a completed limit decision (written as `0,00;N;0,00;0,00`). Disable if a debtor without a decision can still have purchases. |
 | `ArchiveRequests`     | `true`                         | Store every request/response/data exchange in `ArchiveDir` |
 | `OutputFileName`      | `crefo_limits.csv`             | Filename in `OutputDir` |
 

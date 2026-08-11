@@ -3,8 +3,11 @@
 # Orchestrates the Crefo Factoring limit export:
 #   1. authenticate (OAuth2 password flow, cached token)
 #   2. fetch the debitor account list (paginated)
-#   3. per debtor: fetch risk data and append one CSV row
-#   4. persist progress after every account so runs are resumable
+#   3. fetch completed limit decisions once (bulk) - accounts without a
+#      decision have no limit, so they are written as 0,00 / N and the
+#      per-debtor /risk request is skipped entirely
+#   4. per debtor with a decision: fetch risk data and append one CSV row
+#   5. persist progress after every account so runs are resumable
 # Run with:  pwsh -File Start-CrefoExport.ps1 [-Reset] [-ForceToken] [-ConfigPath <path>]
 # Exit code: 0 = success, 1 = at least one account failed (re-run to retry).
 # =============================================================================
@@ -61,22 +64,26 @@ function ConvertTo-GermanyNumber {
 #   Kto-Nr. | Name1 | Limit | LimitKennz | Gekauft | freie Linie
 # freie Linie is not returned by the API and is derived from limit minus the
 # purchased receivables (or minus balance when FreeLineFromBalance is enabled).
+# With -NoLimitDecision the row is written from scratch as 0,00 / N / 0,00 / 0,00
+# (the account has no limit decision, so no /risk request was made for it).
 function New-CsvRow {
     param(
         [hashtable]$Cfg,
         [int]$Id,
         [string]$Name,
-        [object]$Risk
+        [object]$Risk,
+        [switch]$NoLimitDecision
     )
     $limit = 0.0
     $purchased = 0.0
     $balance = 0.0
-    $limitCode = ''
-    if ($null -ne $Risk) {
+    $limitCode = 'N'
+    if (-not $NoLimitDecision -and $null -ne $Risk) {
         $limit = [double]$Risk.limit
         $purchased = [double]$Risk.purchasedReceivables
         $balance = [double]$Risk.balance
         $limitCode = [string]$Risk.limitCode
+        if ([string]::IsNullOrWhiteSpace($limitCode)) { $limitCode = 'N' }
     }
     $freeBase = if ($Cfg['FreeLineFromBalance']) { $balance } else { $purchased }
     $freeLine = $limit - $freeBase
@@ -126,6 +133,7 @@ $script:cfg['RequestDelayMs'] = [int](Get-Default $script:cfg['RequestDelayMs'] 
 $script:cfg['LogLevel'] = [string](Get-Default $script:cfg['LogLevel'] 'INFO')
 $script:cfg['RefreshAccountList'] = [bool](Get-Default $script:cfg['RefreshAccountList'] $true)
 $script:cfg['FreeLineFromBalance'] = [bool](Get-Default $script:cfg['FreeLineFromBalance'] $false)
+$script:cfg['UseLastLimitDecisions'] = [bool](Get-Default $script:cfg['UseLastLimitDecisions'] $true)
 $script:cfg['ArchiveRequests'] = [bool](Get-Default $script:cfg['ArchiveRequests'] $true)
 $script:cfg['OutputFileName'] = [string](Get-Default $script:cfg['OutputFileName'] 'crefo_limits.csv')
 
@@ -241,20 +249,54 @@ if ($toProcess.Count -eq 0) {
     exit 0
 }
 
+# Optional optimization: fetch the completed limit decisions in ONE bulk call
+# before the loop. Accounts that have no decision are written as 0,00 / N and
+# skip the per-debtor /risk request (this is what cuts most of the 15k calls).
+# If the bulk call fails we simply fall back to /risk for every account.
+$limitDecisions = @{}
+if ($script:cfg['UseLastLimitDecisions']) {
+    try {
+        Write-CrefoInfo 'Fetching completed limit decisions (single bulk call)...'
+        foreach ($decision in Get-CrefoLastLimitDecisions -Config $script:cfg -AccessToken $script:token -AuthRefresher $script:authRefresher) {
+            if ($null -ne $decision -and $null -ne $decision.debtorNumber) {
+                $limitDecisions[[int]$decision.debtorNumber] = $decision
+            }
+        }
+        Write-CrefoInfo ("Limit decisions available for {0} of {1} pending account(s)." -f $limitDecisions.Count, $toProcess.Count)
+        if ($limitDecisions.Count -eq 0) {
+            Write-CrefoWarn 'No limit decisions found. Every account will be written as 0,00 / N without a /risk call - if this looks wrong, set UseLastLimitDecisions = false.'
+        }
+    }
+    catch {
+        Write-CrefoWarn ("Could not fetch last-limit-decisions ({0}); falling back to fetching /risk for every account." -f $_.Exception.Message)
+        $limitDecisions = @{}
+        $script:cfg['UseLastLimitDecisions'] = $false
+    }
+}
+
 Write-CrefoInfo ("Processing {0} account(s)..." -f $toProcess.Count)
 $csvPath = Join-Path $script:cfg['OutputDir'] $script:cfg['OutputFileName']
 $succeeded = 0
 $failed = 0
+$shortCircuited = 0
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 foreach ($account in $toProcess) {
     $id = [int]$account.id
     try {
-        Write-CrefoInfo ("Fetching risk data for debitor {0} ({1})..." -f $id, $account.name)
-        $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
-        $row = New-CsvRow -Cfg $script:cfg -Id $id -Name $account.name -Risk $risk
+        if ($script:cfg['UseLastLimitDecisions'] -and -not $limitDecisions.ContainsKey($id)) {
+            # No limit decision -> no risk request. Write the zero row directly.
+            Write-CrefoInfo ("Debitor {0} ({1}) has no limit decision; writing zero row, skipping risk request." -f $id, $account.name)
+            $row = New-CsvRow -Cfg $script:cfg -Id $id -Name $account.name -NoLimitDecision
+            $shortCircuited++
+        }
+        else {
+            Write-CrefoInfo ("Fetching risk data for debitor {0} ({1})..." -f $id, $account.name)
+            $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
+            $row = New-CsvRow -Cfg $script:cfg -Id $id -Name $account.name -Risk $risk
+            Write-CrefoInfo ("Debitor {0} processed." -f $id)
+        }
         Add-CsvLine -Path $csvPath -Lines @($row)
-        Write-CrefoInfo ("Debitor {0} processed." -f $id)
         $account.status = 'done'
         $account.error = $null
         $succeeded++
@@ -279,7 +321,7 @@ foreach ($account in $toProcess) {
 }
 $stopwatch.Stop()
 
-Write-CrefoInfo ("Run finished: total={0} succeeded={1} failed={2} elapsed={3:N1}s" -f $toProcess.Count, $succeeded, $failed, $stopwatch.Elapsed.TotalSeconds)
+Write-CrefoInfo ("Run finished: total={0} succeeded={1} failed={2} short-circuited={3} elapsed={4:N1}s" -f $toProcess.Count, $succeeded, $failed, $shortCircuited, $stopwatch.Elapsed.TotalSeconds)
 if ($failed -gt 0) {
     Write-CrefoWarn 'Some accounts failed and are persisted in state. Re-run this script later to retry them.'
     exit 1

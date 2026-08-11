@@ -44,6 +44,12 @@
     #   true:            freie Linie = Limit - Balance
     FreeLineFromBalance = $false
 
+    # Skip the per-debtor /risk request for accounts that have no completed
+    # limit decision (they are written as 0,00 / N / 0,00 / 0,00). The 'has a
+    # decision' information comes from ONE bulk call to /last-limit-decisions.
+    # Disable this if debtors without a decision can still have purchases.
+    UseLastLimitDecisions = $true
+
     # Store every API exchange (request.json + response.json + data.json) in
     # the archive directory so calls can be audited/replayed later.
     ArchiveRequests = $true
