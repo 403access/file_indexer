@@ -34,6 +34,7 @@ function Get-CrefoState {
         version             = 1
         updatedAt           = $null
         accountListFetchedAt = $null
+        decisionsSignature  = $null
         accounts            = @()
     }
 }

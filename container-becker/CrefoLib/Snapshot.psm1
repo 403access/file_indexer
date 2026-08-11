@@ -59,6 +59,7 @@ function Get-RefreshDecision {
         [bool]$HasDecision,
         [object]$Decision,
         [bool]$InOpenDesires,
+        [bool]$DecisionsChanged = $true,
         [object[]]$ForceRanges = @()   # debtor id ranges that must be re-fetched
     )
     $D = {
@@ -104,8 +105,9 @@ function Get-RefreshDecision {
     $storedActive = ($storedCode -ne 'N') -or ($storedLimit -gt 0.0)
 
     # Decision removed while the account previously had one: refetch, because
-    # purchases may still exist and only /risk knows.
-    if (-not $HasDecision -and -not $InOpenDesires -and $storedActive) {
+    # purchases may still exist and only /risk knows. Skip this when the bulk
+    # decisions set is unchanged since the last run (resumability guard).
+    if (-not $HasDecision -and -not $InOpenDesires -and $storedActive -and $DecisionsChanged) {
         return & $D $true 'completed decision removed, account previously had a limit'
     }
 
@@ -153,9 +155,10 @@ function Test-ShouldRefreshRisk {
         [bool]$HasDecision,
         [object]$Decision,
         [bool]$InOpenDesires,
+        [bool]$DecisionsChanged = $true,
         [object[]]$ForceRanges = @()
     )
-    return (Get-RefreshDecision -Cfg $Cfg -Account $Account -HasDecision $HasDecision -Decision $Decision -InOpenDesires $InOpenDesires -ForceRanges $ForceRanges).ShouldRefresh
+    return (Get-RefreshDecision -Cfg $Cfg -Account $Account -HasDecision $HasDecision -Decision $Decision -InOpenDesires $InOpenDesires -DecisionsChanged $DecisionsChanged -ForceRanges $ForceRanges).ShouldRefresh
 }
 
 Export-ModuleMember -Function 'Set-AccountField', 'Set-AccountSnapshot', 'Get-RefreshDecision', 'Test-ShouldRefreshRisk'
