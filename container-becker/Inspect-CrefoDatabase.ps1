@@ -26,7 +26,7 @@ if (-not (Test-Path -LiteralPath $DbPath)) {
     exit 1
 }
 
-. (Join-Path $PSScriptRoot 'CrefoLib\Inspect.ps1')
+Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Inspect\index.psm1') -Global -Force
 
 if ($ShowStats) {
     $stats = Get-DatabaseStats -DbPath $DbPath
