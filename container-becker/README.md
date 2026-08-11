@@ -78,6 +78,98 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
 6. **Retry / resume**: any account that failed keeps status `failed` and is retried on
    the next run. Failed accounts are omitted from the rebuilt CSV until a later run succeeds.
 
+## Visual overview of the flows
+
+### Overall run
+
+```mermaid
+sequenceDiagram
+    participant Start as Start-CrefoExport.ps1
+    participant Log as Logger/Archive
+    participant DB as Database (crefo.db)
+    participant St as State (crefo_state.json)
+    participant API as Crefo API
+
+    Start->>Log: init logger + archive
+    Start->>DB: Initialize-CrefoDatabase (schema, WAL)
+    Start->>API: Get-CrefoAccessToken (cached or fresh)
+    Start->>St: Get-CrefoState
+    Start->>DB: Import-CrefoDatabaseFromState (one-time seed)
+    Start->>DB: Get-CrefoDatabaseAccountSummary (count, highest id)
+
+    alt empty database
+        Start->>API: full list fetch, page by page
+    else known accounts
+        Start->>API: probe list (pageSize=0/1) - total size
+        API-->>Start: header.totalItems/totalPages
+        opt production grew (gap > 0)
+            Start->>API: fetch only the delta (StartIndex/MaxCount)
+            Start->>St: Merge-CrefoAccounts (new debtors)
+        end
+        opt probe failed
+            Start->>API: fall back to full list fetch
+        end
+    end
+
+    Start->>API: last-limit-decisions + open-limit-desires (bulk)
+    loop every account
+        Start->>API: GET /risk (only if refresh needed)
+        Start->>DB: Save-CrefoAccount / Save-CrefoRiskSnapshot
+        Start-->>St: Save-CrefoState (resumable after each account)
+    end
+
+    Start->>DB: Get-CrefoDatabaseCsvRows
+    Start->>Start: Write-CrefoCsv (head + all rows, stable order)
+```
+
+### Account list discovery (probe + delta)
+
+```mermaid
+flowchart LR
+    A[Get-CrefoDatabaseAccountSummary] --> B{knownCount = 0?}
+    B -- yes --> C[full list fetch page by page]
+    B -- no --> D[probe pageSize=0 then 1]
+    D --> E{probe ok?}
+    E -- no --> C
+    E -- yes --> F{gap = totalItems - knownCount}
+    F -- <= 0 --> G[list unchanged - keep cached, skip sync]
+    F -- > 0 --> H[delta fetch StartIndex=knownCount MaxCount=gap]
+    C --> I[Merge-CrefoAccounts]
+    H --> I
+    G --> J[set accountListFetchedAt + Save-CrefoState]
+    I --> J
+```
+
+### Per-account risk processing
+
+```mermaid
+flowchart TD
+    A[for each account sorted by id] --> B{"ShouldRefresh?<br/>new / failed / decision changed<br/>open pipeline / older than MaxAgeDays"}
+    B -- yes --> C[GET /risk - store snapshot source='api']
+    B -- no --> D{"account has a stored limitCode?"}
+    D -- yes --> E[reuse stored snapshot - zero requests]
+    D -- no --> F[short-circuit zero row - no request]
+    C --> G[New-CsvRowFromAccount]
+    E --> G
+    F --> G
+    G --> H[mark account done]
+    H --> I[Save account + snapshot to database]
+    I --> J[Save state after every account]
+    J --> A
+```
+
+### CSV rebuild (database is the source of truth)
+
+```mermaid
+flowchart TD
+    A[Get-CrefoDatabaseCsvRows] --> B["latest risk snapshot per account<br/>via MAX(id) grouped join"]
+    B --> C[skip accounts with status = failed]
+    C --> D[order by account id]
+    D --> E{"database returned rows?"}
+    E -- yes --> F[Write-CrefoCsv from database rows]
+    E -- no --> G[fall back to in-memory rows]
+```
+
 ## Field mapping (API -> CSV)
 
 | CSV column    | API source                                                                          |
