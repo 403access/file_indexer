@@ -1,6 +1,6 @@
 # =============================================================================
 # CrefoLib/Documents/Downloads.ps1 - single-document and sheet-level download.
-# Dot-sourced by CrefoLib/Documents.psm1.
+# Dot-sourced by CrefoLib/Documents/index.psm1.
 # =============================================================================
 
 function ConvertTo-SafeDocumentName {

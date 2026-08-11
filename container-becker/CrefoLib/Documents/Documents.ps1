@@ -1,6 +1,6 @@
 # =============================================================================
 # CrefoLib/Documents/Documents.ps1 - document retrieval orchestration.
-# Lives in the Documents submodule and is dot-sourced by CrefoLib/Documents.psm1.
+# Lives in the Documents submodule and is dot-sourced by CrefoLib/Documents/index.psm1.
 # =============================================================================
 
 function Invoke-CrefoDocuments {

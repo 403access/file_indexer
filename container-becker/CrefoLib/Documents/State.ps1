@@ -1,6 +1,6 @@
 # =============================================================================
 # CrefoLib/Documents/State.ps1 - document download index persistence.
-# Dot-sourced by CrefoLib/Documents.psm1.
+# Dot-sourced by CrefoLib/Documents/index.psm1.
 # =============================================================================
 
 function Get-DocumentIndex {

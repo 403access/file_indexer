@@ -20,7 +20,7 @@ Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CsvFormat.psm1') -Global 
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Database.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\ApiArchive.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CrefoApi.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Documents.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Documents\index.psm1') -Global -Force
 
 # ---------------------------------------------------------------------------
 # Configuration loading & logging setup
