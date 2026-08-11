@@ -12,9 +12,12 @@
 #   bulk-call fallback / free-line-from-balance / pagination / reset
 #
 # Layout (all dot-sourced into this script's scope):
-#   TestHarness.ps1   - mock lifecycle, exporter runs, assertion helpers,
-#                       Invoke-CrefoPhase (one run against one mock snapshot)
-#   TestScenarios.ps1 - the scenario table
+#   TestHarness.ps1   - aggregator for the support code; dot-sources the
+#                       per-concern parts in TestHarness/ (mock lifecycle,
+#                       exporter runs, readers, assertions, Invoke-CrefoPhase)
+#   TestScenarios.ps1 - aggregator for the scenario table; dot-sources the
+#                       feature-category files in scenarios/
+#   Mock-CrefoApi.ps1 - the mock API server started per phase
 #
 # Usage:
 #   pwsh -File tests/Run-CrefoTests.ps1            # run everything
