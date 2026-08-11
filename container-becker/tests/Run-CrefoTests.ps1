@@ -46,6 +46,8 @@ if (-not (Test-Path -LiteralPath $exportScript)) { throw "Exporter not found: $e
 # Run everything
 # ---------------------------------------------------------------------------
 
+# Only the scenarios whose name matches -Filter (substring) OR whose FilterTags
+# contain the exact token run; an empty filter selects the whole catalogue.
 $selected = @($scenarios | Where-Object {
     [string]::IsNullOrWhiteSpace($Filter) -or
     ($_.Name -like "*$Filter*") -or
@@ -57,12 +59,20 @@ foreach ($scenario in $selected) {
     $index++
     Write-Host ""
     Write-Host ("===== [{0}/{1}] {2} =====" -f $index, $selected.Count, $scenario.Name)
+    # One RUNTIME dir per scenario (not per phase): state.json + the sqlite db
+    # survive under it, so later phases of the scenario build on earlier ones.
+    # The GUID suffix keeps parallel/debug runs from clobbering each other.
     $runtime = Join-Path ([System.IO.Path]::GetTempPath()) ("crefo-tests-{0}-{1}" -f $scenario.Name, [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Path $runtime -Force | Out-Null
 
+    # Scenario-level config overrides apply to EVERY phase; per-phase Mock/
+    # Flags/Expect still override/observe the run itself.
     $configOverrides = @{}
     foreach ($k in $scenario.Config.Keys) { $configOverrides[$k] = $scenario.Config[$k] }
 
+    # Accumulate every phase's verdict lines into one ordered block, so the
+    # printed scenario report is contiguous. Phase names phase1/phase2/...
+    # keep multi-phase scenarios readable in that block.
     $phaseIndex = 0
     $scenarioPass = $true
     $allLines = New-Object System.Collections.Generic.List[string]
@@ -70,11 +80,14 @@ foreach ($scenario in $selected) {
         $phaseIndex++
         $phaseResult = Invoke-CrefoPhase -Phase $phase -RuntimeDir $runtime -RunName ("phase{0}" -f $phaseIndex) -ConfigOverrides $configOverrides
         foreach ($line in $phaseResult.Lines) { $allLines.Add($line) }
+        # A scenario passes only if EVERY phase passed (a failed phase's Lines
+        # are already in $allLines; the final verdict line reflects the AND).
         if (-not $phaseResult.Pass) { $scenarioPass = $false }
     }
 
     $allLines.Add(("  SCENARIO {0}: {1}" -f $scenario.Name, $(if ($scenarioPass) { 'PASS' } else { 'FAIL' })))
     foreach ($line in $allLines) { Write-Host $line }
+    # Snapshot into the shared summary accumulator (see TestHarness.ps1).
     $script:results.Add([pscustomobject]@{ Name = $scenario.Name; Pass = $scenarioPass; Lines = @($allLines.ToArray()) })
 }
 
