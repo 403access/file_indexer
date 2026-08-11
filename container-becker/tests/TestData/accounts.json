@@ -1,0 +1,47 @@
+[
+  {
+    "id": 1014,
+    "name": "Debitor Company GmbH",
+    "street": "Hauptstraße 10",
+    "countryCode": "DE",
+    "postalCode": "10115",
+    "city": "Berlin",
+    "externalReference": "FR1014"
+  },
+  {
+    "id": 2044,
+    "name": "New GmbH",
+    "street": "Beispielweg 2",
+    "countryCode": "DE",
+    "postalCode": "98765",
+    "city": "Teststadt",
+    "externalReference": "FR2044"
+  },
+  {
+    "id": 3050,
+    "name": "Muster AG",
+    "street": "Industriestraße 33",
+    "countryCode": "DE",
+    "postalCode": "50667",
+    "city": "Köln",
+    "externalReference": "FR3050"
+  },
+  {
+    "id": 4102,
+    "name": "Handel e.K.",
+    "street": "Marktplatz 5",
+    "countryCode": "DE",
+    "postalCode": "80331",
+    "city": "München",
+    "externalReference": "FR4102"
+  },
+  {
+    "id": 5010,
+    "name": "Logistik KG",
+    "street": "Hafenweg 12",
+    "countryCode": "DE",
+    "postalCode": "20457",
+    "city": "Hamburg",
+    "externalReference": "FR5010"
+  }
+]

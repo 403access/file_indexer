@@ -60,12 +60,9 @@ if (-not [string]::IsNullOrWhiteSpace($RefetchRanges)) {
 # Parse + validate the forced refetch ranges once; they are matched per account
 # in the processing loop (empty = no forced refetches this run).
 $script:forceRanges = @(ConvertTo-CrefoRefetchRanges -Value $script:cfg['RefetchRanges'])
-if ($script:forceRanges.Count -gt 0) {
-    $rangesText = @($script:forceRanges | ForEach-Object {
-        if ($_.Min -eq $_.Max) { '{0}' -f $_.Min } else { '{0}-{1}' -f $_.Min, $_.Max }
-    }) -join ', '
-    Write-Host ("Forcing /risk refetch for debtor id range(s): {0}" -f $rangesText)
-}
+$script:forceRangesText = @($script:forceRanges | ForEach-Object {
+    if ($_.Min -eq $_.Max) { '{0}' -f $_.Min } else { '{0}-{1}' -f $_.Min, $_.Max }
+}) -join ', '
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -83,6 +80,9 @@ Write-CrefoInfo ("Output CSV  : " + (Join-Path $script:cfg['OutputDir'] $script:
 Write-CrefoInfo ("State file  : " + (Join-Path $script:cfg['StateDir'] 'crefo_state.json'))
 Write-CrefoInfo ("Log file    : " + $script:logFile)
 Write-CrefoInfo ("Archive dir : " + $script:cfg['ArchiveDir'] + "  (enabled=" + $script:cfg['ArchiveRequests'] + ")")
+if ($script:forceRanges.Count -gt 0) {
+    Write-CrefoInfo ("Forcing /risk refetch for debtor id range(s): {0}" -f $script:forceRangesText)
+}
 
 # Persist every API request/response/data exchange to disk (configurable).
 Initialize-ApiArchive -Enabled $script:cfg['ArchiveRequests'] -RootDir $script:cfg['ArchiveDir']

@@ -1,0 +1,16 @@
+[
+  {
+    "debtorNumber": 5010,
+    "debtorName": "Logistik KG",
+    "street": "Hafenweg 12",
+    "countryCode": "DE",
+    "postalCode": "20457",
+    "city": "Hamburg",
+    "requestedLimit": 60000,
+    "requestedLimitDate": "2024-11-20",
+    "currentLimit": 0,
+    "limitCode": "",
+    "limitValidFrom": null,
+    "isInProgress": true
+  }
+]
