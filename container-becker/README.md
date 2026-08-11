@@ -44,6 +44,7 @@ that were already processed successfully on a previous run.
 | `-ConfigPath <path>` | Use a different config file (default: `./config.psd1`)     |
 | `-Reset`             | Restart from scratch: reprocess all accounts, truncate CSV |
 | `-ForceToken`        | Ignore the cached access token and re-authenticate         |
+| `-RefetchRanges <r>` | Force a `/risk` refetch for these debtor ids/ranges, e.g. `"1014,1100-1200"` (overrides the config value) |
 | `-Verbose`           | Additional verbose output                                  |
 
 Exit code is `0` on success and `1` when at least one account failed (retryable).
@@ -70,9 +71,10 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
    without a `/risk` request. If these bulk calls fail, the script falls back to fetching
    `/risk` for every account.
 4. **Risk data per debtor with a limit context** (`GET /api/v1/DebitorAccounts/{debitor}/risk`) -
-   the stored snapshot decides whether a call is needed (see `SyncMode`/`MaxAgeDays`). Each call
-   is archived under `archive/`, the response is stored in the account state, and the account is
-   marked `done`.
+    the stored snapshot decides whether a call is needed (see `SyncMode`/`MaxAgeDays`).
+    Debtors listed in `RefetchRanges` (or `-RefetchRanges`) are always re-fetched, overriding
+    that decision. Each call is archived under `archive/`, the response is stored in the account
+    state, and the account is marked `done`.
 5. **CSV rebuild** - the complete CSV is re-written every run (header + all rows, stable order)
    from the stored snapshots, so the file is always complete and unchanged accounts cost zero requests.
 6. **Retry / resume**: any account that failed keeps status `failed` and is retried on
@@ -144,7 +146,9 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-    A[for each account sorted by id] --> B{"ShouldRefresh?<br/>new / failed / decision changed<br/>open pipeline / older than MaxAgeDays"}
+    A[for each account sorted by id] --> R{"id in RefetchRanges?"}
+    R -- yes --> C[GET /risk - store snapshot source='api']
+    R -- no --> B{"ShouldRefresh?<br/>new / failed / decision changed<br/>open pipeline / older than MaxAgeDays"}
     B -- yes --> C[GET /risk - store snapshot source='api']
     B -- no --> D{"account has a stored limitCode?"}
     D -- yes --> E[reuse stored snapshot - zero requests]
@@ -199,6 +203,7 @@ Amounts are formatted German-style (decimal comma, `;` separator, UTF-8 with BOM
 | `UseLastLimitDecisions`                   | `true`                       | Skip `/risk` for accounts with no live limit context (not in `last-limit-decisions` or `open-limit-desires`); written as `0,00;N;0,00;0,00`. Disable if a debtor without any limit context can still have purchases. |
 | `SyncMode`                                | `Incremental`                | `Incremental` = re-fetch `/risk` only on change/new/age; `RefreshAll` = re-fetch for all accounts with a limit context every run                                                                                     |
 | `MaxAgeDays`                              | `7`                          | In `Incremental` mode, force a `/risk` re-fetch for snapshots older than this many days (`0` = no cap). Controls `Gekauft` staleness                                                                                 |
+| `RefetchRanges`                           | `''`                         | Comma list of debtor ids / id ranges that are always re-fetched, e.g. `'1014,1100-1200'`. Overrides all incremental decisions (kept fresh despite `MaxAgeDays`/limits). Can also be passed as `-RefetchRanges` on the command line. |
 | `ArchiveRequests`                         | `true`                       | Store every request/response/data exchange in `ArchiveDir`                                                                                                                                                           |
 | `OutputFileName`                          | `crefo_limits.csv`           | Filename in `OutputDir`                                                                                                                                                                                              |
 

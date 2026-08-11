@@ -34,6 +34,7 @@ function Import-CrefoConfig {
     $cfg['SyncMode'] = [string](Get-Default $cfg['SyncMode'] 'Incremental')
     $cfg['MaxAgeDays'] = [int](Get-Default $cfg['MaxAgeDays'] 7)
     $cfg['OutputFileName'] = [string](Get-Default $cfg['OutputFileName'] 'crefo_limits.csv')
+    $cfg['RefetchRanges'] = Get-Default $cfg['RefetchRanges'] ''
 
     if ($cfg['SyncMode'] -notin @('Incremental', 'RefreshAll')) {
         throw ("Invalid SyncMode '{0}'. Use 'Incremental' or 'RefreshAll'." -f $cfg['SyncMode'])
@@ -76,4 +77,33 @@ function Import-CrefoConfig {
     return $cfg
 }
 
-Export-ModuleMember -Function 'Import-CrefoConfig'
+# Parses a RefetchRanges specification ("1014" or "1100-1200", comma- or
+# array-separated) into normalized [pscustomobject]@{ Min; Max } ranges.
+# Throws on malformed entries; a zero-entry spec returns an empty array.
+function ConvertTo-CrefoRefetchRanges {
+    [CmdletBinding()]
+    param([object]$Value)   # string, array of strings/ints, or $null
+    $ranges = New-Object System.Collections.Generic.List[object]
+    $parts = @()
+    if ($null -eq $Value) { return @() }
+    if ($Value -is [array]) { $parts = @($Value) }
+    else { $parts = @($Value -split ',') }
+    foreach ($part in $parts) {
+        $token = [string]$part
+        if ([string]::IsNullOrWhiteSpace($token)) { continue }
+        $token = $token.Trim()
+        $match = [regex]::Match($token, '^(\d+)(?:-(\d+))?$')
+        if (-not $match.Success) {
+            throw ("Invalid RefetchRanges entry '{0}'. Use a single id like 1014 or a range like 1100-1200." -f $token)
+        }
+        $min = [int]$match.Groups[1].Value
+        $max = if ($match.Groups[2].Success) { [int]$match.Groups[2].Value } else { $min }
+        if ($max -lt $min) {
+            throw ("Invalid RefetchRanges entry '{0}': range end below start." -f $token)
+        }
+        $ranges.Add([pscustomobject]@{ Min = $min; Max = $max })
+    }
+    return $ranges.ToArray()
+}
+
+Export-ModuleMember -Function 'Import-CrefoConfig', 'ConvertTo-CrefoRefetchRanges'

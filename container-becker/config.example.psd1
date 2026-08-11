@@ -66,6 +66,12 @@
     # week (about one seventh of it per day).
     MaxAgeDays = 7
 
+    # Always re-fetch /risk for these debtor ids (comma list of single ids and
+    # ranges, e.g. '1014,1100-1200'). Overrides Incremental decisions. You can
+    # also pass the same value on the command line:
+    #   pwsh -File Start-CrefoExport.ps1 -RefetchRanges "1014,1100-1200"
+    RefetchRanges = ''
+
     # Store every API exchange (request.json + response.json + data.json) in
     # the archive directory so calls can be audited/replayed later.
     ArchiveRequests = $true

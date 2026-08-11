@@ -58,11 +58,20 @@ function Get-RefreshDecision {
         [object]$Account,
         [bool]$HasDecision,
         [object]$Decision,
-        [bool]$InOpenDesires
+        [bool]$InOpenDesires,
+        [object[]]$ForceRanges = @()   # debtor id ranges that must be re-fetched
     )
     $D = {
         param([bool]$Refresh, [string]$Reason)
         return [pscustomobject]@{ ShouldRefresh = $Refresh; Reason = $Reason }
+    }
+
+    # Explicit refetch ranges win over every other consideration: an account
+    # whose id falls in a listed range is always re-fetched this run.
+    foreach ($range in @($ForceRanges)) {
+        if ([int]$Account.id -ge [int]$range.Min -and [int]$Account.id -le [int]$range.Max) {
+            return & $D $true ("refetch range {0}-{1}" -f $range.Min, $range.Max)
+        }
     }
 
     # New or previously failed accounts are always fetched.
@@ -143,9 +152,10 @@ function Test-ShouldRefreshRisk {
         [object]$Account,
         [bool]$HasDecision,
         [object]$Decision,
-        [bool]$InOpenDesires
+        [bool]$InOpenDesires,
+        [object[]]$ForceRanges = @()
     )
-    return (Get-RefreshDecision -Cfg $Cfg -Account $Account -HasDecision $HasDecision -Decision $Decision -InOpenDesires $InOpenDesires).ShouldRefresh
+    return (Get-RefreshDecision -Cfg $Cfg -Account $Account -HasDecision $HasDecision -Decision $Decision -InOpenDesires $InOpenDesires -ForceRanges $ForceRanges).ShouldRefresh
 }
 
 Export-ModuleMember -Function 'Set-AccountField', 'Set-AccountSnapshot', 'Get-RefreshDecision', 'Test-ShouldRefreshRisk'

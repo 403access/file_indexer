@@ -27,7 +27,8 @@
 param(
     [string]$ConfigPath = (Join-Path $PSScriptRoot 'config.psd1'),  # path to config.psd1
     [switch]$Reset,                                                # reprocess all accounts from scratch
-    [switch]$ForceToken                                            # ignore cached token, re-authenticate
+    [switch]$ForceToken,                                           # ignore cached token, re-authenticate
+    [string]$RefetchRanges = ''                                    # e.g. "1014,1100-1200"; forces /risk for those debtor ids/ranges
 )
 
 # Fail fast: any unhandled error stops the script instead of continuing blind.
@@ -50,6 +51,21 @@ Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CrefoApi.psm1') -Global -
 # ---------------------------------------------------------------------------
 
 $script:cfg = Import-CrefoConfig -ConfigPath $ConfigPath
+
+# Command-line override: -RefetchRanges wins over the config file.
+if (-not [string]::IsNullOrWhiteSpace($RefetchRanges)) {
+    $script:cfg['RefetchRanges'] = $RefetchRanges
+}
+
+# Parse + validate the forced refetch ranges once; they are matched per account
+# in the processing loop (empty = no forced refetches this run).
+$script:forceRanges = @(ConvertTo-CrefoRefetchRanges -Value $script:cfg['RefetchRanges'])
+if ($script:forceRanges.Count -gt 0) {
+    $rangesText = @($script:forceRanges | ForEach-Object {
+        if ($_.Min -eq $_.Max) { '{0}' -f $_.Min } else { '{0}-{1}' -f $_.Min, $_.Max }
+    }) -join ', '
+    Write-Host ("Forcing /risk refetch for debtor id range(s): {0}" -f $rangesText)
+}
 
 # ---------------------------------------------------------------------------
 # Logging setup
@@ -240,7 +256,7 @@ foreach ($account in $allAccounts) {
         $decision = if ($hasDecision) { $limitDecisions[$id] } else { $null }
         $inOpenDesires = $openDesires.ContainsKey($id)
 
-        $refreshDecision = Get-RefreshDecision -Cfg $script:cfg -Account $account -HasDecision $hasDecision -Decision $decision -InOpenDesires $inOpenDesires
+        $refreshDecision = Get-RefreshDecision -Cfg $script:cfg -Account $account -HasDecision $hasDecision -Decision $decision -InOpenDesires $inOpenDesires -ForceRanges $script:forceRanges
         if ($refreshDecision.ShouldRefresh) {
             Write-CrefoInfo ("Fetching risk data for debitor {0} ({1}) [{2}]..." -f $id, $account.name, $refreshDecision.Reason)
             $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
