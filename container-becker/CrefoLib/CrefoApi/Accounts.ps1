@@ -20,8 +20,8 @@ function Get-CrefoDebtorListStats {
     # rejected) gives the exact total in the smallest payload. The caller uses
     # this to detect a gap against the database and fetch only the difference.
     $probe = $null
-    $usedPageSize = 0
-    foreach ($tryPageSize in @(0, 1)) {
+    $usedPageSize = 1
+    foreach ($tryPageSize in @(1, 0)) {
         try {
             $probe = Invoke-CrefoApi -Config $Config -Method GET `
                 -Path '/api/v1/DebitorAccounts/list-debitor' `
