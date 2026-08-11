@@ -79,6 +79,11 @@
     # Name of the result file inside the output directory.
     OutputFileName = 'crefo_limits.csv'
 
+    # Where retrieved submission/obligo documents are downloaded (used by
+    # Invoke-CrefoDocuments.ps1). Relative to this file, or absolute.
+    # Layout: <DocumentsDir>/submission/..., <DocumentsDir>/<folder>/...
+    DocumentsDir = 'documents'
+
     # Relative to the folder that contains config.psd1:
     OutputDir = 'output'
     StateDir  = 'state'

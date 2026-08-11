@@ -35,6 +35,7 @@ function Import-CrefoConfig {
     $cfg['MaxAgeDays'] = [int](Get-Default $cfg['MaxAgeDays'] 7)
     $cfg['OutputFileName'] = [string](Get-Default $cfg['OutputFileName'] 'crefo_limits.csv')
     $cfg['RefetchRanges'] = Get-Default $cfg['RefetchRanges'] ''
+    $cfg['DocumentsDir'] = [string](Get-Default $cfg['DocumentsDir'] 'documents')
 
     if ($cfg['SyncMode'] -notin @('Incremental', 'RefreshAll')) {
         throw ("Invalid SyncMode '{0}'. Use 'Incremental' or 'RefreshAll'." -f $cfg['SyncMode'])
@@ -57,7 +58,7 @@ function Import-CrefoConfig {
 
     # Resolve relative directory entries against the config file's location and
     # make sure the directories exist before we write anything into them.
-    foreach ($dirKey in @('OutputDir', 'StateDir', 'LogDir', 'ArchiveDir')) {
+    foreach ($dirKey in @('OutputDir', 'StateDir', 'LogDir', 'ArchiveDir', 'DocumentsDir')) {
         if ([string]::IsNullOrWhiteSpace([string]$cfg[$dirKey])) { $cfg[$dirKey] = $dirKey }
         if (-not [System.IO.Path]::IsPathRooted([string]$cfg[$dirKey])) {
             $cfg[$dirKey] = Join-Path $cfgRoot $cfg[$dirKey]

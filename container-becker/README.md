@@ -77,8 +77,39 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
     state, and the account is marked `done`.
 5. **CSV rebuild** - the complete CSV is re-written every run (header + all rows, stable order)
    from the stored snapshots, so the file is always complete and unchanged accounts cost zero requests.
-6. **Retry / resume**: any account that failed keeps status `failed` and is retried on
+6. **Document downloads** (`GET /api/v1/Submission/{document}` and `GET /api/v1/Documents/{folder}/{document}`).
+   Binary files are streamed straight to disk via `HttpClient` (response headers are read
+   first, then the body is copied in chunks so a large PDF or invoice never sits entirely
+   in memory). Only metadata (status, content-type, file size) is archived; the raw binary
+   body is never persisted. The same retry/backoff and one-shot 401 recovery used for
+   JSON endpoints applies here too. Run `Invoke-CrefoDocuments.ps1` to export the
+   submission and generic-document inventories.
+7. **Retry / resume**: any account that failed keeps status `failed` and is retried on
    the next run. Failed accounts are omitted from the rebuilt CSV until a later run succeeds.
+
+## Document exports (`Invoke-CrefoDocuments.ps1`)
+
+`Invoke-CrefoDocuments.ps1` handles the binary document endpoints separately from
+the limit-export flow. It supports two inventories:
+
+- **Submission documents** (`/api/v1/Submission/list-document` + `/api/v1/Submission/{name}`)
+- **Generic documents** (`/api/v1/Documents/list-directory` + `/api/v1/Documents/{folder}/list-document` + `/api/v1/Documents/{folder}/{name}`)
+
+```powershell
+pwsh -File container-becker/Invoke-CrefoDocuments.ps1
+```
+
+Options:
+
+| Flag                 | Effect                                                     |
+| -------------------- | ---------------------------------------------------------- |
+| `-ConfigPath <path>` | Use a different config file (default: `./config.psd1`)     |
+| `-OutputDir <path>`  | Destination folder for downloaded binaries (default: `./documents`) |
+| `-Verbose`           | Additional verbose output                                  |
+
+Each downloaded file is written to `<OutputDir>/<category>/<filename>`. The archive
+records the HTTP status, content-type, and byte size for every request, but the raw
+binary body is never written to the archive so the folder stays small.
 
 ## Visual overview of the flows
 
@@ -384,3 +415,4 @@ flattened the category path). Two tools bring everything to the current layout:
 - **Idempotency**: rows are appended once per account; re-running never duplicates data.
 - **Security**: secrets live in git-ignored `config.psd1` or environment variables; the token cache is `chmod 600`.
 - **Resilience**: retries with a configurable delay + jitter for transient errors, automatic token refresh on `401`.
+- **Memory-safe downloads**: binary documents are streamed via `HttpClient` with `ResponseHeadersRead` + chunked `CopyTo()` instead of `Invoke-WebRequest -OutFile`, which returns nothing in PowerShell 7 and makes post-call status/header inspection impossible. The chunked path keeps large files off the heap.

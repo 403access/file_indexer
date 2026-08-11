@@ -6,12 +6,18 @@
 # snapshot: the debitor accounts, the completed limit decisions, the open
 # limit desires and optional per-debtor /risk payloads, plus fault injection
 # (500 on probe/decisions, 401-then-success per risk id, 500-once for retry
-# tests). Responses follow the OpenAPI shapes documented in api.md/swagger:
-#   - POST /connect/token                  -> OAuth token response
-#   - GET /api/v1/DebitorAccounts/list-debitor -> DebitorAccountDtoPagedResult
-#   - GET /api/v1/last-limit-decisions     -> LastLimitDecisionDto[]
-#   - GET /api/v1/open-limit-desires       -> OpenLimitDesireDto[]
-#   - GET /api/v1/DebitorAccounts/{id}/risk -> DebtorRiskInfoDto[]
+# tests). Document scenarios additionally define the submission documents and
+# generic Documents folders. Responses follow the OpenAPI shapes:
+#   - POST /connect/token                          -> OAuth token response
+#   - GET /api/v1/DebitorAccounts/list-debitor      -> DebitorAccountDtoPagedResult
+#   - GET /api/v1/last-limit-decisions              -> LastLimitDecisionDto[]
+#   - GET /api/v1/open-limit-desires                -> OpenLimitDesireDto[]
+#   - GET /api/v1/DebitorAccounts/{id}/risk         -> DebtorRiskInfoDto[]
+#   - GET /api/v1/Submission/list-document          -> SubmissionDocumentDtoPagedResult
+#   - GET /api/v1/Submission/{document}             -> binary download
+#   - GET /api/v1/Documents/list-directory          -> FolderListDto
+#   - GET /api/v1/Documents/{dir}/list-document     -> SubmissionDocumentDto[]
+#   - GET /api/v1/Documents/{dir}/{document}        -> binary download
 #
 # Every exchange is appended to a JSON-lines request log (for assertions) and
 # endpoint counters are persisted to a count file after each request.
@@ -21,7 +27,7 @@ param(
     [int]$Port,            # TCP port to listen on (runner picks a free one)
     [string]$MockFile,     # path to the mock scenario psd1 (data + faults)
     [string]$RequestLog,   # JSON-lines log of all requests (one object per line)
-    [string]$CountFile,    # JSON counters: token/list/probe/decisions/desires/risk
+    [string]$CountFile,    # JSON counters: token/list/probe/decisions/desires/risk/etc
     [string]$ReadyFile,    # written with 'READY' when the listener is up
     [string]$StopFile      # when this file appears, the server shuts down
 )
@@ -48,6 +54,14 @@ if ($mock.ContainsKey('Risk')) {
 $faults = @{}
 if ($mock.ContainsKey('Faults')) { $faults = $mock['Faults'] }
 
+# Document scenario data (both optional; document scenarios need at least one).
+$submissionDocs = @()
+if ($mock.ContainsKey('SubmissionDocuments')) { $submissionDocs = @($mock['SubmissionDocuments']) }
+$documentFolders = @()
+if ($mock.ContainsKey('DocumentFolders')) { $documentFolders = @($mock['DocumentFolders']) }
+$documentFiles = @{}
+if ($mock.ContainsKey('DocumentFiles')) { $documentFiles = $mock['DocumentFiles'] }
+
 # ------------------------------------------------------------------- state
 $script:spoken401 = New-Object System.Collections.Generic.HashSet[string]
 $script:risk500OnceSpoken = $false
@@ -58,7 +72,7 @@ $script:port = $Port
 
 # Counters are written as JSON after every request so the runner can assert on
 # traffic shape (how many risk calls, probes, token calls etc).
-$script:counts = @{ token = 0; list = 0; probe = 0; decisions = 0; desires = 0; risk = 0 }
+$script:counts = @{ token = 0; list = 0; probe = 0; decisions = 0; desires = 0; risk = 0; submissionList = 0; submissionDownload = 0; documentsDir = 0; documentsList = 0; documentDownload = 0 }
 
 function Get-CountValue {
     param([string]$Name)
@@ -108,6 +122,25 @@ function Send-Json {
     $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
     $Ctx.Response.StatusCode = $Status
     $Ctx.Response.ContentType = 'application/json'
+    $Ctx.Response.ContentLength64 = $bytes.Length
+    $Ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+    $Ctx.Response.Close()
+}
+
+# Serves a binary download body (used by the Submission/Documents document
+# endpoints). Content is a deterministic, name-derived ASCII string so the
+# runner can assert both the bytes actually written and their length.
+function Send-Binary {
+    param(
+        [System.Net.HttpListenerContext]$Ctx,
+        [string]$Name,
+        [int]$Status = 200
+    )
+    $body = 'content-of:' + $Name
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+    $Ctx.Response.StatusCode = $Status
+    $Ctx.Response.ContentType = 'application/octet-stream'
+    $Ctx.Response.AddHeader('content-disposition', ('attachment; filename="{0}"' -f $Name))
     $Ctx.Response.ContentLength64 = $bytes.Length
     $Ctx.Response.OutputStream.Write($bytes, 0, $bytes.Length)
     $Ctx.Response.Close()
@@ -249,6 +282,74 @@ while ($true) {
                 # The API returns an array (DebtorRiskInfoDto[]); the client
                 # reads the first element, so wrap the payload in an array.
                 Send-Json $ctx @(Get-RiskForId -Id $id)
+            }
+        }
+        # ------------------------------------------------- submission list
+        elseif ($path -eq '/api/v1/Submission/list-document') {
+            $script:counts.submissionList = (Get-CountValue 'submissionList') + 1
+            Write-RequestLog 'GET' $path $q 200
+            $total = $submissionDocs.Count
+            Send-Json $ctx @{
+                header = @{
+                    currentPage  = 1
+                    itemsPerPage = 50
+                    totalItems   = [int]$total
+                    totalPages   = if ($total -gt 0) { 1 } else { 1 }
+                }
+                items  = $submissionDocs
+            }
+        }
+        # --------------------------------------------- submission download
+        elseif ($path -match '^/api/v1/Submission/(.+)$') {
+            $docName = [uri]::UnescapeDataString($Matches[1])
+            $script:counts.submissionDownload = (Get-CountValue 'submissionDownload') + 1
+            if ($submissionDocs.name -contains $docName) {
+                Write-RequestLog 'GET' $path $q 200
+                Send-Binary $ctx $docName
+            }
+            else {
+                Write-RequestLog 'GET' $path $q 404
+                $ctx.Response.StatusCode = 404
+                $ctx.Response.Close()
+            }
+        }
+        # ------------------------------------------------ document folders
+        elseif ($path -eq '/api/v1/Documents/list-directory') {
+            $script:counts.documentsDir = (Get-CountValue 'documentsDir') + 1
+            Write-RequestLog 'GET' $path $q 200
+            Send-Json $ctx @{ folder = @($documentFolders) }
+        }
+        # ------------------------------------------------- document listing
+        elseif ($path -match '^/api/v1/Documents/([^/]+)/list-document$') {
+            $dirName = [uri]::UnescapeDataString($Matches[1])
+            $script:counts.documentsList = (Get-CountValue 'documentsList') + 1
+            if ($documentFiles.ContainsKey($dirName)) {
+                Write-RequestLog 'GET' $path $q 200
+                Send-Json $ctx @($documentFiles[$dirName])
+            }
+            else {
+                Write-RequestLog 'GET' $path $q 404
+                $ctx.Response.StatusCode = 404
+                $ctx.Response.Close()
+            }
+        }
+        # -------------------------------------------------- document download
+        elseif ($path -match '^/api/v1/Documents/([^/]+)/([^/]+)$') {
+            $dirName = [uri]::UnescapeDataString($Matches[1])
+            $docName = [uri]::UnescapeDataString($Matches[2])
+            $script:counts.documentDownload = (Get-CountValue 'documentDownload') + 1
+            $inFolder = $false
+            if ($documentFiles.ContainsKey($dirName)) {
+                $inFolder = (@($documentFiles[$dirName]).name -contains $docName)
+            }
+            if ($inFolder) {
+                Write-RequestLog 'GET' $path $q 200
+                Send-Binary $ctx $docName
+            }
+            else {
+                Write-RequestLog 'GET' $path $q 404
+                $ctx.Response.StatusCode = 404
+                $ctx.Response.Close()
             }
         }
         # ------------------------------------------------------- 404s
