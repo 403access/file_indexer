@@ -104,7 +104,17 @@ Amounts are formatted German-style (decimal comma, `;` separator, UTF-8 with BOM
 ## Generated artifacts
 
 - `output/crefo_limits.csv` - the results.
-- `state/crefo_state.json` - progress snapshot (one entry per account: id, name, status, error, updatedAt). This is what makes runs resumable. Also contains the account list snapshot in the `accounts` array.
+- `state/crefo.db` - **canonical** SQLite store (source of truth) the CSV is rebuilt from:
+  - `accounts` - one row per debitor (id, name, status, error, created/updated)
+  - `risk_snapshots` - append-only history of every `/risk` result (and short-circuit zero rows); latest per account wins
+  - `api_exchanges` - audit log of every API call (endpoint, method, url, status, elapsed, archive path)
+  Access requires the `sqlite3` CLI (ships with macOS). Writes are batched into
+  atomic transactions; a failed statement rolls the whole batch back.
+- `state/crefo_state.json` - progress snapshot kept **alongside** the DB for rollback (id, name, status, error, updatedAt). This is what makes runs resumable. Also contains the account list snapshot in the `accounts` array. On the first run after enabled, accounts/snapshots already in this file are copied into the database.
+
+Because `risk_snapshots` stores `fetched_at` and the account id, archive file paths are
+reconstructable without extra storage: `archive/risks/<outer-range>/<inner-range>/<debtor-id>-risk/`.
+
 - `state/crefo_token_cache.json` - cached access token (permissions restricted).
 - `logs/crefo_export_<timestamp>.log` - per-run log with timestamps and levels.
 - `archive/<endpoint>/<timestamp>_<seq>_request.json` / `_response.json` / `_data.json` - every API exchange stored as files:

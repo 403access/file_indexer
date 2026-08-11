@@ -78,7 +78,11 @@ function Save-ApiExchange {
         [switch]$IncludeAuthorization,  # record a redacted Authorization header
         [string]$Category               # optional subfolder grouping (e.g. 'risks')
     )
-    if (-not $script:ArchiveEnabled) { return }
+    if (-not $script:ArchiveEnabled) {
+        # No files are written, but the SQLite audit log is kept anyway.
+        Save-CrefoApiExchangeLog -Name $Name -Method $Method -Uri $Uri -StatusCode $StatusCode -ElapsedMs $ElapsedMs
+        return
+    }
 
     $script:ArchiveCounter++
     $stamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
@@ -123,6 +127,17 @@ function Save-ApiExchange {
 
     if ($null -ne $Data) {
         Write-ArchiveFile -Path ($base + '_data.json') -Content $Data
+    }
+
+    # Mirror the exchange into the SQLite audit log (best-effort bridge: the
+    # Database module may not be loaded, or logging must never break a run).
+    try {
+        if (Get-Command 'Save-CrefoApiExchangeLog' -ErrorAction SilentlyContinue) {
+            Save-CrefoApiExchangeLog -Name $Name -Method $Method -Uri $Uri -StatusCode $StatusCode -ElapsedMs $ElapsedMs -Archived $true -ArchivePath $base
+        }
+    }
+    catch {
+        Write-CrefoDebug ("API exchange DB logging failed: {0}" -f $_.Exception.Message)
     }
 }
 

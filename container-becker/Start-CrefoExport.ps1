@@ -39,6 +39,7 @@ Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Config.psm1') -Global -Fo
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\StateStore.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Snapshot.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CsvFormat.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Database.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\ApiArchive.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CrefoApi.psm1') -Global -Force
 
@@ -67,6 +68,12 @@ Write-CrefoInfo ("Archive dir : " + $script:cfg['ArchiveDir'] + "  (enabled=" + 
 
 # Persist every API request/response/data exchange to disk (configurable).
 Initialize-ApiArchive -Enabled $script:cfg['ArchiveRequests'] -RootDir $script:cfg['ArchiveDir']
+
+# Local SQLite store: canonical source of truth for the CSV. The JSON state is
+# still written alongside (rollback), but the CSV is rebuilt from the database.
+$script:dbPath = Join-Path $script:cfg['StateDir'] 'crefo.db'
+Initialize-CrefoDatabase -DbPath $script:dbPath
+Write-CrefoInfo ("Database    : " + $script:dbPath)
 
 # ---------------------------------------------------------------------------
 # Authentication
@@ -106,6 +113,8 @@ if ($Reset) {
     Reset-CrefoAccounts -State $state
     $resetCsv = Join-Path $script:cfg['OutputDir'] $script:cfg['OutputFileName']
     if (Test-Path -LiteralPath $resetCsv) { Remove-Item -LiteralPath $resetCsv -Force }
+    # Let the database rebuild from the reset run as well.
+    Invoke-CrefoSqlite -DbPath $script:dbPath -Sql 'DELETE FROM risk_snapshots; DELETE FROM accounts;' -ErrorAction SilentlyContinue | Out-Null
 }
 
 # Refresh the account list (merges new debtors in, keeps old progress) unless
@@ -118,6 +127,10 @@ if ($script:cfg['RefreshAccountList'] -or -not $state.accountListFetchedAt) {
     $state.accountListFetchedAt = (Get-Date).ToUniversalTime().ToString('o')
     Save-CrefoState -Path $statePath -State $state
 }
+
+# One-time seed: copy accounts/snapshots already known in JSON state into the
+# database so the CSV can be rebuilt from it even before any /risk runs.
+Import-CrefoDatabaseFromState -State $state
 
 # ---------------------------------------------------------------------------
 # Main processing loop (incremental daily sync)
@@ -182,6 +195,7 @@ $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
 foreach ($account in $allAccounts) {
     $id = [int]$account.id
+    $snapshotSource = $null   # 'api' | 'short-circuit' when a new snapshot is written
     try {
         $hasDecision = $limitDecisions.ContainsKey($id)
         $decision = if ($hasDecision) { $limitDecisions[$id] } else { $null }
@@ -192,6 +206,7 @@ foreach ($account in $allAccounts) {
             Write-CrefoInfo ("Fetching risk data for debitor {0} ({1}) [{2}]..." -f $id, $account.name, $refreshDecision.Reason)
             $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
             $account = Set-AccountSnapshot -Account $account -Risk $risk
+            $snapshotSource = 'api'
             $refreshed++
         }
         elseif ($null -eq $account.limitCode) {
@@ -199,6 +214,7 @@ foreach ($account in $allAccounts) {
             # write the explicit N / zero row without a risk request.
             Write-CrefoInfo ("Debitor {0} ({1}) - no limit context, writing zero row [{2}]." -f $id, $account.name, $refreshDecision.Reason)
             $account = Set-AccountSnapshot -Account $account -Risk $null
+            $snapshotSource = 'short-circuit'
             $shortCircuited++
         }
         else {
@@ -220,6 +236,24 @@ foreach ($account in $allAccounts) {
         Write-CrefoError ("Debitor {0} failed: {1}" -f $id, $_.Exception.Message)
     }
     $account.updatedAt = (Get-Date).ToUniversalTime().ToString('o')
+
+    # Persist to the SQLite database (canonical store) alongside the JSON state.
+    try {
+        Save-CrefoAccount -Account $account
+        if ($null -ne $snapshotSource) {
+            Save-CrefoRiskSnapshot -AccountId $id -Risk ([pscustomobject]@{
+                limit     = [double]$account.limit
+                purchased = [double]$account.purchased
+                balance   = [double]$account.balance
+                limitCode = [string]$account.limitCode
+                fetchedAt = ([string]$account.fetchedAt)
+            }) -Source $snapshotSource -RiskFetched ($snapshotSource -eq 'api')
+        }
+    }
+    catch {
+        Write-CrefoWarn ("Database write failed for debitor {0}: {1}" -f $id, $_.Exception.Message)
+    }
+
     # Persist after every single account - this is what makes a Ctrl+C or
     # crashed run resumable without re-fetching the whole book.
     Save-CrefoState -Path $statePath -State $state
@@ -231,8 +265,24 @@ foreach ($account in $allAccounts) {
 }
 $stopwatch.Stop()
 
-# Rebuild the complete CSV from the stored snapshots (stable order by id).
-Write-CrefoCsv -Path $csvPath -Rows $rows.ToArray()
+# Rebuild the complete CSV from the database (the canonical source). Falls back
+# to the in-memory rows if the DB read unexpectedly fails.
+try {
+    $dbRows = Get-CrefoDatabaseCsvRows
+    $dbRowLines = @($dbRows | ForEach-Object { New-CsvRowFromAccount -Cfg $script:cfg -Account $_ })
+    if ($dbRowLines.Count -gt 0) {
+        Write-CrefoCsv -Path $csvPath -Rows $dbRowLines
+        Write-CrefoInfo ("CSV rebuilt from database ({0} rows)." -f $dbRowLines.Count)
+    }
+    else {
+        Write-CrefoWarn 'Database returned no CSV rows (empty store); falling back to in-memory rows.'
+        Write-CrefoCsv -Path $csvPath -Rows $rows.ToArray()
+    }
+}
+catch {
+    Write-CrefoWarn ("Could not rebuild CSV from database ({0}); falling back to in-memory rows." -f $_.Exception.Message)
+    Write-CrefoCsv -Path $csvPath -Rows $rows.ToArray()
+}
 
 Write-CrefoInfo ("Run finished: total={0} refreshed={1} reused={2} short-circuited={3} failed={4} elapsed={5:N1}s" -f $allAccounts.Count, $refreshed, $reused, $shortCircuited, $failedCount, $stopwatch.Elapsed.TotalSeconds)
 if ($failedCount -gt 0) {
