@@ -55,17 +55,19 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
 2. **List accounts** (`GET /api/v1/DebitorAccounts/list-debitor`, paged).
    Fetched account IDs are merged into the persistent state, so new debtors are picked
    up and old progress is never lost.
-3. **Completed limit decisions** (`GET /api/v1/last-limit-decisions`, one bulk call).
-   Builds the set of accounts that actually have a limit decision. Accounts **without**
-   a decision have no limit and are written straight to the CSV as `0,00;N;0,00;0,00`
-   without a `/risk` request (see `UseLastLimitDecisions`). If this bulk call fails,
-   the script falls back to fetching `/risk` for every account.
-4. **Risk data per debtor with a decision** (`GET /api/v1/DebitorAccounts/{debitor}/risk`) -
-   one request per such account. Each response is logged, applied to the CSV, and the account
-   is marked `done` in the state. Every HTTP exchange (request, raw response, decoded data)
-   is saved as files under `archive/` when `ArchiveRequests = true`.
-5. **Retry / resume**: any account that failed keeps status `failed` and is retried on
-   the next run. Existing `done` rows are not re-written, so CSV rows are never duplicated.
+3. **Limit-workflow bulk calls** (`GET /api/v1/last-limit-decisions` + `GET /api/v1/open-limit-desires`,
+   one call each). Their union is the set of accounts with a live limit context. Accounts in
+   **neither** list have no limit and are written straight to the CSV as `0,00;N;0,00;0,00`
+   without a `/risk` request. If these bulk calls fail, the script falls back to fetching
+   `/risk` for every account.
+4. **Risk data per debtor with a limit context** (`GET /api/v1/DebitorAccounts/{debitor}/risk`) -
+   the stored snapshot decides whether a call is needed (see `SyncMode`/`MaxAgeDays`). Each call
+   is archived under `archive/`, the response is stored in the account state, and the account is
+   marked `done`.
+5. **CSV rebuild** - the complete CSV is re-written every run (header + all rows, stable order)
+   from the stored snapshots, so the file is always complete and unchanged accounts cost zero requests.
+6. **Retry / resume**: any account that failed keeps status `failed` and is retried on
+   the next run. Failed accounts are omitted from the rebuilt CSV until a later run succeeds.
 
 ## Field mapping (API -> CSV)
 
@@ -93,7 +95,9 @@ Amounts are formatted German-style (decimal comma, `;` separator, UTF-8 with BOM
 | `LogLevel`            | `INFO`                         | `DEBUG`, `INFO`, `WARN`, `ERROR` |
 | `RefreshAccountList`  | `true`                         | Re-fetch the account list each run to discover new debtors |
 | `FreeLineFromBalance` | `false`                        | `true` = freie Linie = limit - balance, otherwise limit - purchased |
-| `UseLastLimitDecisions` | `true`                       | Skip `/risk` for accounts without a completed limit decision (written as `0,00;N;0,00;0,00`). Disable if a debtor without a decision can still have purchases. |
+| `UseLastLimitDecisions` | `true`                       | Skip `/risk` for accounts with no live limit context (not in `last-limit-decisions` or `open-limit-desires`); written as `0,00;N;0,00;0,00`. Disable if a debtor without any limit context can still have purchases. |
+| `SyncMode`            | `Incremental`                  | `Incremental` = re-fetch `/risk` only on change/new/age; `RefreshAll` = re-fetch for all accounts with a limit context every run |
+| `MaxAgeDays`          | `7`                            | In `Incremental` mode, force a `/risk` re-fetch for snapshots older than this many days (`0` = no cap). Controls `Gekauft` staleness |
 | `ArchiveRequests`     | `true`                         | Store every request/response/data exchange in `ArchiveDir` |
 | `OutputFileName`      | `crefo_limits.csv`             | Filename in `OutputDir` |
 

@@ -1,13 +1,22 @@
 # =============================================================================
 # Start-CrefoExport.ps1
-# Orchestrates the Crefo Factoring limit export:
+# Orchestrates the Crefo Factoring limit export (daily sync):
 #   1. authenticate (OAuth2 password flow, cached token)
-#   2. fetch the debitor account list (paginated)
-#   3. fetch completed limit decisions once (bulk) - accounts without a
-#      decision have no limit, so they are written as 0,00 / N and the
-#      per-debtor /risk request is skipped entirely
-#   4. per debtor with a decision: fetch risk data and append one CSV row
-#   5. persist progress after every account so runs are resumable
+#   2. fetch the debitor account list (paginated) and merge into state
+#   3. fetch the limit-workflow bulk endpoints (last-limit-decisions +
+#      open-limit-desires): accounts with no limit context short-circuit to a
+#      0,00 / N row without a per-debtor /risk request
+#   4. decide per account whether its stored risk snapshot is stale (new,
+#      failed, decision changed, account in the open pipeline, or older than
+#      MaxAgeDays) and only then call /risk
+#   5. rebuild the full CSV from the account snapshots (stable order by id)
+#   6. persist progress after every account so runs are resumable
+#
+# SyncMode:
+#   Incremental (default) - few requests most days; /risk only where the
+#     decision changed or the snapshot is older than MaxAgeDays.
+#   RefreshAll           - like the original one-time sync: /risk for every
+#     account with a limit context each run.
 # Run with:  pwsh -File Start-CrefoExport.ps1 [-Reset] [-ForceToken] [-ConfigPath <path>]
 # Exit code: 0 = success, 1 = at least one account failed (re-run to retry).
 # =============================================================================
@@ -15,7 +24,7 @@
 [CmdletBinding()]
 param(
     [string]$ConfigPath = (Join-Path $PSScriptRoot 'config.psd1'),  # path to config.psd1
-    [switch]$Reset,                                                # reprocess all accounts, truncate CSV
+    [switch]$Reset,                                                # reprocess all accounts from scratch
     [switch]$ForceToken                                            # ignore cached token, re-authenticate
 )
 
@@ -60,60 +69,143 @@ function ConvertTo-GermanyNumber {
     }
 }
 
-# Builds one CSV data row from the risk payload:
+# Adds/updates a field on an account object. State accounts are deserialized
+# JSON (or literal PSCustomObject) and only accept assignment to existing
+# properties; new snapshot fields must be added as note properties.
+function Set-AccountField {
+    [CmdletBinding()]
+    param(
+        [object]$Account,
+        [string]$Name,
+        [object]$Value
+    )
+    $Account | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
+}
+
+# Stores the last known risk values onto the account object so a CSV row can be
+# re-emitted later without a network call. With -Risk $null (the short-circuit
+# path) the account is stamped as the explicit N / zero snapshot.
+function Set-AccountSnapshot {
+    [CmdletBinding()]
+    param(
+        [object]$Account,
+        [object]$Risk
+    )
+    if ($null -ne $Risk) {
+        Set-AccountField -Account $Account -Name 'limit' -Value ([double]$Risk.limit)
+        Set-AccountField -Account $Account -Name 'purchased' -Value ([double]$Risk.purchasedReceivables)
+        Set-AccountField -Account $Account -Name 'balance' -Value ([double]$Risk.balance)
+        $code = [string]$Risk.limitCode
+        if ([string]::IsNullOrWhiteSpace($code)) { $code = 'N' }
+        Set-AccountField -Account $Account -Name 'limitCode' -Value $code
+        Set-AccountField -Account $Account -Name 'riskFetched' -Value $true
+        Set-AccountField -Account $Account -Name 'fetchedAt' -Value ((Get-Date).ToUniversalTime().ToString('o'))
+    }
+    else {
+        # No risk request made (short-circuit): explicit N / zero snapshot.
+        Set-AccountField -Account $Account -Name 'limit' -Value 0.0
+        Set-AccountField -Account $Account -Name 'purchased' -Value 0.0
+        Set-AccountField -Account $Account -Name 'balance' -Value 0.0
+        Set-AccountField -Account $Account -Name 'limitCode' -Value 'N'
+        Set-AccountField -Account $Account -Name 'riskFetched' -Value $false
+    }
+    return $Account
+}
+
+# Builds one CSV data row from an account's stored snapshot:
 #   Kto-Nr. | Name1 | Limit | LimitKennz | Gekauft | freie Linie
-# freie Linie is not returned by the API and is derived from limit minus the
-# purchased receivables (or minus balance when FreeLineFromBalance is enabled).
-# With -NoLimitDecision the row is written from scratch as 0,00 / N / 0,00 / 0,00
-# (the account has no limit decision, so no /risk request was made for it).
-function New-CsvRow {
+# freie Linie is derived from limit minus purchased (or minus balance when
+# FreeLineFromBalance is enabled), never fetched.
+function New-CsvRowFromAccount {
     param(
         [hashtable]$Cfg,
-        [int]$Id,
-        [string]$Name,
-        [object]$Risk,
-        [switch]$NoLimitDecision
+        [object]$Account
     )
-    $limit = 0.0
-    $purchased = 0.0
-    $balance = 0.0
-    $limitCode = 'N'
-    if (-not $NoLimitDecision -and $null -ne $Risk) {
-        $limit = [double]$Risk.limit
-        $purchased = [double]$Risk.purchasedReceivables
-        $balance = [double]$Risk.balance
-        $limitCode = [string]$Risk.limitCode
-        if ([string]::IsNullOrWhiteSpace($limitCode)) { $limitCode = 'N' }
-    }
+    $limit = [double]$Account.limit
+    $purchased = [double]$Account.purchased
+    $balance = [double]$Account.balance
     $freeBase = if ($Cfg['FreeLineFromBalance']) { $balance } else { $purchased }
     $freeLine = $limit - $freeBase
 
     $fields = @(
-        (ConvertTo-CsvField ([string]$Id)),
-        (ConvertTo-CsvField ([string]$Name)),
+        (ConvertTo-CsvField ([string]$Account.id)),
+        (ConvertTo-CsvField ([string]$Account.name)),
         (ConvertTo-GermanyNumber $limit),
-        (ConvertTo-CsvField $limitCode),
+        (ConvertTo-CsvField ([string]$Account.limitCode)),
         (ConvertTo-GermanyNumber $purchased),
         (ConvertTo-GermanyNumber $freeLine)
     )
     return ($fields -join ';')
 }
 
-# Appends rows to the CSV. Writes the header (with a BOM so Excel detects UTF-8)
-# only when the file is created for the first time.
-function Add-CsvLine {
+# Writes a complete CSV (header + all rows) atomically via a temp file.
+function Write-CrefoCsv {
     param(
         [string]$Path,
-        [string[]]$Lines
+        [string[]]$Rows
     )
     $utf8WithBom = New-Object System.Text.UTF8Encoding($true)
-    if (-not (Test-Path -LiteralPath $Path)) {
-        $header = 'Kto-Nr.;Name1;Limit;LimitKennz;Gekauft;freie Linie'
-        [System.IO.File]::WriteAllLines($Path, @($header) + @($Lines), $utf8WithBom)
+    $header = 'Kto-Nr.;Name1;Limit;LimitKennz;Gekauft;freie Linie'
+    $tmp = $Path + '.tmp'
+    [System.IO.File]::WriteAllLines($tmp, @($header) + @($Rows), $utf8WithBom)
+    Move-Item -LiteralPath $tmp -Destination $Path -Force
+}
+
+# Decides whether the account's /risk snapshot must be re-fetched for this run.
+function Test-ShouldRefreshRisk {
+    [CmdletBinding()]
+    param(
+        [hashtable]$Cfg,
+        [object]$Account,
+        [bool]$HasDecision,
+        [object]$Decision,
+        [bool]$InOpenDesires
+    )
+    # New or previously failed accounts are always fetched.
+    if ($Account.status -in @('pending', 'failed')) { return $true }
+
+    # Accounts from a run before the snapshot feature have no stored data yet:
+    # fetch only when they have a live limit context, otherwise they fall into
+    # the short-circuit path below.
+    if ($null -eq $Account.limitCode) { return ($HasDecision -or $InOpenDesires) }
+
+    # RefreshAll: refetch every account with a limit context each run.
+    if ($Cfg['SyncMode'] -eq 'RefreshAll') { return ($HasDecision -or $InOpenDesires) }
+
+    # --- Incremental mode below -------------------------------------------------
+    $storedCode = [string]$Account.limitCode
+    $storedLimit = [double]$Account.limit
+    if ([string]::IsNullOrWhiteSpace($storedCode)) { $storedCode = 'N' }
+    $storedActive = ($storedCode -ne 'N') -or ($storedLimit -gt 0.0)
+
+    # Decision removed while the account previously had one: refetch, because
+    # purchases may still exist and only /risk knows.
+    if (-not $HasDecision -and -not $InOpenDesires -and $storedActive) { return $true }
+
+    if ($HasDecision) {
+        # Limit/decision changed since our last snapshot?
+        $decisionCode = [string]$Decision.limitCode
+        if ([string]::IsNullOrWhiteSpace($decisionCode)) { $decisionCode = 'N' }
+        $decisionLimit = [double]$Decision.currentLimit
+        if ($storedCode -ne $decisionCode -or [math]::Abs($storedLimit - $decisionLimit) -gt 0.001) { return $true }
     }
     else {
-        [System.IO.File]::AppendAllLines($Path, $Lines, $utf8WithBom)
+        # No decision, but the account sits in the open-limit pipeline: refresh.
+        if ($InOpenDesires) { return $true }
     }
+
+    # Staleness cap: refetch everything past MaxAgeDays regardless of changes.
+    $maxAgeDays = [int]$Cfg['MaxAgeDays']
+    if ($maxAgeDays -gt 0 -and $Account.riskFetched) {
+        try {
+            $fetchedUtc = [datetime]$Account.fetchedAt
+            if ($fetchedUtc.Kind -ne 'Utc') { $fetchedUtc = $fetchedUtc.ToUniversalTime() }
+            $age = (Get-Date).ToUniversalTime() - $fetchedUtc
+            if ($age.TotalDays -ge $maxAgeDays) { return $true }
+        }
+        catch { }
+    }
+    return $false
 }
 
 # ---------------------------------------------------------------------------
@@ -135,7 +227,13 @@ $script:cfg['RefreshAccountList'] = [bool](Get-Default $script:cfg['RefreshAccou
 $script:cfg['FreeLineFromBalance'] = [bool](Get-Default $script:cfg['FreeLineFromBalance'] $false)
 $script:cfg['UseLastLimitDecisions'] = [bool](Get-Default $script:cfg['UseLastLimitDecisions'] $true)
 $script:cfg['ArchiveRequests'] = [bool](Get-Default $script:cfg['ArchiveRequests'] $true)
+$script:cfg['SyncMode'] = [string](Get-Default $script:cfg['SyncMode'] 'Incremental')
+$script:cfg['MaxAgeDays'] = [int](Get-Default $script:cfg['MaxAgeDays'] 7)
 $script:cfg['OutputFileName'] = [string](Get-Default $script:cfg['OutputFileName'] 'crefo_limits.csv')
+
+if ($script:cfg['SyncMode'] -notin @('Incremental', 'RefreshAll')) {
+    throw ("Invalid SyncMode '{0}'. Use 'Incremental' or 'RefreshAll'." -f $script:cfg['SyncMode'])
+}
 
 # Environment variables are optional but win over the config file (handy in CI).
 $envMap = @{
@@ -182,6 +280,7 @@ Initialize-Logger -LogFilePath $script:logFile -Level $script:cfg['LogLevel'] -C
 Write-CrefoInfo ("=== Crefo Factoring limit export started ===")
 Write-CrefoInfo ("Config      : " + $ConfigPath)
 Write-CrefoInfo ("Base URL    : " + $script:cfg['BaseUrl'])
+Write-CrefoInfo ("Sync mode   : " + $script:cfg['SyncMode'] + "  (max age " + $script:cfg['MaxAgeDays'] + "d)")
 Write-CrefoInfo ("Output CSV  : " + (Join-Path $script:cfg['OutputDir'] $script:cfg['OutputFileName']))
 Write-CrefoInfo ("State file  : " + (Join-Path $script:cfg['StateDir'] 'crefo_state.json'))
 Write-CrefoInfo ("Log file    : " + $script:logFile)
@@ -222,7 +321,7 @@ $state = Get-CrefoState -Path $statePath
 
 # -Reset: forget all progress and start from an empty CSV.
 if ($Reset) {
-    Write-CrefoWarn 'Reset requested: resetting all accounts and truncating the output CSV.'
+    Write-CrefoWarn 'Reset requested: resetting all accounts from scratch.'
     Reset-CrefoAccounts -State $state
     $resetCsv = Join-Path $script:cfg['OutputDir'] $script:cfg['OutputFileName']
     if (Test-Path -LiteralPath $resetCsv) { Remove-Item -LiteralPath $resetCsv -Force }
@@ -240,70 +339,94 @@ if ($script:cfg['RefreshAccountList'] -or -not $state.accountListFetchedAt) {
 }
 
 # ---------------------------------------------------------------------------
-# Main processing loop
+# Main processing loop (incremental daily sync)
 # ---------------------------------------------------------------------------
 
-$toProcess = @(Get-CrefoPendingAccounts -State $state)
-if ($toProcess.Count -eq 0) {
-    Write-CrefoInfo 'Nothing to process - all accounts already done.'
+$allAccounts = @($state.accounts | Sort-Object -Property id)
+if ($allAccounts.Count -eq 0) {
+    Write-CrefoInfo 'No accounts known - nothing to do.'
     exit 0
 }
 
-# Optional optimization: fetch the completed limit decisions in ONE bulk call
-# before the loop. Accounts that have no decision are written as 0,00 / N and
-# skip the per-debtor /risk request (this is what cuts most of the 15k calls).
-# If the bulk call fails we simply fall back to /risk for every account.
+# Bulk limit-workflow endpoints. Their union defines the accounts with a live
+# limit context: only accounts in NEITHER list are safe to short-circuit to a
+# 0,00 / N row without a /risk request. If the bulk calls fail we degrade to
+# fetching /risk for every account.
 $limitDecisions = @{}
+$openDesires = @{}
 if ($script:cfg['UseLastLimitDecisions']) {
     try {
-        Write-CrefoInfo 'Fetching completed limit decisions (single bulk call)...'
+        Write-CrefoInfo 'Fetching completed limit decisions (bulk call)...'
         foreach ($decision in Get-CrefoLastLimitDecisions -Config $script:cfg -AccessToken $script:token -AuthRefresher $script:authRefresher) {
             if ($null -ne $decision -and $null -ne $decision.debtorNumber) {
                 $limitDecisions[[int]$decision.debtorNumber] = $decision
             }
         }
-        Write-CrefoInfo ("Limit decisions available for {0} of {1} pending account(s)." -f $limitDecisions.Count, $toProcess.Count)
-        if ($limitDecisions.Count -eq 0) {
-            Write-CrefoWarn 'No limit decisions found. Every account will be written as 0,00 / N without a /risk call - if this looks wrong, set UseLastLimitDecisions = false.'
-        }
+        Write-CrefoInfo ("Limit decisions available for {0} account(s)." -f $limitDecisions.Count)
     }
     catch {
-        Write-CrefoWarn ("Could not fetch last-limit-decisions ({0}); falling back to fetching /risk for every account." -f $_.Exception.Message)
+        Write-CrefoWarn ("Could not fetch last-limit-decisions ({0}); falling back to fetching /risk for every account this run." -f $_.Exception.Message)
         $limitDecisions = @{}
+        $openDesires = @{}
         $script:cfg['UseLastLimitDecisions'] = $false
     }
 }
+if ($script:cfg['UseLastLimitDecisions']) {
+    try {
+        Write-CrefoInfo 'Fetching open limit desires (bulk call)...'
+        foreach ($desire in Get-CrefoOpenLimitDesires -Config $script:cfg -AccessToken $script:token -AuthRefresher $script:authRefresher) {
+            if ($null -ne $desire -and $null -ne $desire.debtorNumber) {
+                $openDesires[[int]$desire.debtorNumber] = $desire
+            }
+        }
+        Write-CrefoInfo ("Open limit desires available for {0} account(s)." -f $openDesires.Count)
+    }
+    catch {
+        Write-CrefoWarn ("Could not fetch open-limit-desires ({0}); proceeding without the open-desire refinements." -f $_.Exception.Message)
+        $openDesires = @{}
+    }
+}
 
-Write-CrefoInfo ("Processing {0} account(s)..." -f $toProcess.Count)
 $csvPath = Join-Path $script:cfg['OutputDir'] $script:cfg['OutputFileName']
-$succeeded = 0
-$failed = 0
+$rows = New-Object System.Collections.Generic.List[string]
+$refreshed = 0
+$reused = 0
 $shortCircuited = 0
+$failed = 0
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-foreach ($account in $toProcess) {
+foreach ($account in $allAccounts) {
     $id = [int]$account.id
     try {
-        if ($script:cfg['UseLastLimitDecisions'] -and -not $limitDecisions.ContainsKey($id)) {
-            # No limit decision -> no risk request. Write the zero row directly.
-            Write-CrefoInfo ("Debitor {0} ({1}) has no limit decision; writing zero row, skipping risk request." -f $id, $account.name)
-            $row = New-CsvRow -Cfg $script:cfg -Id $id -Name $account.name -NoLimitDecision
+        $hasDecision = $limitDecisions.ContainsKey($id)
+        $decision = if ($hasDecision) { $limitDecisions[$id] } else { $null }
+        $inOpenDesires = $openDesires.ContainsKey($id)
+
+        if (Test-ShouldRefreshRisk -Cfg $script:cfg -Account $account -HasDecision $hasDecision -Decision $decision -InOpenDesires $inOpenDesires) {
+            Write-CrefoInfo ("Fetching risk data for debitor {0} ({1})..." -f $id, $account.name)
+            $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
+            $account = Set-AccountSnapshot -Account $account -Risk $risk
+            $refreshed++
+        }
+        elseif ($null -eq $account.limitCode) {
+            # No decision, not in the open pipeline and no stored snapshot yet:
+            # write the explicit N / zero row without a risk request.
+            Write-CrefoInfo ("Debitor {0} ({1}) has no limit context; writing zero row." -f $id, $account.name)
+            $account = Set-AccountSnapshot -Account $account -Risk $null
             $shortCircuited++
         }
         else {
-            Write-CrefoInfo ("Fetching risk data for debitor {0} ({1})..." -f $id, $account.name)
-            $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
-            $row = New-CsvRow -Cfg $script:cfg -Id $id -Name $account.name -Risk $risk
-            Write-CrefoInfo ("Debitor {0} processed." -f $id)
+            $reused++
         }
-        Add-CsvLine -Path $csvPath -Lines @($row)
+
+        $rows.Add((New-CsvRowFromAccount -Cfg $script:cfg -Account $account))
         $account.status = 'done'
         $account.error = $null
-        $succeeded++
     }
     catch {
         # Keep the failed account in state as 'failed' so it is retried on the
-        # next run instead of being lost or duplicated.
+        # next run. Failed accounts keep their last snapshot but produce no row
+        # in the rebuilt CSV until a later run succeeds for them.
         $failed++
         $account.status = 'failed'
         $account.error = $_.Exception.Message
@@ -311,7 +434,7 @@ foreach ($account in $toProcess) {
     }
     $account.updatedAt = (Get-Date).ToUniversalTime().ToString('o')
     # Persist after every single account - this is what makes a Ctrl+C or
-    # crashed run resumable with no duplicate CSV rows.
+    # crashed run resumable without re-fetching the whole book.
     Save-CrefoState -Path $statePath -State $state
 
     # Be polite to the API between requests (configurable).
@@ -321,7 +444,10 @@ foreach ($account in $toProcess) {
 }
 $stopwatch.Stop()
 
-Write-CrefoInfo ("Run finished: total={0} succeeded={1} failed={2} short-circuited={3} elapsed={4:N1}s" -f $toProcess.Count, $succeeded, $failed, $shortCircuited, $stopwatch.Elapsed.TotalSeconds)
+# Rebuild the complete CSV from the stored snapshots (stable order by id).
+Write-CrefoCsv -Path $csvPath -Rows $rows.ToArray()
+
+Write-CrefoInfo ("Run finished: total={0} refreshed={1} reused={2} short-circuited={3} failed={4} elapsed={5:N1}s" -f $allAccounts.Count, $refreshed, $reused, $shortCircuited, $failed, $stopwatch.Elapsed.TotalSeconds)
 if ($failed -gt 0) {
     Write-CrefoWarn 'Some accounts failed and are persisted in state. Re-run this script later to retry them.'
     exit 1

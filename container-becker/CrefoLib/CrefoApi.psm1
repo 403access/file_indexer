@@ -302,4 +302,23 @@ function Get-CrefoLastLimitDecisions {
     return @($response)
 }
 
-Export-ModuleMember -Function 'Get-CrefoAccessToken', 'Invoke-CrefoApi', 'Get-CrefoAccounts', 'Get-CrefoDebtorRisk', 'Get-CrefoLastLimitDecisions'
+function Get-CrefoOpenLimitDesires {
+    [CmdletBinding()]
+    param(
+        [hashtable]$Config,                 # configuration
+        [string]$AccessToken,               # Bearer token
+        [scriptblock]$AuthRefresher,        # passed through to enable 401 recovery
+        [string]$ArchiveName = 'open-limit-desires'   # archive folder label
+    )
+    # GET /api/v1/open-limit-desires returns the current open (undecided /
+    # in-progress) limit requests. Combined with last-limit-decisions it forms
+    # the complete set of accounts with a live limit context: accounts in the
+    # open pipeline can have purchases even before a decision is completed, so
+    # they must never be short-circuited to a zero row.
+    $response = Invoke-CrefoApi -Config $Config -Method GET `
+        -Path '/api/v1/open-limit-desires' `
+        -AccessToken $AccessToken -AuthRefresher $AuthRefresher -ArchiveName $ArchiveName
+    return @($response)
+}
+
+Export-ModuleMember -Function 'Get-CrefoAccessToken', 'Invoke-CrefoApi', 'Get-CrefoAccounts', 'Get-CrefoDebtorRisk', 'Get-CrefoLastLimitDecisions', 'Get-CrefoOpenLimitDesires'

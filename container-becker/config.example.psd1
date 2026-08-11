@@ -44,11 +44,27 @@
     #   true:            freie Linie = Limit - Balance
     FreeLineFromBalance = $false
 
-    # Skip the per-debtor /risk request for accounts that have no completed
-    # limit decision (they are written as 0,00 / N / 0,00 / 0,00). The 'has a
-    # decision' information comes from ONE bulk call to /last-limit-decisions.
-    # Disable this if debtors without a decision can still have purchases.
+    # Skip the per-debtor /risk request for accounts that have no live limit
+    # context, i.e. appear in NEITHER the completed limit decisions NOR the
+    # open limit desires (they are written as 0,00 / N / 0,00 / 0,00). The
+    # context comes from two bulk calls: /last-limit-decisions and
+    # /open-limit-desires. Disable if a debtor without any limit context can
+    # still have purchases.
     UseLastLimitDecisions = $true
+
+    # Daily sync strategy:
+    #   Incremental (default) - few requests most days; /risk is re-fetched only
+    #     when an account is new/failed, its decision changed, it entered the
+    #     open limit pipeline, or its snapshot is older than MaxAgeDays.
+    #   RefreshAll           - like the original one-time sync: /risk for every
+    #     account with a limit context on every run.
+    SyncMode = 'Incremental'
+
+    # In Incremental mode, re-fetch the /risk snapshot of every account that
+    # has not been touched for at least this many days. 0 disables the cap.
+    # With MaxAgeDays = 7 the whole book is re-fetched over the course of a
+    # week (about one seventh of it per day).
+    MaxAgeDays = 7
 
     # Store every API exchange (request.json + response.json + data.json) in
     # the archive directory so calls can be audited/replayed later.
