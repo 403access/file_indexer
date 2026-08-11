@@ -120,7 +120,8 @@ function Invoke-CrefoApi {
         [string]$AccessToken,               # Bearer token to send
         [hashtable]$Query = @{},            # optional query-string parameters
         [scriptblock]$AuthRefresher,        # optional scriptblock returning a fresh token on 401
-        [string]$ArchiveName                # endpoint label used for the request/response archive
+        [string]$ArchiveName,               # endpoint label used for the request/response archive
+        [string]$ArchiveCategory            # optional archive subfolder (e.g. 'risks')
     )
     $maxRetries = [int]$Config['MaxRetries']
     $delayMs = [int]$Config['RequestDelayMs']
@@ -167,7 +168,8 @@ function Invoke-CrefoApi {
             # Archive request + raw response + decoded data for this call.
             Save-ApiExchange -Name $ArchiveName -Method $Method -Uri $uri -Query $Query `
                 -StatusCode $statusCode -ContentType $contentType -ResponseRaw $rawBody `
-                -Data $parsed -ElapsedMs $stopwatch.Elapsed.TotalMilliseconds -IncludeAuthorization
+                -Data $parsed -ElapsedMs $stopwatch.Elapsed.TotalMilliseconds -IncludeAuthorization `
+                -Category $ArchiveCategory
             return $parsed
         }
         catch {
@@ -197,7 +199,8 @@ function Invoke-CrefoApi {
             # exchange (status + error body) before surfacing to the caller.
             Save-ApiExchange -Name $ArchiveName -Method $Method -Uri $uri -Query $Query `
                 -StatusCode $status -ContentType '' -ResponseRaw $_.ErrorDetails.Message `
-                -Data $null -ElapsedMs $stopwatch.Elapsed.TotalMilliseconds -IncludeAuthorization
+                -Data $null -ElapsedMs $stopwatch.Elapsed.TotalMilliseconds -IncludeAuthorization `
+                -Category $ArchiveCategory
             throw $lastError
         }
     }
@@ -266,7 +269,8 @@ function Get-CrefoDebtorRisk {
         $ArchiveName = ('debtor-{0}-risk' -f $DebtorId)
     }
     $response = Invoke-CrefoApi -Config $Config -Method GET -Path $path `
-        -AccessToken $AccessToken -AuthRefresher $AuthRefresher -ArchiveName $ArchiveName
+        -AccessToken $AccessToken -AuthRefresher $AuthRefresher -ArchiveName $ArchiveName `
+        -ArchiveCategory 'risks'
     return @($response)[0]
 }
 

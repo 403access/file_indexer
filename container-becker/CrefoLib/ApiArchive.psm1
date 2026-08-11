@@ -6,6 +6,9 @@
 #   <ArchiveDir>/<endpoint>/<timestamp>_<seq>_request.json
 #   <ArchiveDir>/<endpoint>/<timestamp>_<seq>_response.json
 #   <ArchiveDir>/<endpoint>/<timestamp>_<seq>_data.json   (decoded body only)
+# Calls can be grouped under a category subfolder via Save-ApiExchange -Category:
+#   <ArchiveDir>/<category>/<endpoint>/<timestamp>_<seq>_*.json
+# (e.g. all risk calls land under <ArchiveDir>/risks/debtor-<id>-risk/).
 #
 # Callers must pass already-sanitized request bodies / tokens: secrets such as
 # passwords, client secrets and access tokens are expected to be redacted
@@ -71,14 +74,21 @@ function Save-ApiExchange {
         [string]$ResponseRaw,           # raw response body text (pre-redacted)
         [object]$Data,                  # decoded data object for the _data.json
         [double]$ElapsedMs,             # request duration for the response file
-        [switch]$IncludeAuthorization   # record a redacted Authorization header
+        [switch]$IncludeAuthorization,  # record a redacted Authorization header
+        [string]$Category               # optional subfolder grouping (e.g. 'risks')
     )
     if (-not $script:ArchiveEnabled) { return }
 
     $script:ArchiveCounter++
     $stamp = Get-Date -Format 'yyyyMMdd_HHmmss_fff'
     $sequence = '{0:D5}' -f $script:ArchiveCounter
-    $dir = Join-Path $script:ArchiveRoot (ConvertTo-SafeName $Name)
+    # Category subfolder (e.g. risks) nests below the archive root; the endpoint
+    # label itself is always sanitized so it stays a single folder level.
+    $dir = $script:ArchiveRoot
+    if (-not [string]::IsNullOrWhiteSpace($Category)) {
+        $dir = Join-Path $dir (ConvertTo-SafeName $Category)
+    }
+    $dir = Join-Path $dir (ConvertTo-SafeName $Name)
     if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
