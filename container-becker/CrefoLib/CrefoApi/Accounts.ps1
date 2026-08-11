@@ -45,13 +45,20 @@ function Get-CrefoDebtorListStats {
             $totalItems = [int]$probe.header.totalItems
         }
         if ($probe.header.PSObject.Properties.Name -contains 'totalPages') {
-            $totalPages = [int]$probe.header.totalPages
+            $raw = $probe.header.totalPages
+            if ($null -ne $raw -and $raw -ne '') {
+                $totalPages = [long]$raw
+                if ($totalPages -lt 0 -or $totalPages -gt [long]::MaxValue) {
+                    $totalPages = $null
+                }
+            }
         }
     }
     if ($null -eq $totalItems) {
         throw 'Account list probe response did not include header.totalItems.'
     }
-    Write-CrefoInfo ("Account list probe (pageSize={0}): {1} total item(s) / {2} page(s)." -f $usedPageSize, $totalItems, $totalPages)
+    $totalPagesText = if ($null -ne $totalPages) { $totalPages } else { 'n/a' }
+    Write-CrefoInfo ("Account list probe (pageSize={0}): {1} total item(s) / {2} page(s)." -f $usedPageSize, $totalItems, $totalPagesText)
     return [pscustomobject]@{
         TotalItems = $totalItems
         TotalPages = $totalPages
@@ -125,7 +132,11 @@ function Get-CrefoAccounts {
 
         # Remember totalPages from the very first response (it is stable).
         if ($null -eq $totalPages -and $null -ne $response.header) {
-            $totalPages = [int]$response.header.totalPages
+            $raw = $response.header.totalPages
+            if ($null -ne $raw -and $raw -ne '') {
+                $totalPages = [long]$raw
+                if ($totalPages -lt 0) { $totalPages = $null }
+            }
         }
         $page++
         if ($null -ne $totalPages -and $page -gt $totalPages) { break }
