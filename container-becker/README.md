@@ -71,6 +71,7 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
 | `Migrate-ArchiveRunStamp.ps1`                      | Restructure an existing archive so each script run gets its own run-stamp subfolder                     |
 | `Reorganize-Archive.ps1`                           | Migrate older archive layouts (flat, 1000-er-only buckets) into the current nested risk structure       |
 | `Migrate-StateFromArchive.ps1`                     | Backfill `crefo_state.json` from archived risk responses (one-time)                                     |
+| `Show-CrefoAccountsByLimit.ps1`                    | List all accounts with credit limits, sorted by limit size                                               |
 
 
 ## Recovery & inspection
