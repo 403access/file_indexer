@@ -357,4 +357,16 @@ function Get-CrefoDatabaseStats {
     return $counts[0]
 }
 
-Export-ModuleMember -Function 'Invoke-CrefoSqlite', 'Initialize-CrefoDatabase', 'Complete-CrefoDatabase', 'Save-CrefoAccount', 'Save-CrefoRiskSnapshot', 'Save-CrefoApiExchange', 'Save-CrefoApiExchangeLog', 'Import-CrefoDatabaseFromState', 'Get-CrefoDatabaseCsvRows', 'Get-CrefoDatabaseStats'
+# The account list footprint the delta-sync decision needs: how many accounts we
+# already know and the highest id among them (a note on where our list ends).
+function Get-CrefoDatabaseAccountSummary {
+    [CmdletBinding()]
+    param()
+    if (-not $script:DbPath) { return $null }
+    Complete-CrefoDatabase
+    $rows = @(Invoke-CrefoSqlite -DbPath $script:DbPath -Sql "SELECT COUNT(*) AS count, MAX(id) AS highest_id FROM accounts;" -AsJson)
+    if ($rows.Count -eq 0) { return $null }
+    return $rows[0]
+}
+
+Export-ModuleMember -Function 'Invoke-CrefoSqlite', 'Initialize-CrefoDatabase', 'Complete-CrefoDatabase', 'Save-CrefoAccount', 'Save-CrefoRiskSnapshot', 'Save-CrefoApiExchange', 'Save-CrefoApiExchangeLog', 'Import-CrefoDatabaseFromState', 'Get-CrefoDatabaseCsvRows', 'Get-CrefoDatabaseStats', 'Get-CrefoDatabaseAccountSummary'

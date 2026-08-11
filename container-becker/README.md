@@ -52,7 +52,16 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
 
 1. **Authenticate** (`POST /connect/token`, OAuth2 password flow). The token is cached
    in `state/crefo_token_cache.json` and reused until it expires.
-2. **List accounts** (`GET /api/v1/DebitorAccounts/list-debitor`, paged).
+2. **Discover the account list** (`GET /api/v1/DebitorAccounts/list-debitor`).
+   The list is paginated and each response carries `header.totalItems`/`totalPages`.
+   - First run / empty database: the **full list** is fetched, page by page.
+   - Otherwise the database is checked first (how many accounts we already know and
+     the highest known id). The production list is then **probed** with the smallest
+     possible request (`pageSize=0`, falling back to `1`) to read the total size.
+     If the totals match, the cached list is kept and the full sync is **skipped**
+     (one request instead of a page walk). If production is larger, the **difference**
+     (the trailing accounts) is fetched by offset and merged, so only the new debtors
+     are requested. A probe failure degrades to the safe full-list fetch.
    Fetched account IDs are merged into the persistent state, so new debtors are picked
    up and old progress is never lost.
 3. **Limit-workflow bulk calls** (`GET /api/v1/last-limit-decisions` + `GET /api/v1/open-limit-desires`,
@@ -93,7 +102,7 @@ Amounts are formatted German-style (decimal comma, `;` separator, UTF-8 with BOM
 | `RequestDelayMs`                          | `200`                        | Pause between API requests (be polite to the API)                                                                                                                                                                    |
 | `MaxRetries`                              | `5`                          | Retries for transient errors (408/429/5xx/network)                                                                                                                                                                   |
 | `LogLevel`                                | `INFO`                       | `DEBUG`, `INFO`, `WARN`, `ERROR`                                                                                                                                                                                     |
-| `RefreshAccountList`                      | `true`                       | Re-fetch the account list each run to discover new debtors                                                                                                                                                           |
+| `RefreshAccountList`                      | `true`                       | Re-verify the account list each run to discover new debtors. When the database already holds accounts, the production total is probed with `pageSize=0` (falling back to `1`); if it matches the known account count the full sync is skipped, otherwise only the trailing difference is fetched. Count-based probe: cannot detect renames/substitutions when the totals stay equal. Set to `false` to keep the cached list in all cases. |
 | `FreeLineFromBalance`                     | `false`                      | `true` = freie Linie = limit - balance, otherwise limit - purchased                                                                                                                                                  |
 | `UseLastLimitDecisions`                   | `true`                       | Skip `/risk` for accounts with no live limit context (not in `last-limit-decisions` or `open-limit-desires`); written as `0,00;N;0,00;0,00`. Disable if a debtor without any limit context can still have purchases. |
 | `SyncMode`                                | `Incremental`                | `Incremental` = re-fetch `/risk` only on change/new/age; `RefreshAll` = re-fetch for all accounts with a limit context every run                                                                                     |
