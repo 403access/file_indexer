@@ -179,6 +179,19 @@ pub fn request_stop(id: u64) {
     }
 }
 
+/// Stable identifier used to persist "stopped by user" state across restarts.
+/// Only repeating/startup background processes return `Some`; one-off manual
+/// runs return `None` so stopping them doesn't disable the scheduled job.
+pub fn stopped_state_key(name: &str) -> Option<&'static str> {
+    match name {
+        "Startup indexing" => Some("startup_indexing"),
+        "Initial dashboard refresh" => Some("dashboard_refresh"),
+        "Dashboard refresh" => Some("dashboard_refresh"),
+        "Duplicate folder groups refresh" => Some("duplicate_folder_groups_refresh"),
+        _ => None,
+    }
+}
+
 pub fn clear_completed() {
     PROCESSES
         .lock()

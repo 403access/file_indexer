@@ -37,6 +37,28 @@ async fn main() {
     app_state::init(path, database_url.clone());
     file_indexer::modules::logging::init(&database_url);
 
+    // Ensure the schema (incl. the `settings` table used to persist process
+    // stopped-state) exists before any background jobs or API writes.
+    {
+        let db = database_url.clone();
+        match file_indexer::modules::sql::database::get_connection(&db) {
+            Ok(mut conn) => {
+                let tx = conn.transaction();
+                match tx {
+                    Ok(tx) => {
+                        let created = file_indexer::modules::sql::database::init_db(&tx);
+                        let _ = tx.commit();
+                        if created.is_err() {
+                            eprintln!("⚠️  Failed to initialize database schema: {:?}", created.err());
+                        }
+                    }
+                    Err(e) => eprintln!("⚠️  Failed to start schema transaction: {}", e),
+                }
+            }
+            Err(e) => eprintln!("⚠️  Failed to open database for schema init: {}", e),
+        }
+    }
+
     let state = AppState {
         cwd: app_state::get_cwd(),
         db: database_url.clone(),
@@ -79,20 +101,42 @@ async fn main() {
 }
 
 fn spawn_background_jobs(state: AppState, database_url: String) {
+    // Read the persisted "stopped by user" flags once at startup. When
+    // IGNORE_PROCESS_DATABASE_STATE=true the DB state is ignored and processes
+    // start normally from the ENV enable flags (default = respect the DB).
+    let ignore_db_state =
+        file_indexer::modules::environment::env_vars::get_ignore_process_database_state();
+    let db_conn = file_indexer::modules::sql::database::get_connection(&database_url).ok();
+    let stopped_in_db = |key: &str| -> bool {
+        if ignore_db_state {
+            return false;
+        }
+        match &db_conn {
+            Some(conn) => file_indexer::modules::sql::database::is_process_stopped(conn, key),
+            None => false,
+        }
+    };
+
     // Startup indexing (blocking pool — never on async workers)
     if file_indexer::modules::environment::env_vars::get_enable_startup_indexing() {
-        let db_clone = database_url.clone();
-        let cwd_clone = state.cwd.clone();
-        let pause_clone = state.pause_indexer.clone();
-        tokio::spawn(async move {
-            ensure_indexed_async(db_clone, cwd_clone, pause_clone).await;
-        });
+        if stopped_in_db("startup_indexing") {
+            println!("⏸️  Startup indexing skipped: stopped previously (set IGNORE_PROCESS_DATABASE_STATE=true to override)");
+        } else {
+            let db_clone = database_url.clone();
+            let cwd_clone = state.cwd.clone();
+            let pause_clone = state.pause_indexer.clone();
+            tokio::spawn(async move {
+                ensure_indexed_async(db_clone, cwd_clone, pause_clone).await;
+            });
+        }
     } else {
         println!("⏸️  Startup indexing disabled via ENABLE_STARTUP_INDEXING");
     }
 
     // Initial dashboard refresh (blocking pool)
-    {
+    if stopped_in_db("dashboard_refresh") {
+        println!("⏸️  Dashboard refresh skipped: stopped previously (set IGNORE_PROCESS_DATABASE_STATE=true to override)");
+    } else {
         let db = database_url.clone();
         tokio::spawn(async move {
             let process_id =
@@ -119,84 +163,91 @@ fn spawn_background_jobs(state: AppState, database_url: String) {
 
     // Periodic dashboard refresh
     if file_indexer::modules::environment::env_vars::get_enable_dashboard_refresh() {
-        let refresh_db = database_url.clone();
-        let refresh_process_id =
-            processes::register_controllable("Dashboard refresh", "dashboard", Some("Scheduled"));
-        tokio::spawn(async move {
-            loop {
-                if processes::is_stopped(refresh_process_id) {
-                    processes::fail(refresh_process_id, "Stopped by user");
-                    break;
-                }
+        if stopped_in_db("dashboard_refresh") {
+            println!("⏸️  Periodic dashboard refresh skipped: stopped previously (set IGNORE_PROCESS_DATABASE_STATE=true to override)");
+        } else {
+            let refresh_db = database_url.clone();
+            let refresh_process_id = processes::register_controllable(
+                "Dashboard refresh",
+                "dashboard",
+                Some("Scheduled"),
+            );
+            tokio::spawn(async move {
+                loop {
+                    if processes::is_stopped(refresh_process_id) {
+                        processes::fail(refresh_process_id, "Stopped by user");
+                        break;
+                    }
 
-                let interval_secs = {
-                    let db = refresh_db.clone();
-                    tokio::task::spawn_blocking(move || {
-                        let conn = file_indexer::modules::sql::database::get_connection(&db).ok()?;
-                        file_indexer::modules::sql::database::get_setting(
-                            &conn,
-                            "dashboard_refresh_interval",
-                        )
+                    let interval_secs = {
+                        let db = refresh_db.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let conn = file_indexer::modules::sql::database::get_connection(&db).ok()?;
+                            file_indexer::modules::sql::database::get_setting(
+                                &conn,
+                                "dashboard_refresh_interval",
+                            )
+                            .ok()
+                            .flatten()
+                            .and_then(|v| v.parse::<u64>().ok())
+                        })
+                        .await
                         .ok()
                         .flatten()
-                        .and_then(|v| v.parse::<u64>().ok())
+                        .unwrap_or(60)
+                        .max(5)
+                    };
+
+                    processes::update(
+                        refresh_process_id,
+                        None,
+                        Some(&format!("Waiting {}s until next refresh", interval_secs)),
+                    );
+
+                    tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+
+                    if processes::is_stopped(refresh_process_id) {
+                        processes::fail(refresh_process_id, "Stopped by user");
+                        break;
+                    }
+
+                    processes::update(
+                        refresh_process_id,
+                        Some(50.0),
+                        Some("Refreshing stats..."),
+                    );
+
+                    let db = refresh_db.clone();
+                    let ok = tokio::task::spawn_blocking(move || {
+                        let conn = file_indexer::modules::sql::database::get_connection(&db)?;
+                        file_indexer::modules::sql::database::recompute_dashboard_stats(&conn);
+                        Ok::<(), rusqlite::Error>(())
                     })
-                    .await
-                    .ok()
-                    .flatten()
-                    .unwrap_or(60)
-                    .max(5)
-                };
+                    .await;
 
-                processes::update(
-                    refresh_process_id,
-                    None,
-                    Some(&format!("Waiting {}s until next refresh", interval_secs)),
-                );
-
-                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
-
-                if processes::is_stopped(refresh_process_id) {
-                    processes::fail(refresh_process_id, "Stopped by user");
-                    break;
-                }
-
-                processes::update(
-                    refresh_process_id,
-                    Some(50.0),
-                    Some("Refreshing stats..."),
-                );
-
-                let db = refresh_db.clone();
-                let ok = tokio::task::spawn_blocking(move || {
-                    let conn = file_indexer::modules::sql::database::get_connection(&db)?;
-                    file_indexer::modules::sql::database::recompute_dashboard_stats(&conn);
-                    Ok::<(), rusqlite::Error>(())
-                })
-                .await;
-
-                match ok {
-                    Ok(Ok(())) => {
-                        processes::update(
-                            refresh_process_id,
-                            Some(100.0),
-                            Some(&format!(
-                                "Dashboard stats refreshed; next in {}s",
-                                interval_secs
-                            )),
-                        );
-                    }
-                    Ok(Err(e)) => {
-                        processes::fail(refresh_process_id, &e.to_string());
-                        break;
-                    }
-                    Err(e) => {
-                        processes::fail(refresh_process_id, &e.to_string());
-                        break;
+                    match ok {
+                        Ok(Ok(())) => {
+                            processes::update(
+                                refresh_process_id,
+                                Some(100.0),
+                                Some(&format!(
+                                    "Dashboard stats refreshed; next in {}s",
+                                    interval_secs
+                                )),
+                            );
+                        }
+                        Ok(Err(e)) => {
+                            processes::fail(refresh_process_id, &e.to_string());
+                            break;
+                        }
+                        Err(e) => {
+                            processes::fail(refresh_process_id, &e.to_string());
+                            break;
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
     } else {
         println!("⏸️  Periodic dashboard refresh disabled via ENABLE_DASHBOARD_REFRESH");
     }
@@ -204,66 +255,70 @@ fn spawn_background_jobs(state: AppState, database_url: String) {
     // Duplicate folder groups materialization
     if file_indexer::modules::environment::env_vars::get_enable_duplicate_folder_groups_refresh()
     {
-        let dup_db = database_url.clone();
-        let dup_process_id = processes::register_controllable(
-            "Duplicate folder groups refresh",
-            "duplicate-folders",
-            Some("Scheduled"),
-        );
-        tokio::spawn(async move {
-            loop {
-                if processes::is_stopped(dup_process_id) {
-                    processes::fail(dup_process_id, "Stopped by user");
-                    break;
-                }
-
-                processes::update(
-                    dup_process_id,
-                    Some(50.0),
-                    Some("Refreshing duplicate folder groups..."),
-                );
-
-                let interval_secs = file_indexer::modules::environment::env_vars::get_duplicate_folder_groups_refresh_interval()
-                    .max(30);
-
-                let db = dup_db.clone();
-                let ok = tokio::task::spawn_blocking(move || {
-                    let conn = file_indexer::modules::sql::database::get_connection(&db)?;
-                    file_indexer::modules::sql::database::refresh_duplicate_folder_groups(&conn);
-                    Ok::<(), rusqlite::Error>(())
-                })
-                .await;
-
-                match ok {
-                    Ok(Ok(())) => {
-                        processes::update(
-                            dup_process_id,
-                            Some(100.0),
-                            Some(&format!(
-                                "Duplicate folder groups refreshed; next in {}s",
-                                interval_secs
-                            )),
-                        );
-                    }
-                    Ok(Err(e)) => {
-                        processes::fail(dup_process_id, &e.to_string());
+        if stopped_in_db("duplicate_folder_groups_refresh") {
+            println!("⏸️  Duplicate folder groups refresh skipped: stopped previously (set IGNORE_PROCESS_DATABASE_STATE=true to override)");
+        } else {
+            let dup_db = database_url.clone();
+            let dup_process_id = processes::register_controllable(
+                "Duplicate folder groups refresh",
+                "duplicate-folders",
+                Some("Scheduled"),
+            );
+            tokio::spawn(async move {
+                loop {
+                    if processes::is_stopped(dup_process_id) {
+                        processes::fail(dup_process_id, "Stopped by user");
                         break;
                     }
-                    Err(e) => {
-                        processes::fail(dup_process_id, &e.to_string());
-                        break;
+
+                    processes::update(
+                        dup_process_id,
+                        Some(50.0),
+                        Some("Refreshing duplicate folder groups..."),
+                    );
+
+                    let interval_secs = file_indexer::modules::environment::env_vars::get_duplicate_folder_groups_refresh_interval()
+                        .max(30);
+
+                    let db = dup_db.clone();
+                    let ok = tokio::task::spawn_blocking(move || {
+                        let conn = file_indexer::modules::sql::database::get_connection(&db)?;
+                        file_indexer::modules::sql::database::refresh_duplicate_folder_groups(&conn);
+                        Ok::<(), rusqlite::Error>(())
+                    })
+                    .await;
+
+                    match ok {
+                        Ok(Ok(())) => {
+                            processes::update(
+                                dup_process_id,
+                                Some(100.0),
+                                Some(&format!(
+                                    "Duplicate folder groups refreshed; next in {}s",
+                                    interval_secs
+                                )),
+                            );
+                        }
+                        Ok(Err(e)) => {
+                            processes::fail(dup_process_id, &e.to_string());
+                            break;
+                        }
+                        Err(e) => {
+                            processes::fail(dup_process_id, &e.to_string());
+                            break;
+                        }
                     }
+
+                    processes::update(
+                        dup_process_id,
+                        None,
+                        Some(&format!("Waiting {}s until next refresh", interval_secs)),
+                    );
+
+                    tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
                 }
-
-                processes::update(
-                    dup_process_id,
-                    None,
-                    Some(&format!("Waiting {}s until next refresh", interval_secs)),
-                );
-
-                tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
-            }
-        });
+            });
+        }
     } else {
         println!(
             "⏸️  Duplicate folder groups refresh disabled via ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH"

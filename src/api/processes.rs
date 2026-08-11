@@ -92,8 +92,14 @@ pub async fn trigger_process_handler(
         }
     }
 
+    // A successful manual run signals the process is wanted again: clear its
+    // persisted "stopped by user" flag so it auto-starts on future boots.
+    let stopped_key = processes::stopped_state_key(&name).map(str::to_string);
+    let db_path = state.db.clone();
+
     let category_for_job = category.clone();
     let name_for_job = name.clone();
+    let db = db_path.clone();
 
     // Heavy DB work off the async runtime; return immediately after kickoff would
     // be nicer, but keep sync completion semantics for the UI.
@@ -104,7 +110,7 @@ pub async fn trigger_process_handler(
             Some("Manual trigger"),
         );
 
-        let conn = get_connection(&state.db).map_err(|e| {
+        let conn = get_connection(&db).map_err(|e| {
             processes::fail(process_id, &e.to_string());
             (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
         })?;
@@ -123,6 +129,21 @@ pub async fn trigger_process_handler(
         Ok(process_id)
     })
     .await?;
+
+    if let Some(key) = stopped_key {
+        let db = db_path;
+        let res = offload(move || {
+            let conn = get_connection(&db)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            crate::modules::sql::database::set_process_stopped(&conn, &key, false)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            Ok::<(), (axum::http::StatusCode, String)>(())
+        })
+        .await;
+        if let Err(e) = res {
+            return Err(e);
+        }
+    }
 
     Ok(Json(ProcessActionResponse {
         ok: true,
@@ -153,12 +174,35 @@ pub async fn resume_process_handler(
 }
 
 pub async fn stop_process_handler(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Path(id): Path<u64>,
-) -> Json<ProcessActionResponse> {
+) -> Result<Json<ProcessActionResponse>, (axum::http::StatusCode, String)> {
     processes::request_stop(id);
-    Json(ProcessActionResponse {
+
+    // Persist the "stopped by user" state so a restart respects it (unless the
+    // operator explicitly ignores DB state via IGNORE_PROCESS_DATABASE_STATE).
+    let process = processes::get_all().into_iter().find(|p| p.id == id);
+    if let Some(key) = process
+        .as_ref()
+        .and_then(|p| processes::stopped_state_key(&p.name))
+    {
+        let db = state.db.clone();
+        let key = key.to_string();
+        let res = offload(move || {
+            let conn = get_connection(&db)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            crate::modules::sql::database::set_process_stopped(&conn, &key, true)
+                .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            Ok::<(), (axum::http::StatusCode, String)>(())
+        })
+        .await;
+        if res.is_err() {
+            return Err(res.unwrap_err());
+        }
+    }
+
+    Ok(Json(ProcessActionResponse {
         ok: true,
         message: format!("Stop requested for process #{}", id),
-    })
+    }))
 }

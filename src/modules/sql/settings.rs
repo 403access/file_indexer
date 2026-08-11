@@ -96,3 +96,20 @@ pub fn set_ignore_list(conn: &Connection, folders: &[String]) -> rusqlite::Resul
     let value = folders.join("\n");
     set_setting(conn, "ignore_folders", &value)
 }
+
+/// Persist a process's "stopped by user" state so it survives restarts.
+/// The key is a stable process identifier (name), not a runtime id.
+pub fn set_process_stopped(conn: &Connection, key: &str, stopped: bool) -> rusqlite::Result<()> {
+    let value = if stopped { "1" } else { "0" };
+    set_setting(conn, &format!("process_{}_stopped", key), value)
+}
+
+/// Whether a process with the given stable key was stopped by the user
+/// (persisted from a previous run).
+pub fn is_process_stopped(conn: &Connection, key: &str) -> bool {
+    get_setting(conn, &format!("process_{}_stopped", key))
+        .ok()
+        .flatten()
+        .map(|v| v == "1")
+        .unwrap_or(false)
+}

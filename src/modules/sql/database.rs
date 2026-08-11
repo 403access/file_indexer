@@ -20,8 +20,8 @@ pub use super::files::{
 pub use super::logs::{count_ignore_events, count_logs, get_logs, insert_log};
 pub use super::schema::init_db;
 pub use super::settings::{
-    get_ignore_list, get_ignore_rules, get_setting, set_ignore_list, set_ignore_rules, set_setting,
-    IgnoreRule,
+    get_ignore_list, get_ignore_rules, get_setting, is_process_stopped, set_ignore_list,
+    set_ignore_rules, set_process_stopped, set_setting, IgnoreRule,
 };
 pub use super::skipped::{
     count_skipped_paths, count_skipped_paths_filtered, get_skipped_paths, get_skipped_paths_page,

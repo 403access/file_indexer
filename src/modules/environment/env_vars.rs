@@ -11,6 +11,7 @@ pub struct EnvironmentVariables {
     pub enable_dashboard_refresh: bool,
     pub enable_duplicate_folder_groups_refresh: bool,
     pub duplicate_folder_groups_refresh_interval: u64,
+    pub ignore_process_database_state: bool,
 }
 
 impl Default for EnvironmentVariables {
@@ -22,6 +23,7 @@ impl Default for EnvironmentVariables {
             enable_dashboard_refresh: true,
             enable_duplicate_folder_groups_refresh: true,
             duplicate_folder_groups_refresh_interval: 120,
+            ignore_process_database_state: false,
         }
     }
 }
@@ -80,6 +82,11 @@ pub fn load() {
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(120);
+
+        env_vars.ignore_process_database_state = env::var("IGNORE_PROCESS_DATABASE_STATE")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(false);
     });
 }
 
@@ -132,4 +139,14 @@ pub fn get_enable_duplicate_folder_groups_refresh() -> bool {
 /// Reads the `DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL` environment variable.
 pub fn get_duplicate_folder_groups_refresh_interval() -> u64 {
     ENV_VARS.with(|vars| vars.borrow().duplicate_folder_groups_refresh_interval)
+}
+
+/// Whether process start states persisted in the database should be ignored
+/// (default: false — the database "stopped" state wins over ENV defaults).
+///
+/// Reads the `IGNORE_PROCESS_DATABASE_STATE` environment variable. When set to
+/// `true`, the persisted stopped state is ignored so processes start normally
+/// from ENV vars/enables.
+pub fn get_ignore_process_database_state() -> bool {
+    ENV_VARS.with(|vars| vars.borrow().ignore_process_database_state)
 }
