@@ -42,7 +42,7 @@ Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Config.psm1') -Global -Fo
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\StateStore.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Snapshot.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CsvFormat.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Database.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Database\index.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\ApiArchive.psm1') -Global -Force
 Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CrefoApi.psm1') -Global -Force
 
