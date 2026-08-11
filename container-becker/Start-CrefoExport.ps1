@@ -247,6 +247,8 @@ $reused = 0
 $shortCircuited = 0
 $failedCount = 0
 $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+$stateSaveCounter = 0
+$stateSaveInterval = 100
 
 foreach ($account in $allAccounts) {
     $id = [int]$account.id
@@ -274,7 +276,7 @@ foreach ($account in $allAccounts) {
         }
         else {
             $reused++
-            Write-CrefoInfo ("Reusing snapshot for debitor {0} ({1}) [{2}]: limit {3}, code {4}." -f $id, $account.name, $refreshDecision.Reason, (ConvertTo-GermanyNumber $account.limit), $account.limitCode)
+            Write-CrefoDebug ("Reusing snapshot for debitor {0} ({1}) [{2}]: limit {3}, code {4}." -f $id, $account.name, $refreshDecision.Reason, (ConvertTo-GermanyNumber $account.limit), $account.limitCode)
         }
 
         $rows.Add((New-CsvRowFromAccount -Cfg $script:cfg -Account $account))
@@ -309,16 +311,26 @@ foreach ($account in $allAccounts) {
         Write-CrefoWarn ("Database write failed for debitor {0}: {1}" -f $id, $_.Exception.Message)
     }
 
-    # Persist after every single account - this is what makes a Ctrl+C or
-    # crashed run resumable without re-fetching the whole book.
-    Save-CrefoState -Path $statePath -State $state
+    # Persist progress periodically (batched) so a Ctrl+C or crashed run is
+    # resumable without re-fetching the whole book, but without the overhead
+    # of serializing the full state JSON to disk on every single account.
+    $stateSaveCounter++
+    if ($stateSaveCounter -ge $stateSaveInterval) {
+        Save-CrefoState -Path $statePath -State $state
+        $stateSaveCounter = 0
+    }
 
-    # Be polite to the API between requests (configurable).
-    if ($script:cfg['RequestDelayMs'] -gt 0) {
+    # Be polite to the API between requests (configurable) — only when we
+    # actually made a request. Reused snapshots cost zero network I/O, so
+    # sleeping here just burns time for no benefit.
+    if ($script:cfg['RequestDelayMs'] -gt 0 -and $null -ne $snapshotSource) {
         Start-Sleep -Milliseconds $script:cfg['RequestDelayMs']
     }
 }
 $stopwatch.Stop()
+
+# Final state flush (in case the last batch wasn't full).
+Save-CrefoState -Path $statePath -State $state
 
 # Rebuild the complete CSV from the database (the canonical source). Falls back
 # to the in-memory rows if the DB read unexpectedly fails.
