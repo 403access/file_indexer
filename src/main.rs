@@ -134,7 +134,9 @@ fn spawn_background_jobs(state: AppState, database_url: String) {
     }
 
     // Initial dashboard refresh (blocking pool)
-    if stopped_in_db("dashboard_refresh") {
+    if !file_indexer::modules::environment::env_vars::get_enable_initial_dashboard_refresh() {
+        println!("⏸️  Initial dashboard refresh disabled via ENABLE_INITIAL_DASHBOARD_REFRESH");
+    } else if stopped_in_db("dashboard_refresh") {
         println!("⏸️  Dashboard refresh skipped: stopped previously (set IGNORE_PROCESS_DATABASE_STATE=true to override)");
     } else {
         let db = database_url.clone();

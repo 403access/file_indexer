@@ -8,6 +8,7 @@ pub struct EnvironmentVariables {
     pub database_url: String,
     pub cwd: String,
     pub enable_startup_indexing: bool,
+    pub enable_initial_dashboard_refresh: bool,
     pub enable_dashboard_refresh: bool,
     pub enable_duplicate_folder_groups_refresh: bool,
     pub duplicate_folder_groups_refresh_interval: u64,
@@ -20,6 +21,7 @@ impl Default for EnvironmentVariables {
             database_url: String::from("file_index.db"),
             cwd: env::current_dir().unwrap().to_str().unwrap().to_string(),
             enable_startup_indexing: true,
+            enable_initial_dashboard_refresh: true,
             enable_dashboard_refresh: true,
             enable_duplicate_folder_groups_refresh: true,
             duplicate_folder_groups_refresh_interval: 120,
@@ -54,6 +56,11 @@ pub fn load() {
             .unwrap_or_else(|_| derive_db_name(&env_vars.cwd));
 
         env_vars.enable_startup_indexing = env::var("ENABLE_STARTUP_INDEXING")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
+
+        env_vars.enable_initial_dashboard_refresh = env::var("ENABLE_INITIAL_DASHBOARD_REFRESH")
             .ok()
             .and_then(|v| v.parse::<bool>().ok())
             .unwrap_or(true);
@@ -117,6 +124,15 @@ pub fn get_server_port() -> u16 {
 /// `false`, the application will skip the automatic indexing pass at startup.
 pub fn get_enable_startup_indexing() -> bool {
     ENV_VARS.with(|vars| vars.borrow().enable_startup_indexing)
+}
+
+/// Whether the initial dashboard refresh at startup is enabled (default: true)
+///
+/// Reads the `ENABLE_INITIAL_DASHBOARD_REFRESH` environment variable. When set
+/// to `false`, the one-time refresh that runs after the server starts will be
+/// skipped (the periodic refresh, if enabled, still runs normally).
+pub fn get_enable_initial_dashboard_refresh() -> bool {
+    ENV_VARS.with(|vars| vars.borrow().enable_initial_dashboard_refresh)
 }
 
 /// Whether periodic dashboard refresh is enabled (default: true)
