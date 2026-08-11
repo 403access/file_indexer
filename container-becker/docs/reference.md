@@ -55,8 +55,10 @@ reconstructable without extra storage: `archive/risks/<outer-range>/<inner-range
   - `_data.json`: the decoded/pure JSON data only (no HTTP envelope - this is the "data only" store)
 
   Endpoints are grouped in folders (`token`, `list-debitor`, ...). All per-debtor risk calls
-  are grouped under `archive/risks/<outer-range>/<inner-range>/debtor-<id>-risk/`, bucketed
+  are grouped under `archive/risks/<outer-range>/<inner-range>/<debtor-id>-risk/`, bucketed
   by debtor id: outer buckets in 1000-er steps, then an inner 100-er step. For example the
   debtor with id 1234 lands under `archive/risks/1000-1999/1200-1299/debtor-1234-risk/`.
-  Secrets never land in the archive: the OAuth token call is stored with credentials and
-  the access token redacted, and the `Authorization` header is always written as `Bearer REDACTED`.
+  Inside that folder a **run-stamp subfolder** (`yyyyMMdd_HHmmss`) separates each script
+  execution, so re-runs never overwrite or mix with previous runs. Secrets never land in
+  the archive: the OAuth token call is stored with credentials and the access token redacted,
+  and the `Authorization` header is always written as `Bearer REDACTED`.

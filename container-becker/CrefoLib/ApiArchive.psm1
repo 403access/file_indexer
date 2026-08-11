@@ -19,12 +19,13 @@
 $script:ArchiveEnabled = $false
 $script:ArchiveRoot    = $null
 $script:ArchiveCounter = 0
+$script:ArchiveRunStamp = $null   # set once per script run (yyyyMMdd_HHmmss)
 
 function Initialize-ApiArchive {
     [CmdletBinding()]
     param(
-        [bool]$Enabled = $true,          # master switch (config: ArchiveRequests)
-        [string]$RootDir                 # top-level archive directory
+        [bool]$Enabled = $true,
+        [string]$RootDir
     )
     if ($Enabled -and -not [string]::IsNullOrWhiteSpace($RootDir)) {
         if (-not (Test-Path -LiteralPath $RootDir)) {
@@ -32,6 +33,7 @@ function Initialize-ApiArchive {
         }
         $script:ArchiveEnabled = $true
         $script:ArchiveRoot = $RootDir
+        $script:ArchiveRunStamp = Get-Date -Format 'yyyyMMdd_HHmmss'
     }
     else {
         $script:ArchiveEnabled = $false
@@ -99,6 +101,11 @@ function Save-ApiExchange {
         }
     }
     $dir = Join-Path $dir (ConvertTo-SafeName $Name)
+    # Run stamp: every script execution gets its own subfolder so re-runs never
+    # overwrite or mix with previous runs.
+    if ($script:ArchiveRunStamp) {
+        $dir = Join-Path $dir $script:ArchiveRunStamp
+    }
     if (-not (Test-Path -LiteralPath $dir)) {
         New-Item -ItemType Directory -Path $dir -Force | Out-Null
     }
