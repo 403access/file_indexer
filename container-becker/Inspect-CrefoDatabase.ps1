@@ -2,11 +2,11 @@
 # Inspect-CrefoDatabase.ps1 - read-only diagnostic queries against crefo.db.
 #
 # Usage examples:
-#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db
-#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169
-#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -Status done
-#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -ShowStats
-#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169 -History
+#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db
+#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -AccountId 10169
+#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -Status done
+#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -ShowStats
+#   pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -AccountId 10169 -History
 # =============================================================================
 
 [CmdletBinding()]
@@ -26,7 +26,7 @@ if (-not (Test-Path -LiteralPath $DbPath)) {
     exit 1
 }
 
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Inspect\index.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Inspect\index.psm1') -Global -Force
 
 if ($ShowStats) {
     $stats = Get-DatabaseStats -DbPath $DbPath

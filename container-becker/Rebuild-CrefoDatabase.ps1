@@ -3,11 +3,11 @@
 # archive folder so a subsequent run can continue syncing gaps via the API.
 #
 # What it does:
-#   1. Walks archive/list-debitor/*/data.json to reconstruct the account list
-#   2. Walks archive/risks/**/data.json to harvest the latest risk snapshot
+#   1. Walks data/archive/list-debitor/*/data.json to reconstruct the account list
+#   2. Walks data/archive/risks/**/data.json to harvest the latest risk snapshot
 #      per debtor (newest run-stamp, then highest sequence number)
-#   3. Walks archive/last-limit-decisions/*/data.json and
-#      archive/open-limit-desires/*/data.json to rebuild the bulk context
+#   3. Walks data/archive/last-limit-decisions/*/data.json and
+#      data/archive/open-limit-desires/*/data.json to rebuild the bulk context
 #   4. Writes a fresh crefo_state.json with all accounts marked 'done'
 #   5. Initializes crefo.db and seeds it from that state
 #
@@ -33,12 +33,12 @@ $ErrorActionPreference = 'Stop'
 # Load helper modules (same path conventions as the main scripts)
 # ---------------------------------------------------------------------------
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-Import-Module -Name (Join-Path $scriptRoot 'CrefoLib\Logger.psm1') -Global -Force
-Import-Module -Name (Join-Path $scriptRoot 'CrefoLib\Config.psm1') -Global -Force
-Import-Module -Name (Join-Path $scriptRoot 'CrefoLib\Database\index.psm1') -Global -Force
-Import-Module -Name (Join-Path $scriptRoot 'CrefoLib\StateStore.psm1') -Global -Force
-Import-Module -Name (Join-Path $scriptRoot 'CrefoLib\Snapshot.psm1') -Global -Force
-Import-Module -Name (Join-Path $scriptRoot 'CrefoLib\ApiArchive.psm1') -Global -Force
+Import-Module -Name (Join-Path $scriptRoot 'src\CrefoLib\Logger.psm1') -Global -Force
+Import-Module -Name (Join-Path $scriptRoot 'src\CrefoLib\Config.psm1') -Global -Force
+Import-Module -Name (Join-Path $scriptRoot 'src\CrefoLib\Database\index.psm1') -Global -Force
+Import-Module -Name (Join-Path $scriptRoot 'src\CrefoLib\StateStore.psm1') -Global -Force
+Import-Module -Name (Join-Path $scriptRoot 'src\CrefoLib\Snapshot.psm1') -Global -Force
+Import-Module -Name (Join-Path $scriptRoot 'src\CrefoLib\ApiArchive.psm1') -Global -Force
 
 $cfg = Import-CrefoConfig -ConfigPath $ConfigPath
 Initialize-Logger -LogFilePath (Join-Path $cfg['LogDir'] ("rebuild_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))) -Level $cfg['LogLevel'] -Console $true
@@ -127,7 +127,7 @@ foreach ($f in $listFiles) {
 Write-CrefoInfo ("Reconstructed {0} account(s) from archive." -f $accountById.Count)
 
 # ---------------------------------------------------------------------------
-# 2. Harvest latest risk snapshot per debtor from archive/risks
+# 2. Harvest latest risk snapshot per debtor from data/archive/risks
 # ---------------------------------------------------------------------------
 $riskFiles = Get-ChildItem -LiteralPath $ArchiveDir -Recurse -File -ErrorAction SilentlyContinue |
     Where-Object { $_.Name -like '*_data.json' -and $_.FullName -match 'archive[\\/]risks[\\/]' }

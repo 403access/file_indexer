@@ -33,7 +33,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+$root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $mockScript = Join-Path $PSScriptRoot 'Mock-CrefoApi.ps1'
 $exportScript = Join-Path $root 'Start-CrefoExport.ps1'
 if (-not (Test-Path -LiteralPath $mockScript)) { throw "Mock not found: $mockScript" }

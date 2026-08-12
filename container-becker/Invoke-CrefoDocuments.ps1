@@ -14,13 +14,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Logger.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Config.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CsvFormat.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Database\index.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\ApiArchive.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CrefoApi.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Documents\index.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Logger.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Config.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\CsvFormat.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Database\index.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\ApiArchive.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\CrefoApi.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Documents\index.psm1') -Global -Force
 
 # ---------------------------------------------------------------------------
 # Configuration loading & logging setup

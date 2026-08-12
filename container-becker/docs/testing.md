@@ -1,14 +1,14 @@
 # Testing the exporter (scenario tests)
 
-`tests/Run-CrefoTests.ps1` drives the **real** exporter (a child `pwsh` process, so exit
-codes are meaningful) against a local mock of the Crefo API (`tests/Mock-CrefoApi.ps1`).
+`src/tests/Run-CrefoTests.ps1` drives the **real** exporter (a child `pwsh` process, so exit
+codes are meaningful) against a local mock of the Crefo API (`src/tests/Mock-CrefoApi.ps1`).
 Each scenario is one run directory with one or more *phases*; a phase is one exporter run
 against one mock snapshot. Mock responses are composed per phase from the shared fixtures
-in `tests/TestData/` plus fault injection, so every feature can be triggered deterministically.
+in `src/tests/TestData/` plus fault injection, so every feature can be triggered deterministically.
 
 ```powershell
-pwsh -File tests/Run-CrefoTests.ps1              # run everything
-pwsh -File tests/Run-CrefoTests.ps1 -Filter reuse  # only scenarios matching 'reuse'
+pwsh -File src/tests/Run-CrefoTests.ps1              # run everything
+pwsh -File src/tests/Run-CrefoTests.ps1 -Filter reuse  # only scenarios matching 'reuse'
 ```
 
 Exit code `0` = all scenarios pass, `1` = at least one failed.

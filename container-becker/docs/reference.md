@@ -35,29 +35,29 @@ Amounts are formatted German-style (decimal comma, `;` separator, UTF-8 with BOM
 
 ## Generated artifacts
 
-- `output/crefo_limits.csv` - the results.
-- `state/crefo.db` - **canonical** SQLite store (source of truth) the CSV is rebuilt from:
+- `data/output/crefo_limits.csv` - the results.
+- `data/state/crefo.db` - **canonical** SQLite store (source of truth) the CSV is rebuilt from:
   - `accounts` - one row per debitor (id, name, status, error, created/updated)
   - `risk_snapshots` - append-only history of every `/risk` result (and short-circuit zero rows); latest per account wins
   - `api_exchanges` - audit log of every API call (endpoint, method, url, status, elapsed, archive path)
   Access requires the `sqlite3` CLI (ships with macOS). Writes are batched into
   atomic transactions; a failed statement rolls the whole batch back.
-- `state/crefo_state.json` - progress snapshot kept **alongside** the DB for rollback (id, name, status, error, updatedAt). This is what makes runs resumable. Also contains the account list snapshot in the `accounts` array. On the first run after enabled, accounts/snapshots already in this file are copied into the database.
+- `data/state/crefo_state.json` - progress snapshot kept **alongside** the DB for rollback (id, name, status, error, updatedAt). This is what makes runs resumable. Also contains the account list snapshot in the `accounts` array. On the first run after enabled, accounts/snapshots already in this file are copied into the database.
 
 Because `risk_snapshots` stores `fetched_at` and the account id, archive file paths are
-reconstructable without extra storage: `archive/risks/<outer-range>/<inner-range>/<debtor-id>-risk/`.
+reconstructable without extra storage: `data/archive/risks/<outer-range>/<inner-range>/<debtor-id>-risk/`.
 
-- `state/crefo_token_cache.json` - cached access token (permissions restricted).
-- `logs/crefo_export_<timestamp>.log` - per-run log with timestamps and levels.
-- `archive/<endpoint>/<run-stamp>/<stamp>_<seq>_request.json` / `_response.json` / `_data.json` - every API exchange stored as files:
+- `data/state/crefo_token_cache.json` - cached access token (permissions restricted).
+- `data/logs/crefo_export_<timestamp>.log` - per-run log with timestamps and levels.
+- `data/archive/<endpoint>/<run-stamp>/<stamp>_<seq>_request.json` / `_response.json` / `_data.json` - every API exchange stored as files:
   - `_request.json`: method, URL (incl. query), redacted headers, request body
   - `_response.json`: HTTP status, content type, elapsed ms, **raw** response body
   - `_data.json`: the decoded/pure JSON data only (no HTTP envelope - this is the "data only" store)
 
   Endpoints are grouped in folders (`token`, `list-debitor`, ...). All per-debtor risk calls
-  are grouped under `archive/risks/<outer-range>/<inner-range>/<debtor-id>-risk/`, bucketed
+  are grouped under `data/archive/risks/<outer-range>/<inner-range>/<debtor-id>-risk/`, bucketed
   by debtor id: outer buckets in 1000-er steps, then an inner 100-er step. For example the
-  debtor with id 1234 lands under `archive/risks/1000-1999/1200-1299/debtor-1234-risk/`.
+  debtor with id 1234 lands under `data/archive/risks/1000-1999/1200-1299/debtor-1234-risk/`.
   Inside that folder a **run-stamp subfolder** (`yyyyMMdd_HHmmss`) separates each script
   execution, so re-runs never overwrite or mix with previous runs. Secrets never land in
   the archive: the OAuth token call is stored with credentials and the access token redacted,

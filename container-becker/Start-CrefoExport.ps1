@@ -37,14 +37,14 @@ $ErrorActionPreference = 'Stop'
 # Modules are imported into the global scope so that functions inside one
 # module (e.g. the API module calling the logger or the archive) can see each
 # other.
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Logger.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Config.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\StateStore.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Snapshot.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CsvFormat.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Database\index.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\ApiArchive.psm1') -Global -Force
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\CrefoApi.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Logger.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Config.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\StateStore.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Snapshot.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\CsvFormat.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Database\index.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\ApiArchive.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\CrefoApi.psm1') -Global -Force
 
 # ---------------------------------------------------------------------------
 # Configuration loading & merging (defaults, env vars, dirs, validation)

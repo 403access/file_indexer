@@ -34,7 +34,7 @@ Kto-Nr.;Name1;Limit;LimitKennz;Gekauft;freie Linie
 pwsh -File container-becker/Start-CrefoExport.ps1
 ```
 
-This appends rows to `container-becker/output/crefo_limits.csv` and skips accounts
+This appends rows to `data/output/crefo_limits.csv` and skips accounts
 that were already processed successfully on a previous run.
 
 ### Options
@@ -62,16 +62,16 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
 
 ## Scripts
 
-| Script                                             | Purpose                                                                                                |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `Start-CrefoExport.ps1`                            | Main limit-export orchestrator                                                                          |
-| `Invoke-CrefoDocuments.ps1`                        | Binary document downloader                                                                              |
-| `Rebuild-CrefoDatabase.ps1`                        | Rebuild `crefo.db` + `crefo_state.json` from the archive folder                                         |
-| `Inspect-CrefoDatabase.ps1`                        | Read-only diagnostic queries against `crefo.db` (stats, account lookup, snapshot history)               |
-| `Migrate-ArchiveRunStamp.ps1`                      | Restructure an existing archive so each script run gets its own run-stamp subfolder                     |
-| `Reorganize-Archive.ps1`                           | Migrate older archive layouts (flat, 1000-er-only buckets) into the current nested risk structure       |
-| `Migrate-StateFromArchive.ps1`                     | Backfill `crefo_state.json` from archived risk responses (one-time)                                     |
-| `Show-CrefoAccountsByLimit.ps1`                    | List all accounts with credit limits, sorted by limit size                                               |
+| Script                          | Purpose                                                                                           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `Start-CrefoExport.ps1`         | Main limit-export orchestrator                                                                    |
+| `Invoke-CrefoDocuments.ps1`     | Binary document downloader                                                                        |
+| `Rebuild-CrefoDatabase.ps1`     | Rebuild `crefo.db` + `crefo_state.json` from the archive folder                                   |
+| `Inspect-CrefoDatabase.ps1`     | Read-only diagnostic queries against `crefo.db` (stats, account lookup, snapshot history)         |
+| `Migrate-ArchiveRunStamp.ps1`   | Restructure an existing archive so each script run gets its own run-stamp subfolder               |
+| `Reorganize-Archive.ps1`        | Migrate older archive layouts (flat, 1000-er-only buckets) into the current nested risk structure |
+| `Migrate-StateFromArchive.ps1`  | Backfill `crefo_state.json` from archived risk responses (one-time)                               |
+| `Show-CrefoAccountsByLimit.ps1` | List all accounts with credit limits, sorted by limit size                                        |
 
 
 ## Recovery & inspection
@@ -79,26 +79,25 @@ Exit code is `0` on success and `1` when at least one account failed (retryable)
 If the database or state is lost, you can rebuild both from the archive folder:
 
 ```powershell
-pwsh -File container-becker/Rebuild-CrefoDatabase.ps1 `
-     -ArchiveDir "/Users/olivermolnar/Downloads/container-becker/container-becker/archive" `
-     -StateDir "/Users/olivermolnar/Downloads/container-becker/container-becker/state" `
-     -ConfigPath "/Users/olivermolnar/Downloads/container-becker/container-becker/config.psd1"
+pwsh -File Rebuild-CrefoDatabase.ps1 -ArchiveDir data/archive `
+     -StateDir data/state -ConfigPath config.psd1
 ```
 
-This reconstructs `crefo_state.json` and `crefo.db` from the archived API responses. A subsequent `Start-CrefoExport.ps1` run will then continue syncing gaps via the API (only refetching accounts whose decision changed or snapshot aged out).
+This reconstructs `data/state/crefo_state.json` and `data/state/crefo.db` from the archived API responses. A subsequent `Start-CrefoExport.ps1` run will then continue syncing gaps via the API (only refetching accounts whose decision changed or snapshot aged out).
 
 To inspect the database:
 
 ```powershell
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -Stats
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169 -History
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -Status done -Limit 20
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -Stats
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -AccountId 10169
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -AccountId 10169 -History
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -Status done -Limit 20
 ```
 
 To restructure an existing archive so each script execution gets its own run-stamp subfolder:
 
 ```powershell
-pwsh -File container-becker/Migrate-ArchiveRunStamp.ps1 -ArchiveDir container-becker/archive -DryRun
-pwsh -File container-becker/Migrate-ArchiveRunStamp.ps1 -ArchiveDir container-becker/archive
+pwsh -File Migrate-ArchiveRunStamp.ps1 -ArchiveDir data/archive -DryRun
+pwsh -File Migrate-ArchiveRunStamp.ps1 -ArchiveDir data/archive
 ```
+

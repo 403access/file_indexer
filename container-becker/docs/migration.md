@@ -7,11 +7,11 @@ flattened the category path). Two tools bring everything to the current layout:
 
 1. **Reorganize the archive folders** (idempotent; preview first):
    ```zsh
-   pwsh -File container-becker/Reorganize-Archive.ps1 -ArchiveDir container-becker/archive -DryRun
-   pwsh -File container-becker/Reorganize-Archive.ps1 -ArchiveDir container-becker/archive
+   pwsh -File Reorganize-Archive.ps1 -ArchiveDir data/archive -DryRun
+   pwsh -File Reorganize-Archive.ps1 -ArchiveDir data/archive
    ```
    Every `debtor-<id>-risk` folder is moved to
-   `archive/risks/<outer-range>/<inner-range>/debtor-<id>-risk/`; the now-empty legacy
+   `data/archive/risks/<outer-range>/<inner-range>/debtor-<id>-risk/`; the now-empty legacy
    bucket folders are removed.
 
 2. **Backfill account snapshots from the archive** so the next run reuses them instead of
@@ -19,8 +19,8 @@ flattened the category path). Two tools bring everything to the current layout:
    snapshot feature carry no stored risk data, so without this the first run would re-fetch
    everything once. Preview first:
    ```zsh
-   pwsh -File container-becker/Migrate-StateFromArchive.ps1 -ArchiveDir container-becker/archive -DryRun
-   pwsh -File container-becker/Migrate-StateFromArchive.ps1 -ArchiveDir container-becker/archive
+   pwsh -File Migrate-StateFromArchive.ps1 -ArchiveDir data/archive -DryRun
+   pwsh -File Migrate-StateFromArchive.ps1 -ArchiveDir data/archive
    ```
-   A timestamped backup of `state/crefo_state.json` is written before any change. Accounts
+   A timestamped backup of `data/state/crefo_state.json` is written before any change. Accounts
    with no archived risk are left for a normal `/risk` fetch or the N short-circuit.

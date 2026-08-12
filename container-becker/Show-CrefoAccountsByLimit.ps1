@@ -3,11 +3,11 @@
 # by limit size (descending). Uses the Inspect submodule for DB access.
 #
 # Usage:
-#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath state/crefo.db
-#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath state/crefo.db -Top 20
-#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath state/crefo.db -Status done
-#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath state/crefo.db -Top 20 -SortBy Gekauft
-#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath state/crefo.db -AccountId 10169
+#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath data/state/crefo.db
+#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath data/state/crefo.db -Top 20
+#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath data/state/crefo.db -Status done
+#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath data/state/crefo.db -Top 20 -SortBy Gekauft
+#   pwsh -File Show-CrefoAccountsByLimit.ps1 -DbPath data/state/crefo.db -AccountId 10169
 # =============================================================================
 
 [CmdletBinding()]
@@ -27,7 +27,7 @@ if (-not (Test-Path -LiteralPath $DbPath)) {
     exit 1
 }
 
-Import-Module -Name (Join-Path $PSScriptRoot 'CrefoLib\Inspect\index.psm1') -Global -Force
+Import-Module -Name (Join-Path $PSScriptRoot 'src\CrefoLib\Inspect\index.psm1') -Global -Force
 
 $where = @()
 if ($AccountId) { $where += "a.id = $AccountId" }

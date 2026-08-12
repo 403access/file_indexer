@@ -17,7 +17,7 @@ function Import-CrefoConfig {
     [CmdletBinding()]
     param([string]$ConfigPath)   # path to config.psd1
     if (-not (Test-Path -LiteralPath $ConfigPath)) {
-        throw ("Configuration not found: '{0}'. Copy 'config.example.psd1' to 'config.psd1' and fill in your credentials." -f $ConfigPath)
+        throw ("Configuration not found: '{0}'. Copy 'src/config.example.psd1' to 'config.psd1' and fill in your credentials." -f $ConfigPath)
     }
     $cfg = Import-PowerShellDataFile -LiteralPath $ConfigPath
     $cfgRoot = Split-Path -Parent (Resolve-Path $ConfigPath)

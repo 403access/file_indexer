@@ -3,7 +3,7 @@
 ## What happens on each run
 
 1. **Authenticate** (`POST /connect/token`, OAuth2 password flow). The token is cached
-   in `state/crefo_token_cache.json` and reused until it expires.
+    in `data/state/crefo_token_cache.json` and reused until it expires.
 2. **Discover the account list** (`GET /api/v1/DebitorAccounts/list-debitor`).
    The list is paginated and each response carries `header.totalItems`/`totalPages`.
    - First run / empty database: the **full list** is fetched, page by page.
@@ -24,7 +24,7 @@
 4. **Risk data per debtor with a limit context** (`GET /api/v1/DebitorAccounts/{debitor}/risk`) -
    the stored snapshot decides whether a call is needed (see `SyncMode`/`MaxAgeDays`).
    Debtors listed in `RefetchRanges` (or `-RefetchRanges`) are always re-fetched, overriding
-   that decision. Each call is archived under `archive/`, the response is stored in the account
+    that decision. Each call is archived under `data/archive/`, the response is stored in the account
    state, and the account is marked `done`.
 5. **CSV rebuild** - the complete CSV is re-written every run (header + all rows, stable order)
    from the stored snapshots, so the file is always complete and unchanged accounts cost zero requests.
@@ -43,28 +43,26 @@
 If the database or state is lost, you can rebuild both from the archive folder:
 
 ```powershell
-pwsh -File container-becker/Rebuild-CrefoDatabase.ps1 `
-     -ArchiveDir "/Users/olivermolnar/Downloads/container-becker/container-becker/archive" `
-     -StateDir "/Users/olivermolnar/Downloads/container-becker/container-becker/state" `
-     -ConfigPath "/Users/olivermolnar/Downloads/container-becker/container-becker/config.psd1"
+pwsh -File Rebuild-CrefoDatabase.ps1 -ArchiveDir data/archive `
+     -StateDir data/state -ConfigPath config.psd1
 ```
 
-This reconstructs `crefo_state.json` and `crefo.db` from the archived API responses. A subsequent `Start-CrefoExport.ps1` run will then continue syncing gaps via the API (only refetching accounts whose decision changed or snapshot aged out).
+This reconstructs `data/state/crefo_state.json` and `data/state/crefo.db` from the archived API responses. A subsequent `Start-CrefoExport.ps1` run will then continue syncing gaps via the API (only refetching accounts whose decision changed or snapshot aged out).
 
 To inspect the database:
 
 ```powershell
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -Stats
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -AccountId 10169 -History
-pwsh -File container-becker/Inspect-CrefoDatabase.ps1 -DbPath state/crefo.db -Status done -Limit 20
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -Stats
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -AccountId 10169
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -AccountId 10169 -History
+pwsh -File Inspect-CrefoDatabase.ps1 -DbPath data/state/crefo.db -Status done -Limit 20
 ```
 
 To restructure an existing archive so each script execution gets its own run-stamp subfolder:
 
 ```powershell
-pwsh -File container-becker/Migrate-ArchiveRunStamp.ps1 -ArchiveDir container-becker/archive -DryRun
-pwsh -File container-becker/Migrate-ArchiveRunStamp.ps1 -ArchiveDir container-becker/archive
+pwsh -File Migrate-ArchiveRunStamp.ps1 -ArchiveDir data/archive -DryRun
+pwsh -File Migrate-ArchiveRunStamp.ps1 -ArchiveDir data/archive
 ```
 
 ## Document exports (`Invoke-CrefoDocuments.ps1`)
