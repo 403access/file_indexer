@@ -3,15 +3,23 @@
 # Update-Limitlinie.ps1 - standalone downloader for the Crefo Factoring daily
 # limit-line CSV. Standalone: only pwsh 7 and one small config file are needed.
 #
-#   1. Lists every file in the portal's "Tagesabrechnungen" document folder.
-#   2. Downloads the newest *_Limitlinie.csv (sorted by created timestamp).
-#   3. Deletes every other downloaded file so only the most recent remains.
+# Two steps run on every execution:
+#
+#   A. Archive every file found in the configured portal document folders into
+#      a year/month tree: <ArchiveDir>/<yyyy>/<MM Monthname>/<file>. Folders are
+#      taken from the 'DocumentFolders' config value, or from the API's
+#      list-directory call when that value is empty. Files already present at
+#      their target path are skipped.
+#   B. The limit-line flow: download the newest *_Limitlinie.csv (sorted by
+#      created timestamp) from 'Directory' as 'kundenlimits.csv', run the
+#      optional dbisql import, and remove every other file in the download
+#      folder.
 #
 # Usage:
 #   pwsh -File Update-Limitlinie.ps1                       # use limitlinie-config.psd1
 #   pwsh -File Update-Limitlinie.ps1 -ConfigPath ...       # custom config
 #
-# Exit code: 0 when the newest file is present locally, 1 on any failure.
+# Exit code: 0 on success, 1 on any failure.
 # =============================================================================
 
 [CmdletBinding()]
@@ -43,6 +51,11 @@ $script:token     = $null
 # Resolve the download folder (relative paths are anchored to the script dir)
 $downloadDirRaw = if ([string]::IsNullOrWhiteSpace([string]$script:cfg['DownloadDir'])) { 'data/documents/limitlinie' } else { [string]$script:cfg['DownloadDir'] }
 $script:downloadDir = if ([System.IO.Path]::IsPathRooted($downloadDirRaw)) { $downloadDirRaw } else { Join-Path $PSScriptRoot $downloadDirRaw }
+
+# Archive step (A): year/month tree root + source folders.
+$archiveDirRaw = if ([string]::IsNullOrWhiteSpace([string]$script:cfg['ArchiveDir'])) { 'data/documents/archive' } else { [string]$script:cfg['ArchiveDir'] }
+$script:archiveDir = if ([System.IO.Path]::IsPathRooted($archiveDirRaw)) { $archiveDirRaw } else { Join-Path $PSScriptRoot $archiveDirRaw }
+$script:docFolders = @($script:cfg['DocumentFolders'] | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
 
 # Optional dbisql (SQL Anywhere) run when a more recent file was found and
 # downloaded (not on skips). dbisql accepts only a single command/file origin,
@@ -152,10 +165,11 @@ function Confirm-LimitlineFolder {
 }
 
 function Get-LimitlineDocuments {
+    param([string]$Directory)
     $all = @()
     $page = 1
     while ($true) {
-        $resp = Invoke-LimitlineApi -Path ("/api/v1/Documents/{0}/list-document" -f [uri]::EscapeDataString($script:dir)) `
+        $resp = Invoke-LimitlineApi -Path ("/api/v1/Documents/{0}/list-document" -f [uri]::EscapeDataString($Directory)) `
             -Query @{ unread = 'false'; page = $page; pagesize = '100' }
         if ($resp -is [array]) {
             $all += $resp
@@ -169,6 +183,35 @@ function Get-LimitlineDocuments {
     return $all
 }
 
+# Folders to archive: config 'DocumentFolders' when set, otherwise the full
+# list returned by the API endpoint /api/v1/Documents/list-directory.
+function Get-CrefoArchiveFolders {
+    if ($script:docFolders.Count -gt 0) {
+        return $script:docFolders
+    }
+    $resp = Invoke-LimitlineApi -Path '/api/v1/Documents/list-directory'
+    return @($resp.folder | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+}
+
+# '01 Januar' ... '12 Dezember' (German month names only).
+function Get-GermanMonthFolder {
+    param([int]$Month)
+    $names = @(
+        'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+        'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'
+    )
+    if ($Month -lt 1 -or $Month -gt 12) { throw "Invalid month number: $Month" }
+    return ('{0:00} {1}' -f $Month, $names[$Month - 1])
+}
+
+# Target archive path for one document: <ArchiveDir>/<yyyy>/<MM Monthname>/
+function Get-ArchiveTargetPath {
+    param([object]$Doc)
+    $created = try { [datetime]$Doc.created } catch { $null }
+    if ($null -eq $created) { throw "Document '{0}' has an unparseable created timestamp: {1}" -f $Doc.name, $Doc.created }
+    return Join-Path $script:archiveDir ("{0:0000}" -f $created.Year) (Get-GermanMonthFolder -Month $created.Month)
+}
+
 # ---------------------------------------------------------------------------
 # Run
 # ---------------------------------------------------------------------------
@@ -178,12 +221,61 @@ Write-Host ("Config     : {0}" -f $ConfigPath)
 Write-Host ("Folder     : {0}" -f $script:dir)
 Write-Host ("File suffix: {0}" -f $script:suffix)
 Write-Host ("Download   : {0}" -f $script:downloadDir)
+Write-Host ("Archive    : {0}" -f $script:archiveDir)
 
 $script:token = Get-LimitlineToken
 
+# ---------------------------------------------------------------------------
+# Step A: archive every file from the API folders into a year/month tree.
+# ---------------------------------------------------------------------------
+
+$folders = @(Get-CrefoArchiveFolders)
+if ($folders.Count -eq 0) {
+    Write-Host 'No document folders to archive (none configured or returned by the API); skipping archive step.'
+}
+else {
+    Write-Host ("Archive folders: {0}" -f ($folders -join ', '))
+    $archiveTotal   = 0
+    $archiveSkipped = 0
+    $archiveFailed  = 0
+    foreach ($folder in $folders) {
+        $folderDocs = @(Get-LimitlineDocuments -Directory $folder)
+        Write-Host ("  {0}: listed {1} file(s)" -f $folder, $folderDocs.Count)
+        foreach ($doc in $folderDocs) {
+            if (-not $doc.name) { continue }
+            $name = [string]$doc.name
+            $targetDir = Get-ArchiveTargetPath -Doc $doc
+            $outFile   = Join-Path $targetDir $name
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+            if (Test-Path -LiteralPath $outFile) {
+                $archiveSkipped++
+                continue
+            }
+            $tmpFile = Join-Path $targetDir ("{0}.part" -f $name)
+            try {
+                Invoke-LimitlineApi -Path ("/api/v1/Documents/{0}/{1}" -f [uri]::EscapeDataString($folder), [uri]::EscapeDataString($name)) `
+                    -Binary -OutFile $tmpFile
+                Move-Item -LiteralPath $tmpFile -Destination $outFile -Force
+                $archiveTotal++
+                Write-Host ("  archived: {0} -> {1}" -f $name, $outFile)
+            }
+            catch {
+                $archiveFailed++
+                if (Test-Path -LiteralPath $tmpFile) { Remove-Item -LiteralPath $tmpFile -Force -ErrorAction SilentlyContinue }
+                Write-Warning ("Archive download failed for '{0}' ({1}): {2}" -f $name, $folder, $_.Exception.Message)
+            }
+        }
+    }
+    Write-Host ("Archive finished: downloaded={0} skipped={1} failed={2}." -f $archiveTotal, $archiveSkipped, $archiveFailed)
+}
+
+# ---------------------------------------------------------------------------
+# Step B: limit-line download + dbisql import (unchanged flow).
+# ---------------------------------------------------------------------------
+
 Confirm-LimitlineFolder
 
-$docs = @(Get-LimitlineDocuments)
+$docs = @(Get-LimitlineDocuments -Directory $script:dir)
 Write-Host ("Listed {0} file(s) in folder '{1}'." -f $docs.Count, $script:dir)
 
 $suffixPattern = $script:suffix

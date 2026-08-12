@@ -17,6 +17,15 @@
     # may be absolute or relative to this script's folder).
     DownloadDir = 'data/documents/limitlinie'
 
+    # Folders from the portal to archive into <ArchiveDir>/<yyyy>/<MM month>.
+    # If omitted or empty, the script uses the folders returned by the API
+    # endpoint /api/v1/Documents/list-directory.
+    # DocumentFolders = @('Tagesabrechnungen', 'Monatsabrechnungen', 'Sonstiges', 'Mahnungen', 'Einreichungen')
+
+    # Root folder holding the year/month archive ("ArchiveDir" may be absolute
+    # or relative to this script's folder).
+    ArchiveDir = 'data/documents/archive'
+
 # Optional: run dbisql (SQL Anywhere) on the downloaded CSV when a more recent
 # file was found. Invoked as:  dbisql -c <DbisqlConnString> -nogui <SqlScript> <CSV>
 # DbisqlPath defaults to 'dbisql' found on PATH; SqlScript may be absolute or
