@@ -24,7 +24,7 @@ function Sync-CrefoAccountList {
     # -Reset: forget all progress and start from an empty CSV.
     if ($Reset) {
         Write-CrefoWarn 'Reset requested: resetting all accounts from scratch.'
-        Reset-CrefoAccounts -State $script:state
+        Reset-CrefoAccounts -State $script:state | Out-Null
         $resetCsv = Join-Path $script:cfg['OutputDir'] $script:cfg['OutputFileName']
         if (Test-Path -LiteralPath $resetCsv) { Remove-Item -LiteralPath $resetCsv -Force }
         # Let the database rebuild from the reset run as well.
@@ -78,7 +78,7 @@ function Sync-CrefoAccountList {
                 Write-CrefoInfo ("Found {0} debitor account(s)." -f @($accounts).Count)
             }
         }
-        Merge-CrefoAccounts -State $script:state -Accounts $accounts
+        Merge-CrefoAccounts -State $script:state -Accounts $accounts | Out-Null
         $script:state.accountListFetchedAt = (Get-Date).ToUniversalTime().ToString('o')
         Save-CrefoState -Path $script:statePath -State $script:state
     }
