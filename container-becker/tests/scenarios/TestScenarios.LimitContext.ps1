@@ -16,8 +16,9 @@
 #   because a limit without a backing decision is not trustworthy to export.
 #
 # How it is triggered: 4102 has an active snapshot from phase 1 (limit 104102
-# / code A) but NO completed decision record is served in phase 2 - the mock's
-# decisions list contains only 1014. 1014 keeps its decision and is reused.
+# / code A) and HAD a completed decision in phase 1, but NO completed decision
+# record is served in phase 2 - the mock's decisions list contains only 1014.
+# 1014 keeps its decision and is reused.
 #
 # What we expect: RiskIds=@(4102) (1014 untouched, 4102 re-queried exactly
 # once despite being "due to reuse"), the full re-fetched limit context in the
@@ -29,7 +30,7 @@ $scenarios += @{
     Config = @{ SyncMode = 'Incremental'; MaxAgeDays = 0 }
     Phases = @(
         @{
-            Mock = @{ AccountIds = @(1014, 4102); DecisionIds = @(1014) }
+            Mock = @{ AccountIds = @(1014, 4102); DecisionIds = @(1014, 4102) }
             Expect = @{ ExitCode = 0; RiskIds = @(1014, 4102); CsvRowCount = 2 }
         },
         @{
@@ -37,7 +38,7 @@ $scenarios += @{
             Expect = @{
                 ExitCode = 0
                 # 4102 still holds an active snapshot (limit 104102 / code A)
-                # but has no completed decision -> the "decision removed" rule
+                # but its completed decision was removed -> the "decision removed" rule
                 # re-fetches it; 1014 is unchanged and reused.
                 RiskIds = @(4102)
                 CsvRowCount = 2

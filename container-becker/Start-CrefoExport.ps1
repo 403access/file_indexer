@@ -240,6 +240,24 @@ if ($script:cfg['UseLastLimitDecisions']) {
     }
 }
 
+# Detect whether the bulk decisions set changed since the last run. We keep
+# the previous set of debtor ids that had completed decisions; an account that
+# was previously in that set but is missing now is a "decision removed" case
+# and must be re-fetched even when the rest of the set is otherwise stable.
+$currentDecisionIds = [System.Collections.Generic.HashSet[int]]::new()
+foreach ($id in $limitDecisions.Keys) {
+    [void]$currentDecisionIds.Add([int]$id)
+}
+$previousDecisionIds = [System.Collections.Generic.HashSet[int]]::new()
+if ($null -ne $state.decisionsSignature) {
+    foreach ($token in ($state.decisionsSignature -split '\|')) {
+        if ($token -ne '') { [void]$previousDecisionIds.Add([int]$token) }
+    }
+}
+$newSignature = ($currentDecisionIds | Sort-Object -Unique) -join '|'
+$state | Add-Member -NotePropertyName decisionsSignature -NotePropertyValue $newSignature -Force
+Write-CrefoDebug ("Decisions: previous={0}, current={1}" -f ($previousDecisionIds -join ','), ($currentDecisionIds -join ','))
+
 $csvPath = Join-Path $script:cfg['OutputDir'] $script:cfg['OutputFileName']
 $rows = New-Object System.Collections.Generic.List[string]
 $refreshed = 0
@@ -258,7 +276,8 @@ foreach ($account in $allAccounts) {
         $decision = if ($hasDecision) { $limitDecisions[$id] } else { $null }
         $inOpenDesires = $openDesires.ContainsKey($id)
 
-        $refreshDecision = Get-RefreshDecision -Cfg $script:cfg -Account $account -HasDecision $hasDecision -Decision $decision -InOpenDesires $inOpenDesires -ForceRanges $script:forceRanges
+        $accountDecisionRemoved = ($previousDecisionIds.Contains($id) -and -not $currentDecisionIds.Contains($id))
+        $refreshDecision = Get-RefreshDecision -Cfg $script:cfg -Account $account -HasDecision $hasDecision -Decision $decision -InOpenDesires $inOpenDesires -DecisionsChanged $accountDecisionRemoved -ForceRanges $script:forceRanges
         if ($refreshDecision.ShouldRefresh) {
             Write-CrefoInfo ("Fetching risk data for debitor {0} ({1}) [{2}]..." -f $id, $account.name, $refreshDecision.Reason)
             $risk = Get-CrefoDebtorRisk -Config $script:cfg -DebtorId $id -AccessToken $script:token -AuthRefresher $script:authRefresher
