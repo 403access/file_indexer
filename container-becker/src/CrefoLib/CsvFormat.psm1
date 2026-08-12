@@ -31,14 +31,17 @@ function ConvertTo-GermanyNumber {
 
 # Builds one CSV data row from an account's stored snapshot:
 #   Kto-Nr. | Name1 | Limit | LimitKennz | Gekauft | freie Linie
-# freie Linie is derived from limit minus purchased (or minus balance when
-# FreeLineFromBalance is enabled), never fetched.
+# The API reports the credit limit in thousand EUR (e.g. 2 = 2,000 EUR), while
+# purchased and balance arrive as real EUR. The limit is scaled to EUR before
+# writing so the Limit column and freie Linie match the business unit.
+# freie Linie is derived from the (scaled) limit minus purchased (or minus
+# balance when FreeLineFromBalance is enabled), never fetched.
 function New-CsvRowFromAccount {
     param(
         [hashtable]$Cfg,
         [object]$Account
     )
-    $limit = [double]$Account.limit
+    $limit = [double]$Account.limit * 1000
     $purchased = [double]$Account.purchased
     $balance = [double]$Account.balance
     $freeBase = if ($Cfg['FreeLineFromBalance']) { $balance } else { $purchased }

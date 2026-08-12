@@ -42,7 +42,7 @@ $scenarios += @{
                 # re-fetches it; 1014 is unchanged and reused.
                 RiskIds = @(4102)
                 CsvRowCount = 2
-                CsvRows = @(@{ Id = 4102; Limit = '104102,00'; Code = 'A'; Gekauft = '5102,00'; Free = '99000,00' })
+                CsvRows = @(@{ Id = 4102; Limit = '104102000,00'; Code = 'A'; Gekauft = '5102,00'; Free = '104096898,00' })
                 LogContains = @('completed decision removed, account previously had a limit')
             }
         }
@@ -119,10 +119,10 @@ $scenarios += @{
 
 # What we test:
 #   The FreeLineFromBalance config switch changes the free-line computation:
-#   default = limit - purchased amount (Gekauft), switch = limit - balance.
-#   For 1014: limit 100000, balance 80000 -> freie Linie 20000,00. With Gekauft
-#   empty the DEFAULT path would have produced 100000,00 - so the asserted cell
-#   proves the switch actually took effect.
+#   default = (scaled) limit - purchased amount (Gekauft), switch = limit - balance.
+#   For 1014: limit 100000 (thousand EUR -> 100000000 EUR), balance 80000 ->
+#   freie Linie 99920000,00. With Gekauft empty the DEFAULT path would have
+#   produced 100000000,00 - so the asserted cell proves the switch took effect.
 #
 # What we expect: exactly one row for 1014 whose 'freie Linie' cell is the
 # balance-derived value (the only thing this scenario cares about).
@@ -137,8 +137,8 @@ $scenarios += @{
                 ExitCode = 0
                 RiskIds = @(1014)
                 CsvRowCount = 1
-                # free line = limit - balance = 100000 - 80000 = 20000 (not -Gekauft)
-                CsvRows = @(@{ Id = 1014; Free = '20000,00' })
+                # free line = limit*1000 - balance = 100000000 - 80000 = 99920000 (not -Gekauft)
+                CsvRows = @(@{ Id = 1014; Free = '99920000,00' })
             }
         }
     )
