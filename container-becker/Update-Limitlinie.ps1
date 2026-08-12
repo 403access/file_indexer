@@ -4,22 +4,19 @@
 # limit-line CSV. Standalone: only pwsh 7 and one small config file are needed.
 #
 #   1. Lists every file in the portal's "Tagesabrechnungen" document folder.
-#   2. Downloads the newest *_Limitlinie.csv (sorted by created timestamp)
-#      unless that exact file is already in the download folder.
+#   2. Downloads the newest *_Limitlinie.csv (sorted by created timestamp).
 #   3. Deletes every other downloaded file so only the most recent remains.
 #
 # Usage:
 #   pwsh -File Update-Limitlinie.ps1                       # use limitlinie-config.psd1
 #   pwsh -File Update-Limitlinie.ps1 -ConfigPath ...       # custom config
-#   pwsh -File Update-Limitlinie.ps1 -Force                # re-download newest even if present
 #
 # Exit code: 0 when the newest file is present locally, 1 on any failure.
 # =============================================================================
 
 [CmdletBinding()]
 param(
-    [string]$ConfigPath = (Join-Path $PSScriptRoot 'limitlinie-config.psd1'),
-    [switch]$Force
+    [string]$ConfigPath = (Join-Path $PSScriptRoot 'limitlinie-config.psd1')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -203,53 +200,49 @@ foreach ($c in $candidates | Sort-Object -Property @{ Expression = { try { [date
 
 $latest = $candidates | Sort-Object -Property @{ Expression = { try { [datetime]$_.created } catch { [datetime]::MinValue } } } -Descending | Select-Object -First 1
 $keepName = [string]$latest.name
-$outFile = Join-Path $script:downloadDir $keepName
+$outputName = 'kundenlimits.csv'
+$outFile = Join-Path $script:downloadDir $outputName
 
 New-Item -ItemType Directory -Path $script:downloadDir -Force | Out-Null
 
-if ((Test-Path -LiteralPath $outFile) -and -not $Force) {
-    Write-Host ("Already downloaded (skip): {0}" -f $keepName)
+try {
+    Invoke-LimitlineApi -Path ("/api/v1/Documents/{0}/{1}" -f [uri]::EscapeDataString($script:dir), [uri]::EscapeDataString($keepName)) `
+        -Binary -OutFile $outFile
 }
-else {
+catch {
+    if (Test-Path -LiteralPath $outFile) { Remove-Item -LiteralPath $outFile -Force }
+    throw
+}
+Write-Host ("Downloaded: {0}  ({1} bytes)" -f $keepName, (Get-Item -LiteralPath $outFile).Length)
+if ($script:dbisql) {
+    $csvEscaped = $outFile -replace "'", "''"
+    $sqlText = [System.IO.File]::ReadAllText($script:dbisqlSql)
+    $patched = ($sqlText -replace "(?im)^[ \t]*PARAMETERS[ \t]+csv_path[ \t]*;?[ \t\r\n]*", '') -replace '\{csv_path\}', $csvEscaped
+    $tmpSql = Join-Path ([System.IO.Path]::GetTempPath()) ("update_from_csv_{0}.sql" -f [guid]::NewGuid().ToString('N'))
+    [System.IO.File]::WriteAllText($tmpSql, $patched)
     try {
-        Invoke-LimitlineApi -Path ("/api/v1/Documents/{0}/{1}" -f [uri]::EscapeDataString($script:dir), [uri]::EscapeDataString($keepName)) `
-            -Binary -OutFile $outFile
+        Write-Host ("Running dbisql on new download: {0} -c {1} -nogui -onerror exit {2}" -f $script:dbisqlPath, $script:dbisqlConn, $tmpSql)
+        & $script:dbisqlPath -c $script:dbisqlConn -nogui -onerror exit $tmpSql
+        Write-Host ("dbisql exit code: {0}" -f $LASTEXITCODE)
+        if ($LASTEXITCODE -ne 0) { throw "dbisql failed with exit code $LASTEXITCODE" }
     }
-    catch {
-        if (Test-Path -LiteralPath $outFile) { Remove-Item -LiteralPath $outFile -Force }
-        throw
-    }
-    Write-Host ("Downloaded: {0}  ({1} bytes)" -f $keepName, (Get-Item -LiteralPath $outFile).Length)
-    if ($script:dbisql) {
-        $csvEscaped = $outFile -replace "'", "''"
-        $sqlText = [System.IO.File]::ReadAllText($script:dbisqlSql)
-        $patched = ($sqlText -replace "(?im)^[ \t]*PARAMETERS[ \t]+csv_path[ \t]*;?[ \t\r\n]*", '') -replace '\{csv_path\}', $csvEscaped
-        $tmpSql = Join-Path ([System.IO.Path]::GetTempPath()) ("update_from_csv_{0}.sql" -f [guid]::NewGuid().ToString('N'))
-        [System.IO.File]::WriteAllText($tmpSql, $patched)
-        try {
-            Write-Host ("Running dbisql on new download: {0} -c {1} -nogui -onerror exit {2}" -f $script:dbisqlPath, $script:dbisqlConn, $tmpSql)
-            & $script:dbisqlPath -c $script:dbisqlConn -nogui -onerror exit $tmpSql
-            Write-Host ("dbisql exit code: {0}" -f $LASTEXITCODE)
-            if ($LASTEXITCODE -ne 0) { throw "dbisql failed with exit code $LASTEXITCODE" }
-        }
-        finally {
-            Remove-Item -LiteralPath $tmpSql -Force -ErrorAction SilentlyContinue
-        }
+    finally {
+        Remove-Item -LiteralPath $tmpSql -Force -ErrorAction SilentlyContinue
     }
 }
 
 $removed = 0
 foreach ($f in Get-ChildItem -LiteralPath $script:downloadDir -File) {
-    if ($f.Name -ne $keepName) {
+    if ($f.Name -ne $outputName) {
         Remove-Item -LiteralPath $f.FullName -Force
         $removed++
     }
 }
 if ($removed -gt 0) {
-    Write-Host ("Deleted {0} older download(s); keeping only '{1}'." -f $removed, $keepName)
+    Write-Host ("Deleted {0} older download(s); keeping only '{1}'." -f $removed, $outputName)
 }
 else {
-    Write-Host ("No old downloads to remove; keeping '{0}'." -f $keepName)
+    Write-Host ("No old downloads to remove; keeping '{0}'." -f $outputName)
 }
 
 Write-Host "== Done =="
