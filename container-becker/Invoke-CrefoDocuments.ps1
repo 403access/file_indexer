@@ -99,19 +99,27 @@ $getDocumentDirectories = {
 
 $folderListFactory = {
     param([string]$Folder)
+    # PowerShell scriptblocks are NOT closures, so a nested literal block cannot
+    # see $Folder (it would call /Documents//list-document -> 404). GetNewClosure()
+    # would freeze $script:cfg/$script:token (they resolve to $null inside the
+    # closure), breaking the API calls. The folder is therefore stashed in a
+    # script-scope variable that the inner block reads at call time; Documents.ps1
+    # creates and consumes the list/fetcher for one folder before moving to the next.
+    $script:activeDocumentFolder = $Folder
     return {
         param([int]$Page, [int]$PageSize)
         Get-CrefoDocumentList -Config $script:cfg -AccessToken $script:token `
-            -AuthRefresher $script:authRefresher -Directory $Folder -Unread $false -Page $Page -PageSize $PageSize
+            -AuthRefresher $script:authRefresher -Directory $script:activeDocumentFolder -Unread $false -Page $Page -PageSize $PageSize
     }
 }
 
 $folderFetcherFactory = {
     param([string]$Folder)
+    $script:activeDocumentFolder = $Folder
     return {
         param([string]$Name, [string]$OutFile)
         Get-CrefoDocumentDownload -Config $script:cfg -AccessToken $script:token `
-            -AuthRefresher $script:authRefresher -Directory $Folder -Document $Name -OutFile $OutFile
+            -AuthRefresher $script:authRefresher -Directory $script:activeDocumentFolder -Document $Name -OutFile $OutFile
     }
 }
 
