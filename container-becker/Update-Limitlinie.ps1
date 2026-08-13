@@ -171,14 +171,27 @@ function Get-LimitlineDocuments {
     while ($true) {
         $resp = Invoke-LimitlineApi -Path ("/api/v1/Documents/{0}/list-document" -f [uri]::EscapeDataString($Directory)) `
             -Query @{ unread = 'false'; page = $page; pagesize = '100' }
+        # Three response shapes raced through Invoke-RestMethod:
+        #   [] (bare document array)                 -> Object[] / unrolled scalar
+        #   { header, items } (paging envelope)      -> single object with 'items'
+        # Invoke-RestMethod keeps a real array an array, but unrolls a
+        # ONE-element JSON array into a single object, and member enumeration
+        # of '.items' on a plain array returns an array of $null (NOT $null),
+        # so detect the envelope by property presence, not by anything arrayy.
         if ($resp -is [array]) {
             $all += $resp
             break
         }
-        $all += @($resp.items)
-        $totalPages = if ($null -ne $resp.header -and $null -ne $resp.header.totalPages) { [int]$resp.header.totalPages } else { $page }
-        if ($page -ge $totalPages) { break }
-        $page++
+        if ($null -ne $resp.PSObject.Properties['items']) {
+            $all += @($resp.items)
+            $totalPages = if ($null -ne $resp.header -and $null -ne $resp.header.totalPages) { [int]$resp.header.totalPages } else { $page }
+            if ($page -ge $totalPages) { break }
+            $page++
+        }
+        else {
+            $all += @($resp)
+            break
+        }
     }
     return $all
 }
