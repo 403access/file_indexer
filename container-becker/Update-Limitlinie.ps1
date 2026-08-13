@@ -217,12 +217,12 @@ function Get-GermanMonthFolder {
     return ('{0:00} {1}' -f $Month, $names[$Month - 1])
 }
 
-# Target archive path for one document: <ArchiveDir>/<yyyy>/<MM Monthname>/
+# Target archive path for one document: <ArchiveDir>/<yyyy>/Ordner/Crefo/<MM Monthname>/
 function Get-ArchiveTargetPath {
     param([object]$Doc)
     $created = try { [datetime]$Doc.created } catch { $null }
     if ($null -eq $created) { throw "Document '{0}' has an unparseable created timestamp: {1}" -f $Doc.name, $Doc.created }
-    return Join-Path $script:archiveDir ("{0:0000}" -f $created.Year) (Get-GermanMonthFolder -Month $created.Month)
+    return Join-Path $script:archiveDir ("{0:0000}" -f $created.Year) 'Ordner' 'Crefo' (Get-GermanMonthFolder -Month $created.Month)
 }
 
 # ---------------------------------------------------------------------------

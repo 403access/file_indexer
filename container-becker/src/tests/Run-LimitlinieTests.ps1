@@ -154,17 +154,24 @@ $global:limitlinieScenarios = @()
 Add-LimitlinieScenario -Name 'limitlinie-archive-all-folders' -Phases @(
     @{
         Mock = @{
-            Folders = @('Tagesabrechnungen', 'Monatsabrechnungen', 'Sonstiges')
+            Folders = @('Tagesabrechnungen', 'Monatsabrechnungen', 'Sonstiges', 'Mahnungen', 'Einreichungen')
             Files = @{
                 'Tagesabrechnungen' = @(
                     @{ name = '20260811_1014_Limitlinie.csv'; created = '2026-08-11T21:25:08' },
-                    @{ name = '20260729_1014_Limitlinie.csv'; created = '2026-07-29T21:17:45' }
+                    @{ name = '20260811_1014_FinJournal.csv'; created = '2026-08-11T21:22:40' },
+                    @{ name = '20260811_1014_TA.pdf'; created = '2026-08-11T21:20:00' }
                 )
                 'Monatsabrechnungen' = @(
-                    @{ name = '202607_Monatsabrechnung.csv'; created = '2026-07-31T10:00:00' }
+                    @{ name = '202607_1014_KTO.pdf'; created = '2026-07-31T22:00:00' }
                 )
                 'Sonstiges' = @(
-                    @{ name = '202606_Rundschreiben.pdf'; created = '2026-06-04T09:12:00' }
+                    @{ name = '20260706_1014_OP.pdf'; created = '2026-07-06T10:12:00' }
+                )
+                'Mahnungen' = @(
+                    @{ name = '20260707_1014_MahnPos.csv'; created = '2026-07-07T09:05:00' }
+                )
+                'Einreichungen' = @(
+                    @{ name = '61-31.07.2026-19274_05.pdf'; created = '2026-07-31T14:30:00' }
                 )
             }
         }
@@ -172,9 +179,12 @@ Add-LimitlinieScenario -Name 'limitlinie-archive-all-folders' -Phases @(
             ExitCode = 0
             ArchiveFiles = @(
                 '2026/08 August/20260811_1014_Limitlinie.csv',
-                '2026/07 Juli/20260729_1014_Limitlinie.csv',
-                '2026/07 Juli/202607_Monatsabrechnung.csv',
-                '2026/06 Juni/202606_Rundschreiben.pdf'
+                '2026/08 August/20260811_1014_FinJournal.csv',
+                '2026/08 August/20260811_1014_TA.pdf',
+                '2026/07 Juli/202607_1014_KTO.pdf',
+                '2026/07 Juli/20260706_1014_OP.pdf',
+                '2026/07 Juli/20260707_1014_MahnPos.csv',
+                '2026/07 Juli/61-31.07.2026-19274_05.pdf'
             )
             DownloadFiles = @('kundenlimits.csv')
             ReqLogContains = @(
@@ -182,9 +192,11 @@ Add-LimitlinieScenario -Name 'limitlinie-archive-all-folders' -Phases @(
                 '/api/v1/Documents/Tagesabrechnungen/list-document',
                 '/api/v1/Documents/Monatsabrechnungen/list-document',
                 '/api/v1/Documents/Sonstiges/list-document',
+                '/api/v1/Documents/Mahnungen/list-document',
+                '/api/v1/Documents/Einreichungen/list-document',
                 '/api/v1/Documents/Tagesabrechnungen/20260811_1014_Limitlinie.csv'
             )
-            OutputContains = @('Archive folders: Tagesabrechnungen, Monatsabrechnungen, Sonstiges')
+            OutputContains = @('Archive folders: Tagesabrechnungen, Monatsabrechnungen, Sonstiges, Mahnungen, Einreichungen')
         }
     }
 )
@@ -201,7 +213,8 @@ Add-LimitlinieScenario -Name 'limitlinie-archive-config-folders' -Phases @(
                     @{ name = '20260811_1014_Limitlinie.csv'; created = '2026-08-11T21:25:08' }
                 )
                 'Monatsabrechnungen' = @(
-                    @{ name = '202607_Monatsabrechnung.csv'; created = '2026-07-31T10:00:00' }
+                    @{ name = '202607_1014_KTO.pdf'; created = '2026-07-31T22:00:00' },
+                    @{ name = '202607_1014_SAB.pdf'; created = '2026-07-31T22:01:00' }
                 )
             }
         }
@@ -209,7 +222,7 @@ Add-LimitlinieScenario -Name 'limitlinie-archive-config-folders' -Phases @(
         Expect = @{
             ExitCode = 0
             ArchiveFiles = @('2026/08 August/20260811_1014_Limitlinie.csv')
-            ArchiveAbsent = @('2026/07 Juli/202607_Monatsabrechnung.csv')
+            ArchiveAbsent = @('2026/07 Juli/202607_1014_KTO.pdf', '2026/07 Juli/202607_1014_SAB.pdf')
             DownloadFiles = @('kundenlimits.csv')
             OutputContains = @('Archive folders: Tagesabrechnungen')
         }
@@ -290,13 +303,13 @@ Add-LimitlinieScenario -Name 'limitlinie-missing-candidate-fails' -Phases @(
             Folders = @('Tagesabrechnungen')
             Files = @{
                 'Tagesabrechnungen' = @(
-                    @{ name = '20260811_Rundschreiben.pdf'; created = '2026-08-11T09:00:00' }
+                    @{ name = '20260811_1014_TA.pdf'; created = '2026-08-11T09:00:00' }
                 )
             }
         }
         Expect = @{
             ExitCode = 1
-            ArchiveFiles = @('2026/08 August/20260811_Rundschreiben.pdf')
+            ArchiveFiles = @('2026/08 August/20260811_1014_TA.pdf')
             DownloadFiles = @()
             OutputContains = @('No file ending in')
         }
