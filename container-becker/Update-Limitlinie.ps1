@@ -217,11 +217,19 @@ function Get-GermanMonthFolder {
     return ('{0:00} {1}' -f $Month, $names[$Month - 1])
 }
 
-# Target archive path for one document: <ArchiveDir>/<yyyy>/Ordner/Crefo/<MM Monthname>/
-function Get-ArchiveTargetPath {
+# Created timestamp of a document; used both for the archive path and for
+# preserving the original file date on disk.
+function Get-CrefoCreatedDate {
     param([object]$Doc)
     $created = try { [datetime]$Doc.created } catch { $null }
     if ($null -eq $created) { throw "Document '{0}' has an unparseable created timestamp: {1}" -f $Doc.name, $Doc.created }
+    return $created
+}
+
+# Target archive path for one document: <ArchiveDir>/<yyyy>/Ordner/Crefo/<MM Monthname>/
+function Get-ArchiveTargetPath {
+    param([object]$Doc)
+    $created = Get-CrefoCreatedDate -Doc $Doc
     return Join-Path $script:archiveDir ("{0:0000}" -f $created.Year) 'Ordner' 'Crefo' (Get-GermanMonthFolder -Month $created.Month)
 }
 
@@ -257,6 +265,7 @@ else {
         foreach ($doc in $folderDocs) {
             if (-not $doc.name) { continue }
             $name = [string]$doc.name
+            $created = Get-CrefoCreatedDate -Doc $doc
             $targetDir = Get-ArchiveTargetPath -Doc $doc
             $outFile   = Join-Path $targetDir $name
             New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
@@ -269,6 +278,7 @@ else {
                 Invoke-LimitlineApi -Path ("/api/v1/Documents/{0}/{1}" -f [uri]::EscapeDataString($folder), [uri]::EscapeDataString($name)) `
                     -Binary -OutFile $tmpFile
                 Move-Item -LiteralPath $tmpFile -Destination $outFile -Force
+                (Get-Item -LiteralPath $outFile).LastWriteTime = $created
                 $archiveTotal++
                 Write-Host ("  archived: {0} -> {1}" -f $name, $outFile)
             }
