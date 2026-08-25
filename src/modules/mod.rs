@@ -4,6 +4,7 @@ pub mod environment;
 pub mod file_entry;
 pub mod index_files;
 pub mod logging;
+pub mod near_duplicates;
 pub mod processes;
 pub mod progress;
 pub mod search_files;

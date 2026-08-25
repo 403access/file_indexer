@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
+      })();
+    </script>
+    <title>Near-Duplicate Folders - File Indexer</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <style>
+        .sim-bar-wrap { position: relative; min-width: 120px; }
+        .sim-bar { height: 8px; border-radius: 4px; background: var(--surface-3, rgba(128,128,128,.2)); overflow: hidden; }
+        .sim-bar__fill { height: 100%; background: var(--green, #34c77b); }
+        .sim-bar-wrap span { font-size: 0.82rem; opacity: 0.85; }
+        .nd-filter-bar { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-bottom: 1rem; }
+        .nd-filter-bar input[type="text"], .nd-filter-bar input[type="number"] {
+            padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--border, #444);
+            background: var(--surface-2, transparent); color: inherit;
+        }
+        .nd-paths { display: flex; flex-direction: column; gap: 2px; }
+        .nd-path-a { font-weight: 600; }
+        .nd-delta-stats { display: flex; gap: 1rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+        .nd-delta-stat { padding: 0.35rem 0.75rem; border-radius: 6px; background: var(--surface-3, rgba(128,128,128,.15)); font-size: 0.9rem; }
+        .nd-delta-stat strong { display: block; font-size: 1.1rem; }
+        .nd-section-title { margin: 0.75rem 0 0.25rem; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.7; }
+        .nd-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 90;
+            display: flex; align-items: center; justify-content: center; }
+        .nd-modal { width: min(860px, 94vw); max-height: 86vh; overflow-y: auto; padding: 1.25rem 1.5rem;
+            border-radius: 12px; background: var(--surface-1, #1c1c1e); box-shadow: 0 12px 40px rgba(0,0,0,.45); }
+        .nd-modal h2 { margin-top: 0; }
+        .nd-close { float: right; background: none; border: none; color: inherit; font-size: 1.5rem; cursor: pointer; line-height: 1; }
+        .nd-table td { vertical-align: middle; }
+        .needs-refresh-note { padding: 0.6rem 1rem; border-radius: 8px; background: rgba(255,180,60,.12);
+            border: 1px solid rgba(255,180,60,.35); margin-bottom: 1rem; }
+    </style>
+</head>
+<body>
+    <nav id="sidebar-container"></nav>
+
+    <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Near-Duplicate Folders</h1>
+                <p class="page-header__subtitle">Folder trees sharing most of their content (80%+ match)</p>
+            </div>
+        </header>
+
+        <div class="nd-filter-bar toolbar">
+            <input type="text" id="filter-input" placeholder="Filter by folder path..." onkeydown="if(event.key==='Enter')applyFilter()">
+            <label class="filter-number">
+                Min similarity:
+                <input type="number" id="min-sim-input" min="50" max="100" step="1" value="80" onchange="applyFilter()"> %
+            </label>
+            <label class="filter-number">
+                Max similarity:
+                <input type="number" id="max-sim-input" min="50" max="100" step="1" value="" placeholder="—" onchange="applyFilter()"> %
+            </label>
+            <button type="button" class="btn btn--sm" onclick="applyFilter()">Apply</button>
+        </div>
+
+        <div id="needs-refresh" class="needs-refresh-note" style="display:none;">
+            No near-duplicate pairs materialized yet. The
+            <a href="/pages/processes.html">Near-duplicate folders refresh</a> process fills this table.
+        </div>
+
+        <section class="results-info" id="results-info" style="display:none;">
+            <span id="result-count"></span>
+        </section>
+
+        <section class="results">
+            <div class="table-wrap" id="results-wrap" style="display:none;">
+                <table id="results-table" class="table nd-table">
+                    <thead>
+                        <tr>
+                            <th>Folders</th>
+                            <th>Similarity</th>
+                            <th>Shared</th>
+                            <th>Union</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body"></tbody>
+                </table>
+            </div>
+            <div id="no-results" class="empty-state" style="display:none;">
+                <div class="empty-state__title">No near-duplicate folders found</div>
+                <p class="empty-state__desc">Try lowering the minimum similarity</p>
+            </div>
+        </section>
+
+        <section class="pagination" id="pagination" style="display:none;">
+            <button type="button" id="prev-page" class="btn btn--secondary btn--sm" disabled>Previous</button>
+            <span id="page-info"></span>
+            <button type="button" id="next-page" class="btn btn--secondary btn--sm" disabled>Next</button>
+        </section>
+    </main>
+
+    <script>
+        const PER_PAGE = 20;
+        let currentPage = 1;
+
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function truncatePath(path) {
+            const parts = String(path).split('/').filter(Boolean);
+            if (parts.length <= 3) return '/' + parts.join('/');
+            return '/…/' + parts.slice(-2).join('/');
+        }
+
+        function applyFilter() {
+            currentPage = 1;
+            loadPage();
+        }
+
+        async function loadPage() {
+            const wrap = document.getElementById('results-wrap');
+            const body = document.getElementById('results-body');
+            const info = document.getElementById('results-info');
+            const count = document.getElementById('result-count');
+            const noResults = document.getElementById('no-results');
+            const pagination = document.getElementById('pagination');
+            const pageInfo = document.getElementById('page-info');
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
+            const needsRefresh = document.getElementById('needs-refresh');
+
+            const params = new URLSearchParams({
+                page: currentPage,
+                per_page: PER_PAGE,
+            });
+            const minSim = parseFloat(document.getElementById('min-sim-input').value);
+            if (!isNaN(minSim)) params.set('min_similarity', String(minSim / 100));
+            const maxSimRaw = document.getElementById('max-sim-input').value.trim();
+            if (maxSimRaw !== '') {
+                const maxSim = parseFloat(maxSimRaw);
+                if (!isNaN(maxSim)) params.set('max_similarity', String(maxSim / 100));
+            }
+            const q = document.getElementById('filter-input').value.trim();
+            if (q !== '') params.set('q', q);
+
+            try {
+                const res = await fetch(`/api/near-duplicate-folders?${params}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+
+                needsRefresh.style.display = data.needs_refresh ? 'block' : 'none';
+
+                if (!data.total_pairs && !data.needs_refresh) {
+                    noResults.style.display = 'block';
+                    wrap.style.display = 'none';
+                    info.style.display = 'none';
+                    pagination.style.display = 'none';
+                    return;
+                }
+                noResults.style.display = 'none';
+
+                count.textContent = `${data.total_pairs.toLocaleString()} near-duplicate pair${data.total_pairs === 1 ? '' : 's'}`;
+                info.style.display = 'block';
+                wrap.style.display = '';
+
+                body.innerHTML = data.pairs.map(row => `
+                    <tr>
+                        <td class="path">
+                            <div class="nd-paths">
+                                <span class="nd-path-a" title="${escapeHtml(row.folder_a)}">${escapeHtml(truncatePath(row.folder_a))}</span>
+                                <span title="${escapeHtml(row.folder_b)}">${escapeHtml(truncatePath(row.folder_b))}</span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="sim-bar-wrap">
+                                <div class="sim-bar"><div class="sim-bar__fill" style="width:${(row.similarity * 100).toFixed(1)}%"></div></div>
+                                <span>${(row.similarity * 100).toFixed(1)}%</span>
+                            </div>
+                        </td>
+                        <td>${row.shared_files.toLocaleString()}</td>
+                        <td>${row.union_files.toLocaleString()}</td>
+                        <td><button type="button" class="btn btn--secondary btn--sm"
+                                onclick="showDelta('${escapeHtml(row.folder_a).replace(/'/g, "\\'")}', '${escapeHtml(row.folder_b).replace(/'/g, "\\'")}')">Delta</button></td>
+                    </tr>
+                `).join('');
+
+                const totalPages = Math.max(1, Math.ceil(data.total_pairs / (data.per_page || PER_PAGE)));
+                if (totalPages > 1) {
+                    pagination.style.display = 'flex';
+                    pageInfo.textContent = `Page ${data.page} of ${totalPages}`;
+                    prevBtn.disabled = data.page <= 1;
+                    nextBtn.disabled = data.page >= totalPages;
+                } else {
+                    pagination.style.display = 'none';
+                }
+            } catch (err) {
+                noResults.style.display = 'block';
+                noResults.querySelector('.empty-state__title').textContent = 'Failed to load';
+                noResults.querySelector('.empty-state__desc').textContent = err.message;
+                wrap.style.display = 'none';
+                pagination.style.display = 'none';
+            }
+        }
+
+        async function showDelta(a, b) {
+            let overlay = document.getElementById('nd-modal-overlay');
+            if (overlay) overlay.remove();
+            overlay = document.createElement('div');
+            overlay.className = 'nd-modal-overlay';
+            overlay.id = 'nd-modal-overlay';
+            overlay.innerHTML = `
+                <div class="nd-modal">
+                    <button type="button" class="nd-close" onclick="document.getElementById('nd-modal-overlay').remove()">&times;</button>
+                    <h2>Folder Delta</h2>
+                    <div class="nd-paths">
+                        <span class="nd-path-a">A: ${escapeHtml(a)}</span>
+                        <span>B: ${escapeHtml(b)}</span>
+                    </div>
+                    <div id="nd-delta-body"><p>Loading…</p></div>
+                </div>`;
+            document.body.appendChild(overlay);
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) overlay.remove();
+            });
+
+            const bodyEl = document.getElementById('nd-delta-body');
+            try {
+                const res = await fetch(`/api/near-duplicate-folders/delta?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const d = await res.json();
+
+                const row = (f) => `<li title="${escapeHtml(f.hash)}">${escapeHtml(f.name)} <small>(${window.formatSize ? window.formatSize(f.size) : f.size})</small></li>`;
+                bodyEl.innerHTML = `
+                    <div class="nd-delta-stats">
+                        <div class="nd-delta-stat"><strong>${d.identical_count.toLocaleString()}</strong>identical</div>
+                        <div class="nd-delta-stat"><strong>${d.only_in_a.length.toLocaleString()}</strong>only in A</div>
+                        <div class="nd-delta-stat"><strong>${d.only_in_b.length.toLocaleString()}</strong>only in B</div>
+                        <div class="nd-delta-stat"><strong>${d.changed.length.toLocaleString()}</strong>changed</div>
+                    </div>
+                    ${d.only_in_a.length ? `<div class="nd-section-title">Only in A</div><ul>${d.only_in_a.map(row).join('')}</ul>` : ''}
+                    ${d.only_in_b.length ? `<div class="nd-section-title">Only in B</div><ul>${d.only_in_b.map(row).join('')}</ul>` : ''}
+                    ${d.changed.length ? `<div class="nd-section-title">Changed (same name, different content)</div><ul>${d.changed.map(row).join('')}</ul>` : ''}
+                `;
+            } catch (err) {
+                bodyEl.textContent = `Failed to load delta: ${err.message}`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('prev-page').addEventListener('click', () => {
+                if (currentPage > 1) { currentPage--; loadPage(); }
+            });
+            document.getElementById('next-page').addEventListener('click', () => {
+                currentPage++; loadPage();
+            });
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    const overlay = document.getElementById('nd-modal-overlay');
+                    if (overlay) overlay.remove();
+                }
+            });
+            loadPage();
+        });
+    </script>
+    <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
+    <script src="/assets/js/core/drawer.js"></script>
+    <script src="/assets/js/core/sidebar.js"></script>
+    <script src="/assets/js/core/status.js"></script>
+</body>
+</html>

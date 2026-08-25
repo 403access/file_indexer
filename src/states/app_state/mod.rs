@@ -18,6 +18,8 @@ pub struct AppState {
     pub enable_dashboard_refresh: bool,
     /// Whether duplicate folder groups refresh is enabled (ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH).
     pub enable_duplicate_folder_groups_refresh: bool,
+    /// Whether near-duplicate folder detection refresh is enabled (ENABLE_NEAR_DUPLICATE_FOLDERS_REFRESH).
+    pub enable_near_duplicate_folders_refresh: bool,
 }
 
 impl Default for AppState {
@@ -30,6 +32,7 @@ impl Default for AppState {
             enable_initial_dashboard_refresh: true,
             enable_dashboard_refresh: true,
             enable_duplicate_folder_groups_refresh: true,
+            enable_near_duplicate_folders_refresh: true,
         }
     }
 }
@@ -50,6 +53,7 @@ pub fn init(cwd: String, db: String) {
             enable_initial_dashboard_refresh: true,
             enable_dashboard_refresh: true,
             enable_duplicate_folder_groups_refresh: true,
+            enable_near_duplicate_folders_refresh: true,
         };
     });
 }

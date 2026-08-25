@@ -14,6 +14,7 @@ fn static_page_aliases() -> Router {
         ("/explorer.html", "static/pages/explorer.html"),
         ("/duplicates.html", "static/pages/duplicates.html"),
         ("/duplicate-folders.html", "static/pages/duplicate-folders.html"),
+        ("/near-duplicates.html", "static/pages/near-duplicates.html"),
         ("/skipped.html", "static/pages/skipped.html"),
         ("/ignored.html", "static/pages/ignored.html"),
         ("/processes.html", "static/pages/processes.html"),
@@ -67,6 +68,7 @@ async fn main() {
         enable_initial_dashboard_refresh: file_indexer::modules::environment::env_vars::get_enable_initial_dashboard_refresh(),
         enable_dashboard_refresh: file_indexer::modules::environment::env_vars::get_enable_dashboard_refresh(),
         enable_duplicate_folder_groups_refresh: file_indexer::modules::environment::env_vars::get_enable_duplicate_folder_groups_refresh(),
+        enable_near_duplicate_folders_refresh: file_indexer::modules::environment::env_vars::get_enable_near_duplicate_folders_refresh(),
     };
 
     // Bind and start the HTTP server first so the UI is always reachable.
@@ -328,6 +330,83 @@ fn spawn_background_jobs(state: AppState, database_url: String) {
     } else {
         println!(
             "⏸️  Duplicate folder groups refresh disabled via ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH"
+        );
+    }
+
+    // Near-duplicate folder detection (MinHash + LSH)
+    if file_indexer::modules::environment::env_vars::get_enable_near_duplicate_folders_refresh() {
+        if stopped_in_db("near_duplicate_folders_refresh") {
+            println!("⏸️  Near-duplicate folders refresh skipped: stopped previously (set IGNORE_PROCESS_DATABASE_STATE=true to override)");
+        } else {
+            let nd_db = database_url.clone();
+            let nd_process_id = processes::register_controllable(
+                "Near-duplicate folders refresh",
+                "near-duplicates",
+                Some("Scheduled"),
+            );
+            tokio::spawn(async move {
+                loop {
+                    if processes::is_stopped(nd_process_id) {
+                        processes::fail(nd_process_id, "Stopped by user");
+                        break;
+                    }
+
+                    processes::update(
+                        nd_process_id,
+                        Some(10.0),
+                        Some("Scanning folders for near-duplicates..."),
+                    );
+
+                    let interval_secs = file_indexer::modules::environment::env_vars::get_near_duplicate_folders_refresh_interval()
+                        .max(30);
+
+                    let db = nd_db.clone();
+                    let min_sim = file_indexer::modules::environment::env_vars::get_near_duplicate_min_similarity();
+                    let ok = tokio::task::spawn_blocking(move || {
+                        let mut conn = file_indexer::modules::sql::database::get_connection(&db)?;
+                        let params =
+                            file_indexer::modules::sql::database::RefreshParams { min_similarity: min_sim, ..Default::default() };
+                        file_indexer::modules::sql::database::refresh_near_duplicate_folder_pairs(
+                            &mut conn, &params,
+                        );
+                        Ok::<(), rusqlite::Error>(())
+                    })
+                    .await;
+
+                    match ok {
+                        Ok(Ok(())) => {
+                            processes::update(
+                                nd_process_id,
+                                Some(100.0),
+                                Some(&format!(
+                                    "Near-duplicate pairs refreshed; next in {}s",
+                                    interval_secs
+                                )),
+                            );
+                        }
+                        Ok(Err(e)) => {
+                            processes::fail(nd_process_id, &e.to_string());
+                            break;
+                        }
+                        Err(e) => {
+                            processes::fail(nd_process_id, &e.to_string());
+                            break;
+                        }
+                    }
+
+                    processes::update(
+                        nd_process_id,
+                        None,
+                        Some(&format!("Waiting {}s until next refresh", interval_secs)),
+                    );
+
+                    tokio::time::sleep(std::time::Duration::from_secs(interval_secs)).await;
+                }
+            });
+        }
+    } else {
+        println!(
+            "⏸️  Near-duplicate folders refresh disabled via ENABLE_NEAR_DUPLICATE_FOLDERS_REFRESH"
         );
     }
 }
