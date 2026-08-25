@@ -36,6 +36,11 @@ pub struct NearDupConfig {
     /// Above this folder count the engine switches from the exact inverted
     /// index to the MinHash+LSH approximation.
     pub max_folders_for_inverted_index: usize,
+    /// Roll matching pairs upward: if the parents of both folders are still
+    /// similar enough, report the parent pair instead. Repeats until the
+    /// similarity would drop below `min_similarity`, so the reported pair is
+    /// the largest copied tree rather than its deepest subfolder.
+    pub collapse_ancestors: bool,
 }
 
 impl Default for NearDupConfig {
@@ -47,6 +52,7 @@ impl Default for NearDupConfig {
             min_folder_files: 2,
             max_bucket_size: 256,
             max_folders_for_inverted_index: 5_000,
+            collapse_ancestors: true,
         }
     }
 }
@@ -164,8 +170,93 @@ pub fn find_near_duplicate_pairs(
             }
         })
         .collect();
+
+    if cfg.collapse_ancestors {
+        pairs = collapse_to_ancestor_pairs(folders, pairs, cfg);
+    }
+
     pairs.sort_by(|x, y| y.similarity.total_cmp(&x.similarity));
     pairs
+}
+
+/// Roll each pair upward to the highest ancestor level that is still similar
+/// enough.
+///
+/// A full folder copy produces matches for *every* subfolder inside it; the
+/// user cares about the top of the copied tree, not its deepest leaf. For a
+/// verified pair `(A, B)` this walks both parent chains in lockstep: as long
+/// as `parent(A)` vs `parent(B)` still meets the similarity threshold (and
+/// the two don't overlap), the pair is replaced by its parents. Stops at the
+/// filesystem root or when similarity would fall below `min_similarity`.
+///
+/// Multiple child pairs that collapse onto the same ancestor pair are
+/// deduplicated.
+fn collapse_to_ancestor_pairs(
+    folders: &[FolderSet],
+    pairs: Vec<NearDupPair>,
+    cfg: &NearDupConfig,
+) -> Vec<NearDupPair> {
+    let by_path: HashMap<&str, usize> = folders
+        .iter()
+        .enumerate()
+        .map(|(i, f)| (f.path.as_str(), i))
+        .collect();
+
+    let mut seen: HashSet<(usize, usize)> = HashSet::new();
+    let mut collapsed: Vec<NearDupPair> = Vec::new();
+
+    for p in pairs {
+        let mut a = p.folder_a;
+        let mut b = p.folder_b;
+        let mut best = p;
+
+        loop {
+            let pa = parent_path(&folders[a].path);
+            let pb = parent_path(&folders[b].path);
+            let (Some(ia), Some(ib)) = (
+                pa.and_then(|p| by_path.get(p).copied()),
+                pb.and_then(|q| by_path.get(q).copied()),
+            ) else {
+                break;
+            };
+            if ia == ib || ia == b || ib == a {
+                break;
+            }
+            // Never merge into overlapping trees (one containing the other).
+            if is_prefix_path(&folders[ia].path, &folders[ib].path)
+                || is_prefix_path(&folders[ib].path, &folders[ia].path)
+            {
+                break;
+            }
+            let (sim, inter, union) = jaccard(&folders[ia].token_set, &folders[ib].token_set);
+            if sim < cfg.min_similarity {
+                break;
+            }
+            a = ia;
+            b = ib;
+            best = NearDupPair {
+                folder_a: a,
+                folder_b: b,
+                similarity: sim,
+                intersection: inter,
+                union,
+            };
+        }
+
+        let key = if a <= b { (a, b) } else { (b, a) };
+        if seen.insert(key) {
+            collapsed.push(best);
+        }
+    }
+    collapsed
+}
+
+fn parent_path(path: &str) -> Option<&str> {
+    path.rsplit_once('/').map(|(p, _)| p).filter(|p| !p.is_empty())
+}
+
+fn is_prefix_path(prefix: &str, path: &str) -> bool {
+    path.starts_with(prefix) && (path.len() == prefix.len() || path.as_bytes().get(prefix.len()) == Some(&b'/'))
 }
 
 /// Phase 1: inverted index candidate retrieval.
@@ -413,5 +504,75 @@ mod tests {
     fn empty_input_yields_no_pairs() {
         let pairs = find_near_duplicate_pairs(&[], &NearDupConfig::default());
         assert!(pairs.is_empty());
+    }
+
+    #[test]
+    fn collapses_to_top_of_copied_tree() {
+        // A whole tree was copied: both the parent and its subfolder match.
+        // The pair must be reported at the top level only.
+        let a_parent = FolderSet::new("/src/proj".into(), "proj".into(), 0u64..50);
+        let a_sub = FolderSet::new("/src/proj/sub".into(), "sub".into(), 100u64..110);
+        let b_parent = FolderSet::new("/dst/proj".into(), "proj".into(), 0u64..50);
+        let b_sub = FolderSet::new("/dst/proj/sub".into(), "sub".into(), 100u64..110);
+        let pairs =
+            find_near_duplicate_pairs(&[a_sub, b_sub, a_parent, b_parent], &NearDupConfig::default());
+        assert_eq!(pairs.len(), 1);
+        // Input slice: a_sub=0, b_sub=1, a_parent=2, b_parent=3 →
+        // collapsed onto the parent level (2, 3)
+        assert_eq!((pairs[0].folder_a, pairs[0].folder_b), (2, 3));
+    }
+
+    #[test]
+    fn collapse_stops_when_parents_differ() {
+        // Subfolders are identical but the parents contain mostly unrelated
+        // files — the pair must stay at the child level.
+        let mut a_parent_tokens: Vec<u64> = (0u64..50).collect();
+        a_parent_tokens.extend(500u64..540); // 40 unique files
+        let mut b_parent_tokens: Vec<u64> = (0u64..50).collect();
+        b_parent_tokens.extend(900u64..940); // 40 different unique files
+        let a_parent = FolderSet::new("/src/proj".into(), "proj".into(), a_parent_tokens);
+        let a_sub = FolderSet::new("/src/proj/sub".into(), "sub".into(), 100u64..110);
+        let b_parent = FolderSet::new("/dst/proj".into(), "proj".into(), b_parent_tokens);
+        let b_sub = FolderSet::new("/dst/proj/sub".into(), "sub".into(), 100u64..110);
+        // Parent similarity: 50 shared / 130 union ≈ 0.38 < 0.8
+        let pairs =
+            find_near_duplicate_pairs(&[a_parent, b_parent, a_sub, b_sub], &NearDupConfig::default());
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].intersection, 10); // the subfolder files
+        assert!(pairs[0].similarity > 0.99);
+    }
+
+    #[test]
+    fn collapse_dedupes_children_of_one_copy() {
+        // One copied tree with several matching subfolders collapses onto a
+        // single top-level pair.
+        let a = FolderSet::new("/src/tree".into(), "tree".into(), 0u64..30);
+        let a_s1 = FolderSet::new("/src/tree/s1".into(), "s1".into(), 100u64..110);
+        let a_s2 = FolderSet::new("/src/tree/s2".into(), "s2".into(), 200u64..210);
+        let b = FolderSet::new("/dst/tree".into(), "tree".into(), 0u64..30);
+        let b_s1 = FolderSet::new("/dst/tree/s1".into(), "s1".into(), 100u64..110);
+        let b_s2 = FolderSet::new("/dst/tree/s2".into(), "s2".into(), 200u64..210);
+        let pairs = find_near_duplicate_pairs(
+            &[a, b, a_s1, b_s1, a_s2, b_s2],
+            &NearDupConfig::default(),
+        );
+        assert_eq!(pairs.len(), 1);
+        assert_eq!(pairs[0].intersection, 30);
+    }
+
+    #[test]
+    fn collapse_can_be_disabled() {
+        let cfg = NearDupConfig {
+            collapse_ancestors: false,
+            ..Default::default()
+        };
+        let a_parent = FolderSet::new("/src/proj".into(), "proj".into(), 0u64..50);
+        let a_sub = FolderSet::new("/src/proj/sub".into(), "sub".into(), 100u64..110);
+        let b_parent = FolderSet::new("/dst/proj".into(), "proj".into(), 0u64..50);
+        let b_sub = FolderSet::new("/dst/proj/sub".into(), "sub".into(), 100u64..110);
+        let pairs =
+            find_near_duplicate_pairs(&[a_parent, b_parent, a_sub, b_sub], &cfg);
+        // Both levels reported independently
+        assert_eq!(pairs.len(), 2);
     }
 }
