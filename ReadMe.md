@@ -1,141 +1,140 @@
-Goal:
-- Delete duplicate files
-- Resolve difference of similar directories
+# 🦀 File Indexer
 
-Tasks
-- Index all files
-  - File Path
-  - Directory Path
-  - Name
-  - File Size
-  - File Creation Date (-Time)
-  - File Modification Date (-Time)
-  - Custom Hash
-  - Child count (if a folder)
-  - Database related
-    - parent directory index number (separate table)
-- Find duplicate files
-- Show duplicate files
-  - Sort by highest amount of occurrences
-  - Filter files by
-    - name
-    - extension
-    - file size
-  - Show similar file and folder structures:
-    
-    ~WHAT~
-    Sometimes the same files and folders are copied to multiple locations.
-    Some of those copied items can then be modified by changing their content.
+A fast local file indexer written in Rust. Index terabyte-sized archives into
+SQLite, find exact duplicates and near-duplicate folder trees, and manage
+everything through a built-in web UI.
 
-    ~HOW~
-    There are essentially two scenarios.
+> **Goal:** find all duplicate files, delete them safely, and resolve the
+> differences between similar directories — while keeping already-organized
+> folders intact.
 
-    Scenario 1:
-    This might be the faster scenario since we start by looking at folders first.
-    ...
+## ✨ Features
 
-    Scenario 2:
-    For each file
+### Indexing
 
-    ~Notes~
-    The same way we have a table for files with their hashes that are used as foreign keys
-    within other tables referencing those files, we need to have a table folders
+- 🔁 **Incremental scan** — folders with an unchanged mtime are skipped, so
+  re-indexing after startup resumes almost instantly
+- 💾 **SQLite storage** — WAL mode, indexed lookups, normalized file names
+- ⚡ **Sampled SHA-256 hashing** — size + first/last 4 KB per file, so
+  multi-gigabyte files don't need full reads
+- 🚫 Ignore rules for `.git`, `node_modules`, etc., with skipped-path tracking
 
-    ~Features~
-    - Diffing View
-    Show a tabled tree view (in html) similar to:
+### Duplicate detection
 
-```
-    Name                    Version a             Version b
-                            Path                  Path
+| Level | What it finds | How |
+|-------|---------------|-----|
+| Files | Identical content across the whole index | Shared-hash lookup (`duplicate_hashes`) |
+| Folders | Folders whose entire content is duplicated | Union-find over shared duplicate files |
+| Near-duplicate folders | Folder trees sharing 80–99% of their content despite renames, edits, additions or deletions | Inverted index + MinHash signatures + banded LSH, verified with exact Jaccard similarity |
 
-    |-sample-directory      /sample-directory
-    |  |-file-a             ✅ /file-a                 🚫 -
-    |  |-folder-c           ✅ /folder-c               ⚠️ /renamed-folder-c
-    |  |  |-file-c-1
-    |  |  |-folder-d
-    |  |  |  |-folder-b
-    |  |  |  |  |-file-b-1
-    |  |  |  |-folder-a
-    |  |  |  |  |-file-a-2
-    |  |  |  |  |-file-a-1
-```
+Near-duplicate detection scales past O(N²) pairwise comparison: candidate
+pairs come from LSH band collisions (large corpora) or exact posting-list
+walks (small corpora), and only survivors are verified. Generic noise files
+(`.DS_Store`, `package-lock.json`, `__init__.py`, …) are excluded from folder
+signatures so they can't inflate similarity scores.
 
-- Delete duplicate files
+For every near-duplicate pair the UI reports a concrete delta:
+files only in A, only in B, changed (same name, different hash), identical.
 
-My Goal:
-- find all duplicate files and delete them
-- make sure to organize the files and try to keep the already organized ones
+### Web UI
 
-# 🦀 Rust File Indexer
+Light / dark / system themes, sidebar or topbar layout:
 
-A minimal and fast local file indexer written in Rust.
+- **Dashboard** — live index statistics
+- **Search** — filename search
+- **Explorer** — browse the indexed tree, with duplicate flags per entry
+- **Duplicates → Files / Folders / Near-Dupes** — three levels of dedup views
+- **Processes** — monitor every background job with pause/resume/stop/trigger
+- **Logs / Skipped / Ignored / Settings**
 
-## ✅ Features
+Background processes run on configurable intervals and persist their
+"stopped by user" state in the database across restarts.
 
-- 🔁 Incremental scan (skips unchanged files)
-- 💾 SQLite database storage with unique constraints
-- 🔍 Search by filename using LIKE queries
-- ⚡ Fast hashing with Blake3
-- 🧱 Cross-platform (Windows, macOS, Linux)
-- 🌐 Web UI with light / dark / system themes and a shared design system
-- 🧪 Easily extendable (tagging, content indexing, UI components)
-- 📊 Materialized duplicate folder groups with background refresh
-- 📋 Process monitoring with pause/resume/stop controls
+## 📄 Stored metadata
 
-## 📄 Stored Metadata
-
-| Field    | Description            |
-| -------- | ---------------------- |
-| path     | Full absolute path     |
-| name     | Filename only          |
-| size     | File size in bytes     |
-| modified | UNIX timestamp (float) |
-| hash     | BLAKE3 content hash    |
+| Field      | Description                        |
+| ---------- | ---------------------------------- |
+| path       | Full absolute path                 |
+| parent     | Parent directory path              |
+| name       | Filename (normalized in its own table) |
+| size       | File size in bytes                 |
+| modified   | UNIX timestamp                     |
+| hash       | Sampled SHA-256 content hash       |
+| traversed  | Whether a directory was fully scanned |
 
 ## 🏗️ Setup
 
-### Environment Variables file
+```bash
+git clone <repo>
+cd file_indexer
+cp example.env .env   # then edit .env
+```
 
-- Copy and paste `.example.env`
-- Rename the newly created file to `.env`
-- Make sure the variables are set properly.
-
-### Available Environment Variables
+### Environment variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CWD` | current directory | Working directory to index |
-| `PORT` | `3000` | HTTP API server port |
+| `CWD` | current directory | Directory to index |
+| `PORT` | `3000` | HTTP server port |
 | `DATABASE_URL` | derived from `CWD` | SQLite database path |
-| `ENABLE_STARTUP_INDEXING` | `true` | Run automatic indexing at startup |
-| `ENABLE_DASHBOARD_REFRESH` | `true` | Enable periodic dashboard stats refresh |
-| `ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH` | `true` | Enable background materialization of duplicate folder groups |
-| `DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL` | `120` | Refresh interval in seconds for duplicate folder groups |
+| `ENABLE_STARTUP_INDEXING` | `true` | Index automatically at startup |
+| `ENABLE_INITIAL_DASHBOARD_REFRESH` | `true` | One-time dashboard refresh at startup |
+| `ENABLE_DASHBOARD_REFRESH` | `true` | Periodic dashboard stats refresh |
+| `ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH` | `true` | Materialize duplicate folder groups |
+| `DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL` | `120` | Interval in seconds |
+| `ENABLE_NEAR_DUPLICATE_FOLDERS_REFRESH` | `true` | MinHash/LSH near-duplicate scan |
+| `NEAR_DUPLICATE_FOLDERS_REFRESH_INTERVAL` | `300` | Interval in seconds |
+| `NEAR_DUPLICATE_MIN_SIMILARITY` | `0.8` | Jaccard threshold (0.05–1.0) |
+| `IGNORE_PROCESS_DATABASE_STATE` | `false` | Start jobs even if stopped in DB |
+
+**Indexing-only mode** (e.g. first ingest of a huge archive):
+
+```env
+ENABLE_STARTUP_INDEXING=true
+ENABLE_INITIAL_DASHBOARD_REFRESH=false
+ENABLE_DASHBOARD_REFRESH=false
+ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH=false
+ENABLE_NEAR_DUPLICATE_FOLDERS_REFRESH=false
+IGNORE_PROCESS_DATABASE_STATE=true
+```
+
+See [docs/NIXOS.md](docs/NIXOS.md) for running it as a NixOS systemd service.
 
 ## 📦 Build & Run
 
 ```bash
-cargo run --release
-
 cargo build --release
 ./target/release/file_indexer
 ```
 
-Then open the UI in a browser (default port from `PORT`, typically `http://localhost:3000`).
+Then open `http://localhost:3000`.
 
-Use the sun / moon / monitor controls in the sidebar footer to switch **light**, **dark**, or **system** theme.
+## 🔌 API
+
+Selected endpoints (all JSON):
+
+```
+GET  /api/dashboard                      GET  /api/duplicates
+GET  /api/search?q=                      GET  /api/duplicate-folders
+GET  /api/folder?path=                   GET  /api/near-duplicate-folders
+GET  /api/explorer?path=                       ?min_similarity=&max_similarity=&q=
+GET  /api/skipped                        GET  /api/near-duplicate-folders/delta?a=&b=
+GET  /api/processes                      POST /api/processes/{id}/trigger
+GET  /api/logs                           POST /api/processes/types/{key}/enable
+GET  /api/settings                       GET  /api/status
+```
 
 ## 🎨 Web UI & design system
 
-Static assets live under `static/`. There is no frontend bundler.
+Static assets live under `static/` — no frontend bundler.
 
 | Doc | Contents |
 |-----|----------|
 | [docs/UI.md](docs/UI.md) | Themes, tokens, components, Drawer API, page checklist |
 | [docs/PROJECT.md](docs/PROJECT.md) | Architecture and product overview |
+| [docs/NIXOS.md](docs/NIXOS.md) | NixOS deployment guide |
 
-**Quick conventions**
+Quick conventions:
 
 - Link `tokens.css` → `components.css` → `style.css` on every page
 - Prefer CSS variables (`var(--accent)`) over hardcoded colors
@@ -149,31 +148,5 @@ Static assets live under `static/`. There is no frontend bundler.
 cargo test
 ```
 
-## 📋 High level tasks
-- Traverse given directory
-- Store all files and directories in database
-    - file name is a separate table "file_names"
-    - "files" table contains the following columns:
-      - file_name_id
-      - file_kind: either "file" or "folder"
-      - traversed: boolean (true is default value) / timestamp (null is default value)
-        - some directories like .git, .next, node_modules und vendors should be skipped
-        - directories can be traversed at any time later
-      - size: file size in bytes
-      - modified: timestamp or default null? Not sure about that
-      - hash: whatever makes sense
-- better logging
-  - https://docs.rs/env_logger/latest/env_logger/
-
-## 🧰 Tools
-
-### AI
-
-[Gemini](https://github.com/google-gemini/gemini-cli)
-
-```
-npx @google/gemini-cli
-```
-
-
-find ./data | sed -e "s/[^-][^\/]*\//  |/g" -e "s/|\([^ ]\)/|-\1/"
+Includes unit tests for the MinHash/LSH engine (Jaccard math, LSH recall,
+threshold filtering), SQL layers, and process management.
