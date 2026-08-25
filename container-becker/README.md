@@ -101,3 +101,27 @@ pwsh -File Migrate-ArchiveRunStamp.ps1 -ArchiveDir data/archive -DryRun
 pwsh -File Migrate-ArchiveRunStamp.ps1 -ArchiveDir data/archive
 ```
 
+
+## Short
+
+Based only on the Swagger spec, here's how to build that CSV:
+Endpoints used
+CSV column	Source
+Kto-Nr.	GET /api/v1/DebitorAccounts/list-debitor → items[].id
+Name1	list-debitor → items[].name
+Limit	GET /api/v1/DebitorAccounts/{debitor}/risk → limit (thousand EUR, ×1000 on export)
+LimitKennz	risk → limitCode (empty → write N)
+Gekauft	risk → purchasedReceivables
+freie Linie	computed = limit × 1000 − purchasedReceivables
+Procedure
+1. Authenticate — POST /connect/token (form body: grant_type=password, username, password, client_id, client_secret, optional obligonumber). Use the returned access_token as Authorization: Bearer ....
+2. List accounts — call list-debitor paged (page, pagesize), follow header.totalPages, collect (id, name).
+3. Per-account risk — for each id, call /DebitorAccounts/{id}/risk. The response is an array; take the first element. Read limit, limitCode, purchasedReceivables (optionally balance).
+4. Compute freie Linie = limit × 1000 − purchasedReceivables (or limit × 1000 − balance if you want free-from-current-balance instead).
+5. Serialize — semicolon separator, decimal comma (0,00), a header row Kto-Nr.;Name1;Limit;LimitKennz;Gekauft;freie Linie, UTF-8 with BOM (Excel-friendly).
+Gotchas from the spec
+- No bulk limit endpoint exists — the only per-debtor limit/purchase source is /risk, so you need one request per debitor (N+2 requests total). Only /last-limit-decisions (bulk currentLimit/limitCode) and /open-limit-desires exist as cheap bulk alternatives, but neither has purchasedReceivables.
+- DebtorInfoDto.limitInCents is on /DebitorAccounts/{debitor} if you want the limit without /risk, but it lacks Gekauft.
+- limitCode/several fields are nullable — default limit/purchased to 0,00 and LimitKennz to N.
+- Fields like limitCode from last-limit-decisions can be used to skip /risk for accounts with no limit context (write a zero row) to save requests.
+That exact logic is already implemented in this repo at container-becker/Start-CrefoExport.ps1 — I ignored it for this answer, but it matches the mapping above.
