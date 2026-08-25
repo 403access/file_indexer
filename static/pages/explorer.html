@@ -903,10 +903,14 @@
                             ? `<span class="folder-item__meta">${formatSize(item.size)}</span>`
                             : (item.traversed ? '<span class="folder-item__meta">Folder</span>' : '<span class="folder-item__meta badge badge--warning">Not indexed</span>')
                     : `<span class="folder-item__meta">${formatSize(item.size)}</span>`;
+                const dupBadge = item.has_duplicates
+                    ? `<span class="folder-item__meta badge badge--purple" title="${isDir ? 'This folder contains duplicated files' : 'This file is a duplicate'}">\u21BB Duplicates</span>`
+                    : '';
                 return `<div class="folder-item" onclick="${click}">
                     <span class="folder-item__icon">${icon}</span>
                     <span class="folder-item__name ${isDir ? 'dir' : 'file'}">${escapeHtml(item.name)}</span>
                     ${meta}
+                    ${dupBadge}
                     ${isDir ? '<span class="folder-item__chevron">\u203A</span>' : ''}
                 </div>`;
             }).join('');

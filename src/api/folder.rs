@@ -1,6 +1,7 @@
 use axum::extract::{Query, State};
 use axum::Json;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 use crate::api::offload;
 use crate::modules::sql::database::get_connection;
@@ -35,6 +36,10 @@ pub struct FolderEntry {
     pub hash: Option<String>,
     pub traversed: bool,
     pub traverse_error: Option<String>,
+    /// Whether this entry is connected to duplicates: for a folder, its
+    /// subtree contains at least one duplicate file; for a file, it is itself
+    /// a duplicate (its hash appears in `duplicate_hashes`).
+    pub has_duplicates: bool,
 }
 
 pub async fn folder_handler(
@@ -102,7 +107,7 @@ pub async fn folder_handler(
          ORDER BY f.is_directory DESC, fn.name ASC"
     ).map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    let entries: Vec<FolderEntry> = stmt.query_map([path], |row| {
+    let mut entries: Vec<FolderEntry> = stmt.query_map([path], |row| {
         let modified_f64: Option<f64> = row.get(3)?;
         Ok(FolderEntry {
             path: row.get(0)?,
@@ -114,11 +119,24 @@ pub async fn folder_handler(
             hash: row.get(6)?,
             traversed: row.get::<_, i32>(7)? != 0,
             traverse_error: row.get(8)?,
+            has_duplicates: false,
         })
     })
     .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
     .filter_map(|r| r.ok())
     .collect();
+
+    // Flag entries connected to duplicates:
+    //  - a file is a duplicate if its hash is in duplicate_hashes
+    //  - a folder contains duplicates if any file in its subtree is duplicated
+    let (dup_files, dup_dirs) = duplicate_flags(&conn, path);
+    for entry in &mut entries {
+        entry.has_duplicates = if entry.is_directory {
+            dup_dirs.contains(&entry.path)
+        } else {
+            dup_files.contains(&entry.path)
+        };
+    }
 
     let file_count = entries.iter().filter(|e| e.is_file).count();
     let folder_count = entries.iter().filter(|e| e.is_directory).count();
@@ -135,4 +153,65 @@ pub async fn folder_handler(
         files: entries,
     }))
     }).await
+}
+
+/// Returns two path sets for the children of `parent_path`:
+/// `(duplicate files, folders that contain duplicates in their subtree)`.
+///
+/// A file is a duplicate when its hash appears in `duplicate_hashes`. A folder
+/// is flagged when any file anywhere below it is a duplicate, so the user can
+/// drill into a folder from the folder view and keep finding the duplicated
+/// files. Guarded: if the `duplicate_hashes` table doesn't exist yet (fresh
+/// DB), both sets come back empty.
+fn duplicate_flags(
+    conn: &rusqlite::Connection,
+    parent_path: &str,
+) -> (HashSet<String>, HashSet<String>) {
+    let has_table: bool = conn
+        .query_row(
+            "SELECT EXISTS(
+                 SELECT 1 FROM sqlite_master WHERE type='table' AND name='duplicate_hashes'
+             )",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !has_table {
+        return (HashSet::new(), HashSet::new());
+    }
+
+    let mut dup_files: HashSet<String> = HashSet::new();
+    let dup_file_query = conn.prepare(
+        "SELECT f.path
+         FROM files f INDEXED BY idx_files_parent_path
+         JOIN duplicate_hashes d ON d.hash = f.hash
+         WHERE f.parent_path = ?1 AND f.is_file = 1",
+    );
+    if let Ok(mut stmt) = dup_file_query {
+        if let Ok(rows) = stmt.query_map([parent_path], |row| row.get::<_, String>(0)) {
+            dup_files = rows.filter_map(|r| r.ok()).collect();
+        }
+    }
+
+    let mut dup_dirs: HashSet<String> = HashSet::new();
+    // Instead of recursing the whole subtree (which is O(subtree size) and
+    // planning-fragile in SQLite for deep trees), walk only the duplicate
+    // files below `parent_path` and bucket each one under its direct child.
+    // Any direct child reached this way contains a duplicate somewhere below it.
+    let dup_dir_query = conn.prepare(
+        "SELECT DISTINCT ?1 || '/' || substr(f.path, length(?1) + 2,
+                              instr(substr(f.path, length(?1) + 2), '/') - 1)
+         FROM files f INDEXED BY idx_files_path
+         JOIN duplicate_hashes dh ON dh.hash = f.hash AND f.is_file = 1
+         WHERE f.path >= ?1 || '/' AND f.path < ?1 || char(127)
+           AND instr(substr(f.path, length(?1) + 2), '/') > 0",
+    );
+    if let Ok(mut stmt) = dup_dir_query {
+        if let Ok(rows) = stmt.query_map([parent_path], |row| row.get::<_, String>(0)) {
+            dup_dirs = rows.filter_map(|r| r.ok()).collect();
+        }
+    }
+
+    (dup_files, dup_dirs)
 }
