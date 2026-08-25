@@ -5,6 +5,7 @@ pub mod duplicate_folders_materialized;
 pub mod duplicates;
 pub mod files;
 pub mod logs;
+pub mod near_duplicate_folders;
 pub mod schema;
 pub mod search;
 pub mod settings;

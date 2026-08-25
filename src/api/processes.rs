@@ -33,6 +33,7 @@ type EnvFlags = (
     bool, // enable_initial_dashboard_refresh
     bool, // enable_dashboard_refresh
     bool, // enable_duplicate_folder_groups_refresh
+    bool, // enable_near_duplicate_folders_refresh
 );
 
 fn scheduled_type_env_enabled(flags: &EnvFlags, key: &str) -> bool {
@@ -42,6 +43,7 @@ fn scheduled_type_env_enabled(flags: &EnvFlags, key: &str) -> bool {
         // periodic refresh; disabled only when both env vars are off.
         "dashboard_refresh" => flags.1 || flags.2,
         "duplicate_folder_groups_refresh" => flags.3,
+        "near_duplicate_folders_refresh" => flags.4,
         _ => false,
     }
 }
@@ -69,6 +71,7 @@ pub async fn processes_handler(State(state): State<AppState>) -> Json<ProcessesR
         state.enable_initial_dashboard_refresh,
         state.enable_dashboard_refresh,
         state.enable_duplicate_folder_groups_refresh,
+        state.enable_near_duplicate_folders_refresh,
     );
     let disabled_types = offload(move || {
         let conn = get_connection(&db)
@@ -136,6 +139,7 @@ pub async fn enable_process_type_handler(
             state.enable_initial_dashboard_refresh,
             state.enable_dashboard_refresh,
             state.enable_duplicate_folder_groups_refresh,
+            state.enable_near_duplicate_folders_refresh,
         ),
         &key,
     );
@@ -216,7 +220,7 @@ pub async fn trigger_process_handler(
     let category = process.category.clone();
 
     match category.as_str() {
-        "dashboard" | "duplicate-folders" => {}
+        "dashboard" | "duplicate-folders" | "near-duplicates" => {}
         _ => {
             return Err((
                 axum::http::StatusCode::BAD_REQUEST,
@@ -243,7 +247,7 @@ pub async fn trigger_process_handler(
             Some("Manual trigger"),
         );
 
-        let conn = get_connection(&db).map_err(|e| {
+        let mut conn = get_connection(&db).map_err(|e| {
             processes::fail(process_id, &e.to_string());
             (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
         })?;
@@ -256,6 +260,19 @@ pub async fn trigger_process_handler(
             "duplicate-folders" => {
                 crate::modules::sql::database::refresh_duplicate_folder_groups(&conn);
                 processes::complete(process_id, Some("Duplicate folder groups refreshed"));
+            }
+            "near-duplicates" => {
+                let params = crate::modules::sql::database::RefreshParams {
+                    min_similarity: crate::modules::environment::env_vars::get_near_duplicate_min_similarity(),
+                    ..Default::default()
+                };
+                let count = crate::modules::sql::database::refresh_near_duplicate_folder_pairs(
+                    &mut conn, &params,
+                );
+                processes::complete(
+                    process_id,
+                    Some(&format!("Near-duplicate pairs refreshed: {count} pairs")),
+                );
             }
             _ => unreachable!(),
         }

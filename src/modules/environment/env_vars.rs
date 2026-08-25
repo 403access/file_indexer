@@ -12,6 +12,9 @@ pub struct EnvironmentVariables {
     pub enable_dashboard_refresh: bool,
     pub enable_duplicate_folder_groups_refresh: bool,
     pub duplicate_folder_groups_refresh_interval: u64,
+    pub enable_near_duplicate_folders_refresh: bool,
+    pub near_duplicate_folders_refresh_interval: u64,
+    pub near_duplicate_min_similarity: f64,
     pub ignore_process_database_state: bool,
 }
 
@@ -25,6 +28,9 @@ impl Default for EnvironmentVariables {
             enable_dashboard_refresh: true,
             enable_duplicate_folder_groups_refresh: true,
             duplicate_folder_groups_refresh_interval: 120,
+            enable_near_duplicate_folders_refresh: true,
+            near_duplicate_folders_refresh_interval: 300,
+            near_duplicate_min_similarity: 0.8,
             ignore_process_database_state: false,
         }
     }
@@ -89,6 +95,24 @@ pub fn load() {
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(120);
+
+        env_vars.enable_near_duplicate_folders_refresh = env::var("ENABLE_NEAR_DUPLICATE_FOLDERS_REFRESH")
+            .ok()
+            .and_then(|v| v.parse::<bool>().ok())
+            .unwrap_or(true);
+
+        env_vars.near_duplicate_folders_refresh_interval = env::var(
+            "NEAR_DUPLICATE_FOLDERS_REFRESH_INTERVAL",
+        )
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(300);
+
+        env_vars.near_duplicate_min_similarity = env::var("NEAR_DUPLICATE_MIN_SIMILARITY")
+            .ok()
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|v| v.clamp(0.05, 1.0))
+            .unwrap_or(0.8);
 
         env_vars.ignore_process_database_state = env::var("IGNORE_PROCESS_DATABASE_STATE")
             .ok()
@@ -155,6 +179,27 @@ pub fn get_enable_duplicate_folder_groups_refresh() -> bool {
 /// Reads the `DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL` environment variable.
 pub fn get_duplicate_folder_groups_refresh_interval() -> u64 {
     ENV_VARS.with(|vars| vars.borrow().duplicate_folder_groups_refresh_interval)
+}
+
+/// Whether near-duplicate folder detection refresh is enabled (default: true)
+///
+/// Reads the `ENABLE_NEAR_DUPLICATE_FOLDERS_REFRESH` environment variable.
+pub fn get_enable_near_duplicate_folders_refresh() -> bool {
+    ENV_VARS.with(|vars| vars.borrow().enable_near_duplicate_folders_refresh)
+}
+
+/// Interval in seconds for near-duplicate folders refresh (default: 300)
+///
+/// Reads the `NEAR_DUPLICATE_FOLDERS_REFRESH_INTERVAL` environment variable.
+pub fn get_near_duplicate_folders_refresh_interval() -> u64 {
+    ENV_VARS.with(|vars| vars.borrow().near_duplicate_folders_refresh_interval)
+}
+
+/// Minimum Jaccard similarity for near-duplicate pairs (default: 0.8)
+///
+/// Reads the `NEAR_DUPLICATE_MIN_SIMILARITY` environment variable.
+pub fn get_near_duplicate_min_similarity() -> f64 {
+    ENV_VARS.with(|vars| vars.borrow().near_duplicate_min_similarity)
 }
 
 /// Whether process start states persisted in the database should be ignored

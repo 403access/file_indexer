@@ -10,6 +10,7 @@ const SIDEBAR_ICONS = {
   explorer: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/></svg>`,
   duplicates: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="12" height="12" rx="1.5"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/></svg>`,
   folders: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h3.5l1.5 2H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"/><path d="M3 11h18"/></svg>`,
+  near: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2"/><path d="M13 7.5A1.5 1.5 0 0 1 14.5 6"/><path d="M17 10.5A1.5 1.5 0 0 1 18.5 12"/><rect x="3" y="9" width="11" height="11" rx="2"/></svg>`,
   skipped: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="m9 9 6 6M15 9l-6 6"/></svg>`,
   ignored: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 4 7v5c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7l-8-4z"/><path d="M9.5 12.5 11 14l3.5-3.5"/></svg>`,
   processes: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h14"/><circle cx="18" cy="12" r="2"/><circle cx="20" cy="18" r="2"/></svg>`,
@@ -36,6 +37,7 @@ const SIDEBAR_ITEMS = [
     links: [
       { href: '/pages/duplicates.html', label: 'Files', icon: 'duplicates' },
       { href: '/pages/duplicate-folders.html', label: 'Folders', icon: 'folders' },
+      { href: '/pages/near-duplicates.html', label: 'Near-Dupes', icon: 'near' },
     ],
   },
   {

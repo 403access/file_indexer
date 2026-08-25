@@ -18,6 +18,10 @@ pub use super::files::{
     UpsertResult,
 };
 pub use super::logs::{count_ignore_events, count_logs, get_logs, insert_log};
+pub use super::near_duplicate_folders::{
+    compute_pair_delta, create_near_duplicate_tables, refresh_near_duplicate_folder_pairs,
+    PairDelta, RefreshParams,
+};
 pub use super::schema::init_db;
 pub use super::settings::{
     get_ignore_list, get_ignore_rules, get_setting, is_process_stopped, set_ignore_list,

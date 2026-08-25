@@ -188,6 +188,7 @@ pub fn stopped_state_key(name: &str) -> Option<&'static str> {
         "Initial dashboard refresh" => Some("dashboard_refresh"),
         "Dashboard refresh" => Some("dashboard_refresh"),
         "Duplicate folder groups refresh" => Some("duplicate_folder_groups_refresh"),
+        "Near-duplicate folders refresh" => Some("near_duplicate_folders_refresh"),
         _ => None,
     }
 }
@@ -217,6 +218,11 @@ pub fn scheduled_process_types() -> Vec<ScheduledProcessType> {
             key: "duplicate_folder_groups_refresh",
             name: "Duplicate folder groups refresh",
             category: "duplicate-folders",
+        },
+        ScheduledProcessType {
+            key: "near_duplicate_folders_refresh",
+            name: "Near-duplicate folders refresh",
+            category: "near-duplicates",
         },
     ]
 }

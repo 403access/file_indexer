@@ -16,6 +16,7 @@ use self::folder::folder_handler;
 use self::index::index_handler;
 use self::logs::logs_handler;
 use self::merge::merge_handler;
+use self::near_duplicate_folders::{near_duplicate_delta_handler, near_duplicate_folders_handler};
 use self::processes::{clear_processes_handler, enable_process_type_handler, pause_process_handler, process_logs_handler, processes_handler, resume_process_handler, stop_process_handler, trigger_process_handler};
 use self::search::search_handler;
 use self::settings::{get_settings_handler, update_settings_handler};
@@ -33,6 +34,7 @@ pub mod folder;
 pub mod index;
 pub mod logs;
 pub mod merge;
+pub mod near_duplicate_folders;
 pub mod processes;
 pub mod search;
 pub mod settings;
@@ -66,6 +68,8 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/duplicate-folders/files", get(folder_files_handler))
         .route("/api/duplicate-folders", get(duplicate_folders_handler))
         .route("/api/duplicate-folders/types", get(available_file_types_handler))
+        .route("/api/near-duplicate-folders", get(near_duplicate_folders_handler))
+        .route("/api/near-duplicate-folders/delta", get(near_duplicate_delta_handler))
         .route("/api/folders/check", post(check_folders_handler))
         .route("/api/tree", get(tree_handler))
         .route("/api/explorer", get(explorer_handler))
