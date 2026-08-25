@@ -1,6 +1,71 @@
+Goal:
+- Delete duplicate files
+- Resolve difference of similar directories
+
+Tasks
+- Index all files
+  - File Path
+  - Directory Path
+  - Name
+  - File Size
+  - File Creation Date (-Time)
+  - File Modification Date (-Time)
+  - Custom Hash
+  - Child count (if a folder)
+  - Database related
+    - parent directory index number (separate table)
+- Find duplicate files
+- Show duplicate files
+  - Sort by highest amount of occurrences
+  - Filter files by
+    - name
+    - extension
+    - file size
+  - Show similar file and folder structures:
+    
+    ~WHAT~
+    Sometimes the same files and folders are copied to multiple locations.
+    Some of those copied items can then be modified by changing their content.
+
+    ~HOW~
+    There are essentially two scenarios.
+
+    Scenario 1:
+    This might be the faster scenario since we start by looking at folders first.
+    ...
+
+    Scenario 2:
+    For each file
+
+    ~Notes~
+    The same way we have a table for files with their hashes that are used as foreign keys
+    within other tables referencing those files, we need to have a table folders
+
+    ~Features~
+    - Diffing View
+    Show a tabled tree view (in html) similar to:
+
+```
+    Name                    Version a             Version b
+                            Path                  Path
+
+    |-sample-directory      /sample-directory
+    |  |-file-a             ✅ /file-a                 🚫 -
+    |  |-folder-c           ✅ /folder-c               ⚠️ /renamed-folder-c
+    |  |  |-file-c-1
+    |  |  |-folder-d
+    |  |  |  |-folder-b
+    |  |  |  |  |-file-b-1
+    |  |  |  |-folder-a
+    |  |  |  |  |-file-a-2
+    |  |  |  |  |-file-a-1
+```
+
+- Delete duplicate files
+
 My Goal:
 - find all duplicate files and delete them
-- make sure to organize the files and try to keep the already organized one
+- make sure to organize the files and try to keep the already organized ones
 
 # 🦀 Rust File Indexer
 
@@ -13,7 +78,10 @@ A minimal and fast local file indexer written in Rust.
 - 🔍 Search by filename using LIKE queries
 - ⚡ Fast hashing with Blake3
 - 🧱 Cross-platform (Windows, macOS, Linux)
-- 🧪 Easily extendable (tagging, content indexing, UI)
+- 🌐 Web UI with light / dark / system themes and a shared design system
+- 🧪 Easily extendable (tagging, content indexing, UI components)
+- 📊 Materialized duplicate folder groups with background refresh
+- 📋 Process monitoring with pause/resume/stop controls
 
 ## 📄 Stored Metadata
 
@@ -25,6 +93,26 @@ A minimal and fast local file indexer written in Rust.
 | modified | UNIX timestamp (float) |
 | hash     | BLAKE3 content hash    |
 
+## 🏗️ Setup
+
+### Environment Variables file
+
+- Copy and paste `.example.env`
+- Rename the newly created file to `.env`
+- Make sure the variables are set properly.
+
+### Available Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CWD` | current directory | Working directory to index |
+| `PORT` | `3000` | HTTP API server port |
+| `DATABASE_URL` | derived from `CWD` | SQLite database path |
+| `ENABLE_STARTUP_INDEXING` | `true` | Run automatic indexing at startup |
+| `ENABLE_DASHBOARD_REFRESH` | `true` | Enable periodic dashboard stats refresh |
+| `ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH` | `true` | Enable background materialization of duplicate folder groups |
+| `DUPLICATE_FOLDER_GROUPS_REFRESH_INTERVAL` | `120` | Refresh interval in seconds for duplicate folder groups |
+
 ## 📦 Build & Run
 
 ```bash
@@ -34,7 +122,34 @@ cargo build --release
 ./target/release/file_indexer
 ```
 
-## High level tasks
+Then open the UI in a browser (default port from `PORT`, typically `http://localhost:3000`).
+
+Use the sun / moon / monitor controls in the sidebar footer to switch **light**, **dark**, or **system** theme.
+
+## 🎨 Web UI & design system
+
+Static assets live under `static/`. There is no frontend bundler.
+
+| Doc | Contents |
+|-----|----------|
+| [docs/UI.md](docs/UI.md) | Themes, tokens, components, Drawer API, page checklist |
+| [docs/PROJECT.md](docs/PROJECT.md) | Architecture and product overview |
+
+**Quick conventions**
+
+- Link `tokens.css` → `components.css` → `style.css` on every page
+- Prefer CSS variables (`var(--accent)`) over hardcoded colors
+- Use shared classes (`.btn`, `.card`, `.page-header`, `.table-wrap`, …)
+- Inject nav via `#sidebar-container` + `sidebar.js` (do not copy-paste menus)
+- Prefer `Drawer.create(…)` for new detail side panels
+
+## 🧪 Tests
+
+```bash
+cargo test
+```
+
+## 📋 High level tasks
 - Traverse given directory
 - Store all files and directories in database
     - file name is a separate table "file_names"
@@ -47,4 +162,18 @@ cargo build --release
       - size: file size in bytes
       - modified: timestamp or default null? Not sure about that
       - hash: whatever makes sense
-      - 
+- better logging
+  - https://docs.rs/env_logger/latest/env_logger/
+
+## 🧰 Tools
+
+### AI
+
+[Gemini](https://github.com/google-gemini/gemini-cli)
+
+```
+npx @google/gemini-cli
+```
+
+
+find ./data | sed -e "s/[^-][^\/]*\//  |/g" -e "s/|\([^ ]\)/|-\1/"

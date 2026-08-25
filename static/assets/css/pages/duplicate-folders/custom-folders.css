@@ -1,0 +1,142 @@
+/* Custom folder path panel and toggles */
+
+.custom-folders-panel {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 1.5rem;
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.custom-folders-head {
+    display: flex;
+    align-items: baseline;
+    gap: 0.75rem;
+}
+.custom-folders-head strong { font-size: 0.95rem; color: var(--text-primary); }
+.custom-folders-head span { font-size: 0.8rem; color: var(--text-muted); }
+.custom-folders-panel textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    resize: vertical;
+    min-height: 64px;
+}
+.custom-folders-panel textarea:focus {
+    outline: none;
+    border-color: var(--purple);
+    box-shadow: 0 0 0 2px rgba(142,68,173,0.15);
+}
+.custom-folders-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.custom-folders-mode {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.custom-folders-mode .mode-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+.toggle {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+}
+.toggle input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+.toggle-slider {
+    position: relative;
+    width: 34px;
+    height: 20px;
+    background: var(--border-default);
+    border-radius: 20px;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+.toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 16px;
+    width: 16px;
+    left: 2px;
+    top: 2px;
+    background: var(--bg-elevated);
+    border-radius: 50%;
+    transition: transform 0.2s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.toggle input:checked + .toggle-slider {
+    background: var(--purple);
+}
+.toggle input:checked + .toggle-slider::before {
+    transform: translateX(14px);
+}
+.toggle-text {
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+.custom-folders-hint {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+.custom-folder-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+}
+.custom-folder-row input {
+    flex: 1;
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    box-sizing: border-box;
+}
+.custom-folder-row input:focus {
+    outline: none;
+    border-color: var(--purple);
+    box-shadow: 0 0 0 2px rgba(142,68,173,0.15);
+}
+.custom-folder-remove {
+    background: var(--danger);
+    color: #fff;
+    border: none;
+    border-radius: var(--radius-sm);
+    width: 26px;
+    height: 26px;
+    cursor: pointer;
+    font-size: 1rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+.custom-folder-remove:hover {
+    background: var(--danger);
+}
+.add-folder-btn {
+    background: var(--text-muted);
+}
+.add-folder-btn:hover {
+    background: var(--text-muted);
+}

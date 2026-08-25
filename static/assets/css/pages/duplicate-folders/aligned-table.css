@@ -1,0 +1,75 @@
+/* Aligned multi-folder file table view */
+
+.aligned-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.aligned-table th {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-subtle);
+    border-bottom: 2px solid var(--border-default);
+    text-align: left;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.aligned-table th .th-path {
+    display: block;
+    font-weight: 400;
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.aligned-table td {
+    padding: 0.35rem 0.75rem;
+    border-bottom: 1px solid var(--bg-hover);
+    font-size: 0.85rem;
+    vertical-align: middle;
+}
+.aligned-table tr:hover td {
+    background: var(--bg-muted);
+}
+.aligned-table .file-cell {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    cursor: pointer;
+}
+.aligned-table .file-cell:hover {
+    color: var(--accent);
+}
+.aligned-table .file-cell .file-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.aligned-table .file-cell .file-size {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+.aligned-table td.empty-cell {
+    color: var(--border-default);
+    font-style: italic;
+    font-size: 0.8rem;
+}
+.align-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.align-toggle input {
+    cursor: pointer;
+}

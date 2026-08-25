@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
+      })();
+    </script>
+
+    <title>Duplicate Folders - File Indexer</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <link rel="stylesheet" href="/assets/css/pages/duplicate-folders.css">
+</head>
+<body>
+    <nav id="sidebar-container"></nav>
+
+    <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Duplicate Folders</h1>
+                <p class="page-header__subtitle">Folders that share duplicate file content</p>
+            </div>
+        </header>
+
+        <div class="filter-bar toolbar">
+            <input type="text" id="filter-input" placeholder="Filter by folder or file name..." onkeydown="if(event.key==='Enter')applyFilter()">
+            <label class="filter-number">
+                Min shared files:
+                <input type="number" id="min-shared-input" min="0" value="0" onchange="applyFilter()" title="Only show groups that share at least this many duplicate files">
+            </label>
+            <select id="min-folders" onchange="applyFilter()">
+                <option value="0">Any folder count</option>
+                <option value="2">2+ folders</option>
+                <option value="3">3+ folders</option>
+                <option value="4">4+ folders</option>
+                <option value="5">5+ folders</option>
+                <option value="10">10+ folders</option>
+            </select>
+            <label class="filter-number">
+                Min file size:
+                <input type="number" id="min-size-input" min="0" value="0" onchange="applyFilter()" title="Only show groups where each folder's files are at least this size">
+                <select id="min-size-unit" onchange="applyFilter()">
+                    <option value="1">B</option>
+                    <option value="1024">KB</option>
+                    <option value="1048576">MB</option>
+                    <option value="1073741824">GB</option>
+                    <option value="1099511627776">TB</option>
+                </select>
+            </label>
+            <div class="ft-select" id="ft-select">
+                <button type="button" class="merge-folders-btn ft-select-btn" onclick="toggleFileTypePanel()" >File types <span class="ft-count" id="ft-count"></span></button>
+                <div class="ft-panel" id="ft-panel" style="display:none;">
+                    <select id="ft-template" onchange="applyFileTypeTemplate()">
+                        <option value="">Custom</option>
+                        <option value="photo_album">Photo album</option>
+                        <option value="documents">Documents</option>
+                        <option value="video">Video</option>
+                        <option value="audio">Audio</option>
+                        <option value="code">Code</option>
+                        <option value="config">Config</option>
+                    </select>
+                    <div class="ft-actions">
+                        <button type="button" onclick="selectAllFileTypes()">Select all</button>
+                        <button type="button" onclick="unselectAllFileTypes()">Unselect all</button>
+                    </div>
+                    <div class="ft-list" id="ft-list"></div>
+                    <div class="ft-footer">
+                        <button type="button" class="ft-done" onclick="closeFileTypePanel()">Done</button>
+                    </div>
+                </div>
+            </div>
+            <select id="sort-select" onchange="applyFilter()">
+                <option value="shared">Sort: shared count</option>
+                <option value="folders">Sort: folder count</option>
+                <option value="name">Sort: folder name</option>
+                <option value="files">Sort: file count</option>
+            </select>
+            <select id="sort-dir" onchange="applyFilter()">
+                <option value="desc">High to low</option>
+                <option value="asc">Low to high</option>
+            </select>
+            <label class="align-toggle">
+                <input type="checkbox" id="align-files" onchange="applyFilter()">
+                Align shared files
+            </label>
+            <button type="button" class="btn btn--sm" onclick="applyFilter()">Search</button>
+        </div>
+        <div class="custom-folders-panel">
+            <div class="custom-folders-head">
+                <strong>Check &amp; merge custom folders</strong>
+                <span>Enter folder paths to compare them for duplicate content and merge.</span>
+            </div>
+
+            <div class="custom-folders-mode">
+                <span class="mode-label">Input mode</span>
+                <label class="toggle">
+                    <input type="checkbox" id="custom-folders-mode-toggle" onchange="toggleFolderInputMode()">
+                    <span class="toggle-slider"></span>
+                    <span class="toggle-text" id="custom-folders-mode-text">Paste list</span>
+                </label>
+            </div>
+
+            <div id="custom-folders-paste-mode">
+                <textarea id="custom-folders-input" rows="3" placeholder="/path/to/folder-one&#10;/path/to/folder-two&#10;/path/to/folder-three"></textarea>
+                <div class="custom-folders-hint">Paste folder paths, one per line.</div>
+            </div>
+
+            <div id="custom-folders-list-mode" style="display:none;">
+                <div id="custom-folder-rows"></div>
+                <button type="button" class="merge-folders-btn add-folder-btn" onclick="addFolderRow()">+ Add folder</button>
+                <div class="custom-folders-hint">Each row is one folder path.</div>
+            </div>
+
+            <div class="custom-folders-actions">
+                <button type="button" class="btn btn--sm" style="background:var(--purple)" onclick="checkCustomFolders()">Check &amp; Merge</button>
+            </div>
+        </div>
+        <div class="summary" id="summary"></div>
+        <div id="groups"></div>
+        <div class="pagination" id="pagination"></div>
+    </main>
+
+    <div class="merge-overlay" id="merge-overlay" style="display:none;">
+        <div class="merge-panel">
+            <div class="merge-header">
+                <h2>Merge Duplicate Folders</h2>
+                <div class="merge-view-toggle">
+                    <button class="merge-view-btn" id="view-summary-btn" onclick="setMergeView('summary')">Summary</button>
+                    <button class="merge-view-btn" id="view-list-btn" onclick="setMergeView('list')">List</button>
+                    <button class="merge-view-btn active" id="view-tree-btn" onclick="setMergeView('tree')">Tree</button>
+                </div>
+                <button class="merge-close" onclick="closeMerge()">&times;</button>
+            </div>
+            <div class="merge-dest">
+                <label>Destination:</label>
+                <input type="text" id="merge-dest-path" placeholder="/path/to/merged/output">
+            </div>
+            <div class="merge-body" id="merge-body"></div>
+            <div class="merge-footer">
+                <span class="merge-stats" id="merge-stats"></span>
+                <button class="merge-apply" id="merge-apply" onclick="applyMerge()">Apply Merge</button>
+            </div>
+        </div>
+    </div>
+
+        <script src="/assets/js/core/drawer.js"></script>
+    <script src="/assets/js/core/app.js"></script>
+    <script src="/assets/js/pages/duplicate-folders/utils.js"></script>
+    <script src="/assets/js/pages/duplicate-folders/filetypes.js"></script>
+    <script src="/assets/js/pages/duplicate-folders/custom-folders.js"></script>
+    <script src="/assets/js/pages/duplicate-folders/groups.js"></script>
+    <script src="/assets/js/pages/duplicate-folders/merge.js"></script>
+    <script src="/assets/js/pages/duplicate-folders/main.js"></script>
+    <script src="/assets/js/core/file-viewer.js">    </script>
+        <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
+    <script src="/assets/js/core/sidebar.js"></script>
+    <script src="/assets/js/core/status.js"></script>
+</body>
+</html>

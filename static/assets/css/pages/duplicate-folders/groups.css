@@ -1,0 +1,158 @@
+/* Duplicate folder groups — cards, folder columns, mini-trees, file rows */
+
+.group-card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+.group-header {
+    padding: 0.75rem 1rem;
+    background: var(--bg-muted);
+    border-bottom: 1px solid var(--border-subtle);
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+.group-header .badge {
+    background: var(--danger-muted);
+    color: var(--danger-text);
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--radius-lg);
+}
+.group-header .label {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+.folders-row {
+    display: flex;
+    gap: 0;
+    overflow-x: auto;
+}
+.folder-col {
+    flex: 1;
+    min-width: 250px;
+    border-right: 1px solid var(--border-subtle);
+    display: flex;
+    flex-direction: column;
+}
+.folder-col:last-child {
+    border-right: none;
+}
+.folder-col-files {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+.folder-col-header {
+    padding: 0.6rem 1rem;
+    background: var(--bg-subtle);
+    border-bottom: 1px solid var(--border-subtle);
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.folder-col-header .full-path {
+    display: block;
+    font-weight: 400;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    margin-top: 0.15rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.mini-tree {
+    padding: 0.5rem 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    line-height: 1.4;
+    background: var(--bg-muted);
+    border-bottom: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    flex: 1;
+}
+.mini-tree .tree-line {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+.mini-tree .tree-line.current {
+    color: var(--text-primary);
+    font-weight: 600;
+}
+.mini-tree .tree-prefix {
+    color: var(--text-muted);
+    user-select: none;
+    flex-shrink: 0;
+}
+.folder-file {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1rem;
+    border-bottom: 1px solid var(--bg-muted);
+    font-size: 0.85rem;
+}
+.folder-file:hover {
+    background: var(--bg-muted);
+}
+.folder-file.unique {
+    background: var(--bg-muted);
+    opacity: 0.6;
+}
+.folder-file.unique:hover {
+    opacity: 1;
+}
+.show-all-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-muted);
+    border-bottom: 1px solid var(--border-subtle);
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+.show-all-toggle:hover {
+    background: var(--bg-subtle);
+}
+.show-all-toggle input {
+    cursor: pointer;
+}
+.folder-file .file-icon {
+    font-size: 0.9rem;
+    width: 1.2rem;
+    text-align: center;
+    flex-shrink: 0;
+}
+.folder-file .file-name {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.folder-file .file-size {
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    flex-shrink: 0;
+}
+.hash-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}

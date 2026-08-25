@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
+      })();
+    </script>
+
+    <title>Logs - File Indexer</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <style>
+        .log-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .log-controls select, .log-controls input {
+            padding: 8px;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+        }
+        .log-controls input[type="text"] {
+            width: 220px;
+        }
+        /* buttons use .btn */
+        .log-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: var(--font-mono);
+        }
+        .log-table th, .log-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .log-table th {
+            background: var(--bg-subtle);
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+        }
+        .log-table th:hover {
+            background: var(--bg-hover);
+        }
+        .log-table tr:hover {
+            background: var(--bg-hover);
+        }
+        .level-error { color: var(--danger); font-weight: bold; }
+        .level-warn { color: var(--warning); font-weight: bold; }
+        .level-info { color: var(--info); }
+        .level-debug { color: var(--text-muted); }
+        .timestamp { color: var(--text-secondary); white-space: nowrap; }
+        .message { word-break: break-word; }
+        .indexed-row {
+            cursor: pointer;
+        }
+        .indexed-row:hover {
+            background: var(--accent-muted) !important;
+        }
+        .expand-icon {
+            display: inline-block;
+            width: 1rem;
+            text-align: center;
+            color: var(--text-muted);
+            transition: transform 0.15s;
+            flex-shrink: 0;
+        }
+        .expand-icon.open {
+            transform: rotate(90deg);
+        }
+        .file-list-row td {
+            padding: 0 !important;
+        }
+        .file-list {
+            padding: 0.25rem 1rem 0.5rem 2.5rem;
+            background: var(--bg-muted);
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 0.8rem;
+        }
+        .file-list-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.15rem 0;
+            color: var(--text-secondary);
+        }
+        .file-list-item .fl-name {
+            font-family: var(--font-mono);
+        }
+        .file-list-item .fl-size {
+            color: var(--text-muted);
+            margin-left: auto;
+            font-family: var(--font-mono);
+            font-size: 0.75rem;
+        }
+        .file-list-toggle {
+            font-size: 0.75rem;
+            color: var(--accent);
+            cursor: pointer;
+            border: none;
+            background: none;
+            padding: 0.15rem 0;
+            margin-top: 0.15rem;
+        }
+        .file-list-toggle:hover { text-decoration: underline; }
+        #no-results {
+            display: none;
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+        .auto-refresh {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .search-hint {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: -8px;
+            margin-bottom: 10px;
+        }
+
+        .logs-layout {
+            height: 100vh;
+            height: 100dvh;
+            min-height: 0;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 1.25rem;
+        }
+        .logs-layout > .page-header,
+        .logs-layout > .log-controls,
+        .logs-layout > .search-hint {
+            flex-shrink: 0;
+        }
+        .logs-layout .pagination {
+            flex-wrap: wrap;
+            row-gap: var(--space-2);
+            margin-top: 0;
+            margin-left: auto;
+        }
+        .logs-layout > .results {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+        .logs-layout .results .table-wrap {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        .log-table thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .pagination .page-btn {
+            padding: 0.35rem 0.7rem;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            font-family: inherit;
+            line-height: 1.2;
+            cursor: pointer;
+            transition: background var(--duration-fast) var(--ease-in-out), border-color var(--duration-fast) var(--ease-in-out);
+        }
+        .pagination .page-btn:hover:not(:disabled) {
+            background: var(--bg-subtle);
+            border-color: var(--accent);
+        }
+        .pagination .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        .pagination .page-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            font-weight: 600;
+        }
+        .pagination .page-ellipsis {
+            color: var(--text-muted);
+            padding: 0 0.15rem;
+            font-size: var(--font-size-sm);
+            user-select: none;
+        }
+        .pagination .page-info {
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            font-variant-numeric: tabular-nums;
+            margin-left: var(--space-2);
+        }
+        .pagination .page-jump {
+            width: 3.5rem;
+            padding: 0.2rem 0.4rem;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            font-family: inherit;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+        }
+        .pagination .page-jump:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <nav id="sidebar-container"></nav>
+
+    <main class="logs-layout">
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Logs</h1>
+                <p class="page-header__subtitle">Application and indexing event stream</p>
+            </div>
+        </header>
+
+        <section class="log-controls toolbar">
+            <label>Level:
+                <select id="level-filter">
+                    <option value="all">All</option>
+                    <option value="ERROR">Error</option>
+                    <option value="WARN">Warning</option>
+                    <option value="INFO">Info</option>
+                    <option value="DEBUG">Debug</option>
+                </select>
+            </label>
+            <label>Search:
+                <input type="text" id="search-filter" placeholder="message contains...">
+            </label>
+            <label>Limit:
+                <select id="limit-filter">
+                    <option value="50" selected>50</option>
+                    <option value="100">100</option>
+                    <option value="500">500</option>
+                    <option value="1000">1000</option>
+                    <option value="5000">5000</option>
+                </select>
+            </label>
+            <button type="button" class="btn btn--secondary btn--sm" id="sort-btn" onclick="toggleSort()">Timestamp ▼</button>
+            <button type="button" class="btn btn--sm" onclick="fetchLogs()">Refresh</button>
+            <div class="auto-refresh">
+                <input type="checkbox" id="auto-refresh" onchange="toggleAutoRefresh()">
+                <label for="auto-refresh">Auto-refresh (5s)</label>
+            </div>
+            <section class="pagination" id="pagination" style="display:none;"></section>
+        </section>
+        <div class="search-hint">Search: plain text = exact match, <code>prefix*</code> = starts with</div>
+
+        <section class="results">
+            <div class="table-wrap" id="results-wrap" style="display:none;"><table class="log-table table" id="results-table">
+                <thead>
+                    <tr>
+                        <th>Timestamp</th>
+                        <th>Level</th>
+                        <th>Message</th>
+                    </tr>
+                </thead>
+                <tbody id="results-body"></tbody>
+            </table></div>
+            <div id="no-results" class="empty-state" style="display:none;"><div class="empty-state__title">No logs found</div></div>
+        </section>
+    </main>
+
+    <script>
+        let refreshInterval = null;
+        let sortAsc = false;
+        let currentPage = 1;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchLogs();
+            document.getElementById('level-filter').addEventListener('change', () => { currentPage = 1; fetchLogs(); });
+            document.getElementById('limit-filter').addEventListener('change', () => { currentPage = 1; fetchLogs(); });
+            document.getElementById('search-filter').addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { currentPage = 1; fetchLogs(); }
+            });
+        });
+
+        function toggleSort() {
+            sortAsc = !sortAsc;
+            document.getElementById('sort-btn').textContent = sortAsc ? 'Timestamp ▲' : 'Timestamp ▼';
+            currentPage = 1;
+            fetchLogs();
+        }
+
+        async function fetchLogs() {
+            const limit = document.getElementById('limit-filter').value;
+            const level = document.getElementById('level-filter').value;
+            const search = document.getElementById('search-filter').value;
+            const sort = sortAsc ? 'asc' : 'desc';
+
+            try {
+                const params = new URLSearchParams({ limit, sort, page: currentPage });
+                if (level !== 'all') params.set('level', level);
+                if (search) params.set('search', search);
+
+                const res = await fetch(`/api/logs?${params}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const entries = data.entries || [];
+                const total = data.total ?? 0;
+                lastData = entries;
+
+                const resultsTable = document.getElementById('results-table');
+                const resultsBody = document.getElementById('results-body');
+                const noResults = document.getElementById('no-results');
+                const pagination = document.getElementById('pagination');
+
+                resultsBody.innerHTML = '';
+
+                const resultsWrap = document.getElementById('results-wrap');
+                if (entries.length === 0) {
+                    noResults.style.display = 'block';
+                    resultsTable.style.display = 'none';
+                    if (resultsWrap) resultsWrap.style.display = 'none';
+                    pagination.style.display = 'none';
+                    pagination.innerHTML = '';
+                    return;
+                }
+
+                noResults.style.display = 'none';
+                resultsTable.style.display = 'table';
+                if (resultsWrap) resultsWrap.style.display = '';
+
+                entries.forEach((log, idx) => {
+                    const isIndexed = log.files && log.files.length > 0;
+                    const tr = document.createElement('tr');
+                    if (isIndexed) {
+                        tr.className = 'indexed-row';
+                        tr.dataset.idx = idx;
+                        tr.onclick = () => toggleLogFile(idx);
+                    }
+                    tr.innerHTML = `
+                        <td class="timestamp">${isIndexed ? '<span class="expand-icon" id="icon-' + idx + '">\u25B6</span>' : ''}${escapeHtml(log.timestamp)}</td>
+                        <td class="level-${log.level.toLowerCase()}">${escapeHtml(log.level)}</td>
+                        <td class="message">${escapeHtml(log.message)}</td>
+                    `;
+                    resultsBody.appendChild(tr);
+
+                    if (isIndexed) {
+                        const fileRow = document.createElement('tr');
+                        fileRow.className = 'file-list-row';
+                        fileRow.id = 'files-' + idx;
+                        fileRow.style.display = 'none';
+                        const MAX_SHOW = 50;
+                        let fileHtml = '<td colspan="3"><div class="file-list">';
+                        const files = log.files;
+                        const shown = files.slice(0, MAX_SHOW);
+                        shown.forEach(f => {
+                            fileHtml += `<div class="file-list-item"><span class="fl-name">${escapeHtml(f.name)}</span><span class="fl-size">${formatSize(f.size)}</span></div>`;
+                        });
+                        if (files.length > MAX_SHOW) {
+                            fileHtml += `<button class="file-list-toggle" onclick="event.stopPropagation(); expandAllFiles(${idx}, ${files.length})">Show all ${files.length} files...</button>`;
+                        }
+                        fileHtml += '</div></td>';
+                        fileRow.innerHTML = fileHtml;
+                        resultsBody.appendChild(fileRow);
+                    }
+                });
+
+                const pageSize = data.limit || parseInt(limit, 10) || 50;
+                renderPagination(total, pageSize);
+            } catch (err) {
+                document.getElementById('no-results').textContent = 'Failed to load logs';
+                document.getElementById('no-results').style.display = 'block';
+                const pagination = document.getElementById('pagination');
+                if (pagination) { pagination.style.display = 'none'; pagination.innerHTML = ''; }
+            }
+        }
+
+        function toggleAutoRefresh() {
+            if (document.getElementById('auto-refresh').checked) {
+                refreshInterval = setInterval(() => {
+                    currentPage = 1;
+                    fetchLogs();
+                }, 5000);
+            } else {
+                clearInterval(refreshInterval);
+                refreshInterval = null;
+            }
+        }
+
+        const MAX_VISIBLE_PAGES = 5;
+
+        function buildPageWindow(totalPages) {
+            let startPage = Math.max(1, currentPage - Math.floor(MAX_VISIBLE_PAGES / 2));
+            let endPage = Math.min(totalPages, startPage + MAX_VISIBLE_PAGES - 1);
+            if (endPage - startPage < MAX_VISIBLE_PAGES - 1) {
+                startPage = Math.max(1, endPage - MAX_VISIBLE_PAGES + 1);
+            }
+            return { startPage, endPage };
+        }
+
+        function renderPagination(total, pageSize) {
+            const pagination = document.getElementById('pagination');
+            const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+            if (totalPages <= 1) {
+                pagination.style.display = 'none';
+                pagination.innerHTML = '';
+                return;
+            }
+
+            pagination.style.display = 'flex';
+            const { startPage, endPage } = buildPageWindow(totalPages);
+
+            let html = '';
+            html += `<button type="button" class="page-btn" onclick="goToPage(1)" ${currentPage === 1 ? 'disabled' : ''} aria-label="First page">&laquo;</button>`;
+            html += `<button type="button" class="page-btn" onclick="goToPage(${currentPage - 1})" ${currentPage === 1 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>`;
+
+            if (startPage > 1) {
+                html += `<button type="button" class="page-btn" onclick="goToPage(1)">1</button>`;
+                if (startPage > 2) html += '<span class="page-ellipsis" aria-hidden="true">&hellip;</span>';
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button type="button" class="page-btn${i === currentPage ? ' active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += '<span class="page-ellipsis" aria-hidden="true">&hellip;</span>';
+                html += `<button type="button" class="page-btn" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+            }
+
+            html += `<button type="button" class="page-btn" onclick="goToPage(${currentPage + 1})" ${currentPage === totalPages ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>`;
+            html += `<button type="button" class="page-btn" onclick="goToPage(${totalPages})" ${currentPage === totalPages ? 'disabled' : ''} aria-label="Last page">&raquo;</button>`;
+
+            html += `<span class="page-info">Page <input type="number" id="page-jump" class="page-jump" min="1" max="${totalPages}" value="${currentPage}" onkeydown="if (event.key === 'Enter') jumpToPage()" aria-label="Jump to page"> of ${totalPages} &middot; ${total.toLocaleString()} log${total === 1 ? '' : 's'}</span>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function goToPage(page) {
+            currentPage = page;
+            const wrap = document.getElementById('results-wrap');
+            if (wrap) wrap.scrollTop = 0;
+            fetchLogs();
+        }
+
+        function jumpToPage() {
+            const input = document.getElementById('page-jump');
+            if (!input) return;
+            const raw = input.value.trim();
+            if (!/^\d+$/.test(raw)) return;
+            const page = parseInt(raw, 10);
+            const max = parseInt(input.max, 10) || 1;
+            goToPage(Math.min(Math.max(page, 1), max));
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function toggleLogFile(idx) {
+            const row = document.getElementById('files-' + idx);
+            const icon = document.getElementById('icon-' + idx);
+            if (!row) return;
+            const isOpen = row.style.display !== 'none';
+            row.style.display = isOpen ? 'none' : '';
+            icon.classList.toggle('open', !isOpen);
+        }
+
+        function expandAllFiles(idx, total) {
+            const row = document.getElementById('files-' + idx);
+            if (!row) return;
+            // Find the log entry in the cached data
+            const log = lastData[idx];
+            if (!log || !log.files) return;
+            const list = row.querySelector('.file-list');
+            list.innerHTML = log.files.map(f =>
+                `<div class="file-list-item"><span class="fl-name">${escapeHtml(f.name)}</span><span class="fl-size">${formatSize(f.size)}</span></div>`
+            ).join('');
+        }
+
+        let lastData = [];
+
+        function formatSize(bytes) {
+            if (window.SizeFormat) return window.SizeFormat.format(bytes);
+            if (bytes === 0 || bytes === '0') return '0 B';
+            const n = Number(bytes);
+            if (!Number.isFinite(n) || n < 0) return '—';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.min(Math.floor(Math.log(Math.max(n, 1)) / Math.log(1024)), units.length - 1);
+            const value = n / Math.pow(1024, i);
+            const text = i === 0 ? String(Math.round(value)) : value.toFixed(2).replace(/\.?0+$/, '');
+            return text + ' ' + units[i];
+        }
+    </script>
+        <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
+    <script src="/assets/js/core/drawer.js"></script>
+    <script src="/assets/js/core/sidebar.js"></script>
+    <script src="/assets/js/core/status.js"></script>
+</body>
+</html>

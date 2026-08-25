@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
+      })();
+    </script>
+
+    <title>Explorer - File Indexer</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <style>
+        .tree { padding: 0.5rem 0; }
+        .tree-node { user-select: none; }
+        .tree-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.75rem;
+            cursor: default;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+        }
+        .tree-row:hover { background: var(--bg-hover); }
+        .tree-row.selected { background: var(--accent-muted); }
+
+        .tree-toggle {
+            width: 1.2rem;
+            height: 1.2rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            flex-shrink: 0;
+            border-radius: 3px;
+        }
+        .tree-toggle:hover { background: var(--bg-hover); color: var(--text-primary); }
+        .tree-toggle.empty { display: none; }
+
+        .tree-icon { font-size: 1.1rem; flex-shrink: 0; width: 1.4rem; text-align: center; }
+        .tree-name { flex: 1; min-width: 0; }
+        .tree-name.dir { font-weight: 600; color: var(--text-primary); }
+        .tree-name.file { color: var(--text-secondary); }
+        .tree-meta { color: var(--text-muted); font-size: 0.8rem; font-family: var(--font-mono); white-space: nowrap; }
+
+        .tree-children { padding-left: 1.5rem; }
+        .tree-children.collapsed { display: none; }
+
+        .breadcrumb {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem 0;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            margin-bottom: 0.5rem;
+        }
+        .breadcrumb span { cursor: pointer; }
+        .breadcrumb span:hover { color: var(--accent); text-decoration: underline; }
+        .breadcrumb .sep { color: var(--text-muted); cursor: default; }
+        .breadcrumb .sep:hover { text-decoration: none; color: var(--text-muted); }
+        .breadcrumb .current { color: var(--text-primary); font-weight: 600; cursor: default; }
+        .breadcrumb .current:hover { text-decoration: none; color: var(--text-primary); }
+
+        .expand-all {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.8rem;
+            color: var(--accent);
+            cursor: pointer;
+            padding: 0.2rem 0.5rem;
+            border-radius: var(--radius-sm);
+            margin-bottom: 0.5rem;
+        }
+        .expand-all:hover { background: var(--accent-muted); }
+
+        .summary { color: var(--text-muted); font-size: 0.8rem; padding: 0.5rem 0; }
+
+        .explorer-table-toolbar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            margin-bottom: var(--space-3);
+        }
+        .explorer-table-toolbar .input {
+            flex: 1;
+            min-width: 180px;
+        }
+        .explorer-table th.sortable {
+            cursor: pointer;
+            user-select: none;
+        }
+        .explorer-table th.sortable:hover {
+            background: var(--bg-hover);
+        }
+        .explorer-table th .sort-ind {
+            display: inline-block;
+            min-width: 1.2ch;
+            color: var(--text-muted);
+        }
+        .explorer-table th.active .sort-ind {
+            color: var(--accent);
+        }
+        .explorer-table td.path {
+            max-width: 420px;
+        }
+        #table-view, #tree-view, #folders-view {
+            min-height: 200px;
+        }
+        .folders-toolbar {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            margin-bottom: var(--space-2);
+        }
+        .folders-toolbar .breadcrumb {
+            flex: 1;
+            min-width: 0;
+            margin: 0;
+            padding: 0;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+        .folders-toolbar .breadcrumb .sep {
+            color: var(--text-muted);
+            margin: 0 0.15rem;
+        }
+        .folders-toolbar .breadcrumb .crumb {
+            color: var(--text-link);
+            cursor: pointer;
+        }
+        .folders-toolbar .breadcrumb .crumb:hover {
+            text-decoration: underline;
+        }
+        .folders-toolbar .breadcrumb .current {
+            color: var(--text-primary);
+            font-weight: 600;
+            cursor: pointer;
+            border-bottom: 1px dashed var(--text-muted);
+        }
+        .folders-toolbar .breadcrumb .current:hover {
+            border-bottom-color: var(--accent);
+        }
+        .folders-toolbar .breadcrumb-edit {
+            width: 100%;
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+        .folders-toolbar .summary {
+            padding: 0;
+        }
+        .folder-items {
+            display: flex;
+            flex-direction: column;
+        }
+        .folder-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0.75rem;
+            border-radius: var(--radius-sm);
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+        .folder-item:hover {
+            background: var(--bg-hover);
+        }
+        .folder-item__icon {
+            font-size: 1.1rem;
+            width: 1.4rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+        .folder-item__name {
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .folder-item__name.dir {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        .folder-item__name.file {
+            color: var(--text-secondary);
+        }
+        .folder-item__chevron {
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .folder-item:hover .folder-item__chevron {
+            color: var(--accent);
+        }
+        .folder-item__meta {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            font-family: var(--font-mono);
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        #folders-error {
+            margin-bottom: var(--space-2);
+            padding: 0.6rem 0.75rem;
+            border-radius: var(--radius-sm);
+            background: var(--danger-muted);
+            border: 1px solid var(--danger);
+            color: var(--danger-text);
+            font-size: var(--font-size-sm);
+            word-break: break-word;
+        }
+        #explorer-pagination .page-btn {
+            padding: 0.35rem 0.7rem;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            font-family: inherit;
+            line-height: 1.2;
+            cursor: pointer;
+            transition: background var(--duration-fast) var(--ease-in-out), border-color var(--duration-fast) var(--ease-in-out);
+        }
+        #explorer-pagination .page-btn:hover:not(:disabled) {
+            background: var(--bg-subtle);
+            border-color: var(--accent);
+        }
+        #explorer-pagination .page-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+        #explorer-pagination .page-btn.active {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: #fff;
+            font-weight: 600;
+        }
+        #explorer-pagination .page-ellipsis {
+            color: var(--text-muted);
+            padding: 0 0.15rem;
+            font-size: var(--font-size-sm);
+            user-select: none;
+        }
+        #explorer-pagination .page-info {
+            color: var(--text-secondary);
+            font-size: var(--font-size-sm);
+            font-variant-numeric: tabular-nums;
+            margin-left: var(--space-2);
+        }
+        #explorer-pagination .page-jump {
+            width: 3.5rem;
+            padding: 0.2rem 0.4rem;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            font-size: var(--font-size-sm);
+            font-family: inherit;
+            font-variant-numeric: tabular-nums;
+            text-align: center;
+        }
+        #explorer-pagination .page-jump:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        #explorer-pagination {
+            flex-wrap: wrap;
+            row-gap: var(--space-2);
+        }
+    </style>
+</head>
+<body>
+    <nav id="sidebar-container"></nav>
+
+    <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Explorer</h1>
+                <p class="page-header__subtitle">Browse the indexed file tree</p>
+            </div>
+            <div class="page-header__actions">
+                <div class="segmented" role="group" aria-label="Explorer view">
+                    <button type="button" class="segmented__btn" id="view-folders" onclick="setView('folders')">Folders</button>
+                    <button type="button" class="segmented__btn" id="view-table" onclick="setView('table')">Table</button>
+                    <button type="button" class="segmented__btn" id="view-tree" onclick="setView('tree')">Tree</button>
+                </div>
+            </div>
+        </header>
+        <div class="card">
+        <div class="card__body">
+        <div id="folders-view" style="display:none;">
+            <div class="folders-toolbar">
+                <button type="button" class="btn btn--secondary btn--sm" id="folders-up" onclick="folderGoUp()" disabled>&#8593; Up</button>
+                <button type="button" class="btn btn--secondary btn--sm" onclick="folderOpen(folderPath)">&#8635; Refresh</button>
+                <button type="button" class="btn btn--secondary btn--sm" id="folders-edit" onclick="folderBreadcrumbEdit()" title="Edit path">&#9998; Edit</button>
+                <div class="breadcrumb" id="folders-breadcrumb"></div>
+                <span class="summary" id="folders-summary"></span>
+            </div>
+            <div id="folders-error" class="notice notice--error" style="display:none;"></div>
+            <div class="folder-items" id="folder-items"></div>
+            <div id="folders-no-results" class="empty-state" style="display:none;">
+                <div class="empty-state__title">Empty folder</div>
+                <p class="empty-state__desc">Nothing indexed in this directory</p>
+            </div>
+        </div>
+        <div id="table-view" style="display:none;">
+            <div class="explorer-table-toolbar">
+                <input type="search" id="table-search" class="input" placeholder="Filter by name…">
+                <select id="table-type" class="select">
+                    <option value="both">Files &amp; Folders</option>
+                    <option value="files">Files only</option>
+                    <option value="folders">Folders only</option>
+                </select>
+                <span class="summary" id="table-summary"></span>
+            </div>
+            <div class="table-wrap">
+                <table class="table explorer-table" id="explorer-table">
+                    <thead>
+                        <tr>
+                            <th class="sortable" data-sort="name" onclick="toggleSort('name')">Name <span class="sort-ind"></span></th>
+                            <th class="sortable" data-sort="type" onclick="toggleSort('type')">Type <span class="sort-ind"></span></th>
+                            <th class="sortable" data-sort="size" onclick="toggleSort('size')">Size <span class="sort-ind"></span></th>
+                            <th class="sortable" data-sort="modified" onclick="toggleSort('modified')">Modified <span class="sort-ind"></span></th>
+                            <th>Path</th>
+                        </tr>
+                    </thead>
+                    <tbody id="explorer-table-body"></tbody>
+                </table>
+            </div>
+            <div id="explorer-no-results" class="empty-state" style="display:none;">
+                <div class="empty-state__title">No entries match</div>
+                <p class="empty-state__desc">Try a different name, type, or filter</p>
+            </div>
+            <section class="pagination" id="explorer-pagination" style="display:none;"></section>
+        </div>
+        <div id="tree-view" style="display:none;">
+        <div class="breadcrumb" id="breadcrumb"></div>
+        <div class="expand-all" id="expand-all" onclick="toggleAll()">Expand all</div>
+        <div class="summary" id="summary"></div>
+        <div class="tree" id="tree"></div>
+        </div>
+        </div></div>
+    </main>
+
+    <script>
+        let allExpanded = false;
+        let selectedEl = null;
+
+        function formatSize(bytes) {
+            if (window.SizeFormat) return window.SizeFormat.format(bytes);
+            if (bytes === 0 || bytes === '0') return '0 B';
+            const n = Number(bytes);
+            if (!Number.isFinite(n) || n < 0) return '—';
+            const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.min(Math.floor(Math.log(Math.max(n, 1)) / Math.log(1024)), units.length - 1);
+            const value = n / Math.pow(1024, i);
+            const text = i === 0 ? String(Math.round(value)) : value.toFixed(2).replace(/\.?0+$/, '');
+            return text + ' ' + units[i];
+        }
+
+        function getIcon(entry) {
+            if (entry.is_directory) return '\uD83D\uDCC1';
+            const ext = (entry.name.split('.').pop() || '').toLowerCase();
+            const icons = {
+                'rs': '\uD83D\uDD27', 'js': '\uD83D\uDD26', 'ts': '\uD83D\uDD26',
+                'py': '\uD83D\uDC0D', 'go': '\uD83D\uDC1E', 'java': '\u2615',
+                'html': '\uD83C\uDF10', 'css': '\uD83C\uDFA8', 'json': '{}',
+                'md': '\uD83D\uDCDD', 'txt': '\uD83D\uDCC4', 'pdf': '\uD83D\uDCC5',
+                'png': '\uD83D\uDDBC', 'jpg': '\uD83D\uDDBC', 'jpeg': '\uD83D\uDDBC',
+                'gif': '\uD83D\uDDBC', 'svg': '\uD83D\uDDBC', 'db': '\uD83D\uDCC0',
+                'lock': '\uD83D\uDD12', 'toml': '\u2699', 'yaml': '\u2699', 'yml': '\u2699',
+            };
+            return icons[ext] || '\uD83D\uDCC4';
+        }
+
+        function renderNode(node, container, depth = 0) {
+            const div = document.createElement('div');
+            div.className = 'tree-node';
+
+            const row = document.createElement('div');
+            row.className = 'tree-row';
+            row.style.paddingLeft = (depth * 0.5) + 'rem';
+            row.onclick = (e) => {
+                e.stopPropagation();
+                if (selectedEl) selectedEl.classList.remove('selected');
+                selectedEl = row;
+                row.classList.add('selected');
+            };
+
+            const toggle = document.createElement('span');
+            toggle.className = 'tree-toggle';
+            const icon = document.createElement('span');
+            icon.className = 'tree-icon';
+            icon.textContent = getIcon(node.entry);
+            const name = document.createElement('span');
+            name.className = 'tree-name ' + (node.entry.is_directory ? 'dir' : 'file');
+            name.textContent = node.entry.name;
+
+            const meta = document.createElement('span');
+            meta.className = 'tree-meta';
+            if (node.entry.is_directory) {
+                const count = countFiles(node);
+                meta.textContent = count + ' item' + (count !== 1 ? 's' : '');
+            } else {
+                meta.textContent = formatSize(node.entry.size);
+            }
+
+            row.appendChild(toggle);
+            row.appendChild(icon);
+            row.appendChild(name);
+            row.appendChild(meta);
+            div.appendChild(row);
+
+            if (node.children && node.children.length > 0) {
+                toggle.textContent = allExpanded ? '\u25BC' : '\u25B6';
+                toggle.onclick = (e) => {
+                    e.stopPropagation();
+                    const children = div.querySelector('.tree-children');
+                    const isCollapsed = children.classList.contains('collapsed');
+                    children.classList.toggle('collapsed');
+                    toggle.textContent = isCollapsed ? '\u25BC' : '\u25B6';
+                };
+
+                const childContainer = document.createElement('div');
+                childContainer.className = 'tree-children' + (allExpanded ? '' : ' collapsed');
+
+                // Sort children: dirs first, then alpha
+                node.children.sort((a, b) => {
+                    if (a.entry.is_directory !== b.entry.is_directory)
+                        return b.entry.is_directory - a.entry.is_directory;
+                    return a.entry.name.toLowerCase().localeCompare(b.entry.name.toLowerCase());
+                });
+
+                for (const child of node.children) {
+                    renderNode(child, childContainer, depth + 1);
+                }
+                div.appendChild(childContainer);
+            } else {
+                toggle.classList.add('empty');
+            }
+
+            container.appendChild(div);
+        }
+
+        function countFiles(node) {
+            if (!node.children || node.children.length === 0) return 0;
+            let count = 0;
+            for (const child of node.children) {
+                count += 1;
+                if (child.entry.is_directory) count += countFiles(child);
+            }
+            return count;
+        }
+
+        function countAll(node) {
+            let dirs = 0, files = 0;
+            function walk(n) {
+                if (n.entry.is_directory) { dirs++; }
+                else { files++; }
+                if (n.children) n.children.forEach(walk);
+            }
+            node.forEach(walk);
+            return { dirs, files };
+        }
+
+        function toggleAll() {
+            allExpanded = !allExpanded;
+            document.getElementById('expand-all').textContent = allExpanded ? 'Collapse all' : 'Expand all';
+            document.querySelectorAll('.tree-children').forEach(el => {
+                el.classList.toggle('collapsed', !allExpanded);
+            });
+            document.querySelectorAll('.tree-toggle').forEach(el => {
+                if (!el.classList.contains('empty')) {
+                    el.textContent = allExpanded ? '\u25BC' : '\u25B6';
+                }
+            });
+        }
+
+        function renderBreadcrumb() {
+            const bc = document.getElementById('breadcrumb');
+            bc.innerHTML = '<span class="current">Root</span>';
+        }
+
+        // --- Table view -------------------------------------------------------
+
+        const EXPLORER_VIEW_KEY = 'fi-explorer-view';
+        const EXPLORER_PER_PAGE = 50;
+        const tableState = {
+            type: 'both',
+            q: '',
+            sort: 'name',
+            order: 'asc',
+            page: 1,
+        };
+        let tableCache = null;
+        let treeLoaded = false;
+
+        function getStoredView() {
+            try {
+                const v = localStorage.getItem(EXPLORER_VIEW_KEY);
+                return v === 'table' || v === 'tree' || v === 'folders' ? v : 'table';
+            } catch {
+                return 'table';
+            }
+        }
+
+        function setStoredView(view) {
+            try {
+                localStorage.setItem(EXPLORER_VIEW_KEY, view);
+            } catch {
+                /* ignore */
+            }
+        }
+
+        function getView() {
+            return explorerView;
+        }
+
+        function setView(view) {
+            explorerView = view;
+            setStoredView(view);
+            document.getElementById('view-folders').classList.toggle('active', view === 'folders');
+            document.getElementById('view-table').classList.toggle('active', view === 'table');
+            document.getElementById('view-tree').classList.toggle('active', view === 'tree');
+            document.getElementById('folders-view').style.display = view === 'folders' ? '' : 'none';
+            document.getElementById('table-view').style.display = view === 'table' ? '' : 'none';
+            document.getElementById('tree-view').style.display = view === 'tree' ? '' : 'none';
+            if (view === 'table') {
+                if (tableCache) {
+                    renderTable(tableCache);
+                } else {
+                    loadTable();
+                }
+            } else if (view === 'tree') {
+                if (!treeLoaded) loadTree();
+            } else if (view === 'folders') {
+                if (!folderStarted) folderStart();
+            }
+        }
+
+        function sortIndicator(key, dir) {
+            const th = document.querySelector(`.explorer-table th[data-sort="${key}"]`);
+            if (!th) return;
+            document.querySelectorAll('.explorer-table th.sortable').forEach((el) => {
+                el.classList.remove('active');
+                el.querySelector('.sort-ind').textContent = '';
+            });
+            th.classList.add('active');
+            th.querySelector('.sort-ind').textContent = dir === 'asc' ? '▲' : '▼';
+        }
+
+        async function loadTable() {
+            const params = new URLSearchParams({
+                page: tableState.page,
+                per_page: EXPLORER_PER_PAGE,
+                type: tableState.type,
+                sort: tableState.sort,
+                order: tableState.order,
+            });
+            if (tableState.q) params.set('q', tableState.q);
+
+            try {
+                const res = await fetch(`/api/explorer?${params}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                tableCache = data;
+                renderTable(data);
+            } catch (err) {
+                console.error('Explorer load failed', err);
+            }
+        }
+
+        function renderTable(data) {
+            const results = data.results || [];
+            const total = data.total ?? 0;
+            const tbody = document.getElementById('explorer-table-body');
+            const noResults = document.getElementById('explorer-no-results');
+            const table = document.getElementById('explorer-table');
+
+            tbody.innerHTML = '';
+
+            if (results.length === 0) {
+                table.style.display = 'none';
+                noResults.style.display = 'block';
+                document.getElementById('table-summary').textContent = total === 0
+                    ? 'No entries'
+                    : `No matches`;
+                renderExplorerPagination(total);
+                return;
+            }
+
+            noResults.style.display = 'none';
+            table.style.display = '';
+
+            tbody.innerHTML = results.map((e) => {
+                const isDir = e.is_directory;
+                const icon = isDir ? '\uD83D\uDCC1' : '\uD83D\uDCC4';
+                const path = e.path || '';
+                const safePath = path.replace(/'/g, "\\'");
+                const safeName = (e.name || '').replace(/'/g, "\\'");
+                const onclick = isDir
+                    ? `openFolder('${safePath}')`
+                    : `FileViewer.open('${safePath}', '${safeName}')`;
+                return `<tr class="clickable" onclick="${onclick}">
+                    <td class="name">${icon} ${escapeHtml(e.name)}</td>
+                    <td class="type">${isDir ? 'Dir' : 'File'}</td>
+                    <td class="size">${isDir ? '—' : formatSize(e.size)}</td>
+                    <td>${formatDate(e.modified)}</td>
+                    <td class="path" title="${escapeHtml(path)}">${escapeHtml(path)}</td>
+                </tr>`;
+            }).join('');
+
+            sortIndicator(tableState.sort, tableState.order);
+            document.getElementById('table-summary').textContent =
+                `${total.toLocaleString()} entr${total === 1 ? 'y' : 'ies'}`;
+            renderExplorerPagination(total);
+        }
+
+        function toggleSort(key) {
+            if (tableState.sort === key) {
+                tableState.order = tableState.order === 'asc' ? 'desc' : 'asc';
+            } else {
+                tableState.sort = key;
+                tableState.order = 'asc';
+            }
+            tableState.page = 1;
+            loadTable();
+        }
+
+        // --- Table pagination (mirrors logs page) -------------------------------
+
+        const MAX_VISIBLE_PAGES = 5;
+
+        function buildPageWindow(totalPages) {
+            let startPage = Math.max(1, tableState.page - Math.floor(MAX_VISIBLE_PAGES / 2));
+            let endPage = Math.min(totalPages, startPage + MAX_VISIBLE_PAGES - 1);
+            if (endPage - startPage < MAX_VISIBLE_PAGES - 1) {
+                startPage = Math.max(1, endPage - MAX_VISIBLE_PAGES + 1);
+            }
+            return { startPage, endPage };
+        }
+
+        function renderExplorerPagination(total) {
+            const pagination = document.getElementById('explorer-pagination');
+            const totalPages = Math.max(1, Math.ceil(total / EXPLORER_PER_PAGE));
+
+            if (totalPages <= 1) {
+                pagination.style.display = 'none';
+                pagination.innerHTML = '';
+                return;
+            }
+
+            pagination.style.display = 'flex';
+            const { startPage, endPage } = buildPageWindow(totalPages);
+            const cur = tableState.page;
+
+            let html = '';
+            html += `<button type="button" class="page-btn" onclick="goToExplorerPage(1)" ${cur === 1 ? 'disabled' : ''} aria-label="First page">&laquo;</button>`;
+            html += `<button type="button" class="page-btn" onclick="goToExplorerPage(${cur - 1})" ${cur === 1 ? 'disabled' : ''} aria-label="Previous page">&lsaquo;</button>`;
+
+            if (startPage > 1) {
+                html += `<button type="button" class="page-btn" onclick="goToExplorerPage(1)">1</button>`;
+                if (startPage > 2) html += '<span class="page-ellipsis" aria-hidden="true">&hellip;</span>';
+            }
+
+            for (let i = startPage; i <= endPage; i++) {
+                html += `<button type="button" class="page-btn${i === cur ? ' active' : ''}" onclick="goToExplorerPage(${i})">${i}</button>`;
+            }
+
+            if (endPage < totalPages) {
+                if (endPage < totalPages - 1) html += '<span class="page-ellipsis" aria-hidden="true">&hellip;</span>';
+                html += `<button type="button" class="page-btn" onclick="goToExplorerPage(${totalPages})">${totalPages}</button>`;
+            }
+
+            html += `<button type="button" class="page-btn" onclick="goToExplorerPage(${cur + 1})" ${cur === totalPages ? 'disabled' : ''} aria-label="Next page">&rsaquo;</button>`;
+            html += `<button type="button" class="page-btn" onclick="goToExplorerPage(${totalPages})" ${cur === totalPages ? 'disabled' : ''} aria-label="Last page">&raquo;</button>`;
+            html += `<span class="page-info">Page <input type="number" id="explorer-page-jump" class="page-jump" min="1" max="${totalPages}" value="${cur}" onkeydown="if (event.key === 'Enter') jumpExplorerPage()" aria-label="Jump to page"> of ${totalPages}</span>`;
+
+            pagination.innerHTML = html;
+        }
+
+        function goToExplorerPage(page) {
+            tableState.page = page;
+            loadTable();
+        }
+
+        function jumpExplorerPage() {
+            const input = document.getElementById('explorer-page-jump');
+            if (!input) return;
+            const raw = input.value.trim();
+            if (!/^\d+$/.test(raw)) return;
+            const page = parseInt(raw, 10);
+            const max = parseInt(input.max, 10) || 1;
+            goToExplorerPage(Math.min(Math.max(page, 1), max));
+        }
+
+        async function loadTree() {
+            const res = await fetch('/api/tree');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            data.root.sort((a, b) => {
+                if (a.entry.is_directory !== b.entry.is_directory)
+                    return b.entry.is_directory - a.entry.is_directory;
+                return a.entry.name.toLowerCase().localeCompare(b.entry.name.toLowerCase());
+            });
+
+            const stats = countAll(data.root);
+            document.getElementById('summary').textContent =
+                `${stats.dirs} folders, ${stats.files} files`;
+
+            renderBreadcrumb();
+
+            const tree = document.getElementById('tree');
+            tree.innerHTML = '';
+            for (const node of data.root) {
+                renderNode(node, tree, 0);
+            }
+            treeLoaded = true;
+        }
+
+        // --- Folders view (click-through browser) --------------------------------
+
+        let folderRoot = null;
+        let folderPath = null;
+        let folderStarted = false;
+
+        function folderParentPath(path) {
+            if (!path) return null;
+            const trimmed = path.replace(/\/+$/, '');
+            const idx = trimmed.lastIndexOf('/');
+            if (idx <= 0) return null;
+            return trimmed.slice(0, idx);
+        }
+
+        function folderBreadcrumbHtml(path) {
+            const parts = (path || '').split('/').filter(Boolean);
+            const crumbs = [];
+            let acc = '';
+            parts.forEach((seg, i) => {
+                acc += '/' + seg;
+                const isLast = i === parts.length - 1;
+                if (isLast) {
+                    crumbs.push(`<span class="current" onclick="folderBreadcrumbEdit(event)" title="Edit path">${escapeHtml(seg)}</span>`);
+                } else {
+                    crumbs.push(`<span class="crumb" onclick="folderOpen('${acc.replace(/'/g, "\\'")}')">${escapeHtml(seg)}</span>`);
+                    crumbs.push('<span class="sep">/</span>');
+                }
+            });
+            if (parts.length === 0) {
+                crumbs.push('<span class="crumb" onclick="folderBreadcrumbEdit(event)">Root</span>');
+            }
+            return crumbs.join('');
+        }
+
+        function folderBreadcrumbEdit(event) {
+            if (event && event.stopPropagation) event.stopPropagation();
+            const bc = document.getElementById('folders-breadcrumb');
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'input breadcrumb-edit';
+            input.value = folderPath || folderRoot || '';
+            input.spellcheck = false;
+            input.setAttribute('aria-label', 'Folder path');
+            bc.innerHTML = '';
+            bc.appendChild(input);
+            input.focus();
+            input.select();
+            let done = false;
+            const commit = () => {
+                if (done) return;
+                done = true;
+                const v = input.value.trim().replace(/\/+$/, '');
+                if (v) {
+                    folderOpen(v);
+                } else {
+                    bc.innerHTML = folderBreadcrumbHtml(folderPath);
+                }
+            };
+            const cancel = () => {
+                if (done) return;
+                done = true;
+                bc.innerHTML = folderBreadcrumbHtml(folderPath);
+            };
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') commit();
+                else if (e.key === 'Escape') cancel();
+            });
+            input.addEventListener('blur', cancel);
+        }
+
+        async function folderStart() {
+            folderStarted = true;
+            try {
+                const res = await fetch('/api/config');
+                if (!res.ok) return;
+                const config = await res.json();
+                folderRoot = (config.cwd || '').replace(/\/+$/, '');
+                if (!folderPath) folderPath = folderRoot;
+                await folderOpen(folderPath);
+            } catch (err) {
+                console.error('Failed to start folder view', err);
+            }
+        }
+
+        async function folderOpen(path) {
+            const res = await fetch('/api/folder?path=' + encodeURIComponent(path));
+            if (!res.ok) {
+                document.getElementById('folders-breadcrumb').innerHTML = folderBreadcrumbHtml(folderPath);
+                folderShowError('Open failed (HTTP ' + res.status + '): ' + path);
+                return;
+            }
+            const data = await res.json();
+            document.getElementById('folders-error').style.display = 'none';
+            folderPath = data.path;
+            folderRender(data);
+        }
+
+        function folderShowError(message) {
+            const foldersError = document.getElementById('folders-error');
+            foldersError.textContent = message;
+            foldersError.style.display = 'block';
+        }
+
+        function folderRender(data) {
+            const items = data.files || [];
+
+            document.getElementById('folders-breadcrumb').innerHTML = folderBreadcrumbHtml(data.path);
+
+            const upBtn = document.getElementById('folders-up');
+            const parent = folderParentPath(data.path);
+            upBtn.disabled = !parent || data.path === folderRoot;
+            if (upBtn.disabled) {
+                upBtn.title = '';
+            } else {
+                upBtn.title = parent;
+            }
+
+            document.getElementById('folders-summary').textContent =
+                `${data.folder_count} folder${data.folder_count === 1 ? '' : 's'}, ${data.file_count} file${data.file_count === 1 ? '' : 's'}`;
+
+            const foldersError = document.getElementById('folders-error');
+            if (data.traverse_error) {
+                foldersError.textContent = `This folder could not be read: ${data.traverse_error}`;
+                foldersError.style.display = 'block';
+            } else {
+                foldersError.style.display = 'none';
+            }
+
+            const container = document.getElementById('folder-items');
+            const noResults = document.getElementById('folders-no-results');
+
+            if (items.length === 0) {
+                container.innerHTML = '';
+                noResults.style.display = data.traverse_error ? 'none' : 'block';
+                return;
+            }
+            noResults.style.display = 'none';
+
+            const dirs = items.filter((i) => i.is_directory);
+            const files = items.filter((i) => !i.is_directory);
+
+            container.innerHTML = dirs.concat(files).map((item) => {
+                const isDir = item.is_directory;
+                const icon = isDir
+                    ? item.traverse_error ? '\u26A0\uFE0F' : '\uD83D\uDCC1'
+                    : '\uD83D\uDCC4';
+                const safePath = (item.path || '').replace(/'/g, "\\'");
+                const safeName = (item.name || '').replace(/'/g, "\\'");
+                const click = isDir
+                    ? `folderOpen('${safePath}')`
+                    : `FileViewer.open('${safePath}', '${safeName}')`;
+                const meta = isDir
+                    ? item.traverse_error
+                        ? `<span class="folder-item__meta badge badge--danger" title="${escapeHtml(item.traverse_error)}">Unreadable</span>`
+                        : item.traversed && item.size > 0
+                            ? `<span class="folder-item__meta">${formatSize(item.size)}</span>`
+                            : (item.traversed ? '<span class="folder-item__meta">Folder</span>' : '<span class="folder-item__meta badge badge--warning">Not indexed</span>')
+                    : `<span class="folder-item__meta">${formatSize(item.size)}</span>`;
+                const dupBadge = item.has_duplicates
+                    ? `<span class="folder-item__meta badge badge--purple" title="${isDir ? 'This folder contains duplicated files' : 'This file is a duplicate'}">\u21BB Duplicates</span>`
+                    : '';
+                return `<div class="folder-item" onclick="${click}">
+                    <span class="folder-item__icon">${icon}</span>
+                    <span class="folder-item__name ${isDir ? 'dir' : 'file'}">${escapeHtml(item.name)}</span>
+                    ${meta}
+                    ${dupBadge}
+                    ${isDir ? '<span class="folder-item__chevron">\u203A</span>' : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function folderGoUp() {
+            const parent = folderParentPath(folderPath);
+            if (parent && folderPath !== folderRoot) {
+                folderOpen(parent);
+            }
+        }
+
+        let explorerView = getStoredView();
+        setView(explorerView);
+
+        let searchDebounce = null;
+        document.getElementById('table-search').addEventListener('input', () => {
+            clearTimeout(searchDebounce);
+            searchDebounce = setTimeout(() => {
+                tableState.q = document.getElementById('table-search').value;
+                tableState.page = 1;
+                loadTable();
+            }, 250);
+        });
+
+        document.getElementById('table-type').addEventListener('change', () => {
+            tableState.type = document.getElementById('table-type').value;
+            tableState.page = 1;
+            loadTable();
+        });
+    </script>
+        <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
+    <script src="/assets/js/core/drawer.js"></script>
+    <script src="/assets/js/core/sidebar.js"></script>
+    <script src="/assets/js/core/status.js"></script>
+    <script src="/assets/js/core/app.js"></script>
+    <script src="/assets/js/core/file-viewer.js"></script>
+</body>
+</html>

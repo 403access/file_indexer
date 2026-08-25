@@ -1,0 +1,108 @@
+/* Filter bar, summary, pagination, empty state */
+
+.empty-msg {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+    padding: 1rem;
+}
+.pagination button {
+    padding: 0.4rem 0.8rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elevated);
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+.pagination button:hover:not(:disabled) {
+    background: var(--bg-subtle);
+    border-color: var(--accent);
+}
+.pagination button:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+.pagination button.active {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+.pagination .page-info {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin: 0 0.5rem;
+}
+.summary {
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    padding: 0.5rem 0;
+}
+.filter-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    background: var(--bg-elevated);
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-xs);
+}
+.filter-bar input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: 0.9rem;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+}
+.filter-bar select {
+    padding: 0.45rem 0.5rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.filter-bar .filter-number {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    white-space: nowrap;
+}
+.filter-bar .filter-number input {
+    flex: 0 0 64px;
+    padding: 0.4rem 0.5rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+}
+.filter-bar .ft-input {
+    flex: 0 0 180px;
+    padding: 0.45rem 0.5rem;
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+}
+.filter-bar label {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    cursor: pointer;
+    white-space: nowrap;
+}

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
+      })();
+    </script>
+    <title>Skipped Paths - File Indexer</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+    <nav id="sidebar-container"></nav>
+
+    <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Skipped Paths</h1>
+                <p class="page-header__subtitle">Paths that could not be indexed</p>
+            </div>
+        </header>
+
+        <section class="results-info" id="results-info" style="display:none;">
+            <span id="result-count"></span>
+        </section>
+
+        <section class="results">
+            <div class="table-wrap" id="results-wrap" style="display:none;">
+                <table id="results-table" class="table">
+                    <thead>
+                        <tr>
+                            <th>Path</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body"></tbody>
+                </table>
+            </div>
+            <div id="no-results" class="empty-state" style="display:none;">
+                <div class="empty-state__title">No skipped paths</div>
+                <p class="empty-state__desc">Everything indexed cleanly</p>
+            </div>
+        </section>
+
+        <section class="pagination" id="pagination" style="display:none;">
+            <button type="button" id="prev-page" class="btn btn--secondary btn--sm" disabled>Previous</button>
+            <span id="page-info"></span>
+            <button type="button" id="next-page" class="btn btn--secondary btn--sm" disabled>Next</button>
+        </section>
+    </main>
+
+    <script>
+        const PER_PAGE = 50;
+        let currentPage = 1;
+
+        async function loadPage(page = 1) {
+            const resultsTable = document.getElementById('results-table');
+            const resultsWrap = document.getElementById('results-wrap');
+            const resultsBody = document.getElementById('results-body');
+            const resultsInfo = document.getElementById('results-info');
+            const resultCount = document.getElementById('result-count');
+            const noResults = document.getElementById('no-results');
+            const pagination = document.getElementById('pagination');
+            const pageInfo = document.getElementById('page-info');
+            const prevBtn = document.getElementById('prev-page');
+            const nextBtn = document.getElementById('next-page');
+
+            try {
+                const res = await fetch(`/api/skipped?page=${page}&per_page=${PER_PAGE}`);
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                const results = data.results || [];
+                const total = data.total ?? 0;
+                currentPage = data.page || page;
+
+                if (total === 0) {
+                    noResults.style.display = 'block';
+                    resultsInfo.style.display = 'none';
+                    if (resultsWrap) resultsWrap.style.display = 'none';
+                    resultsTable.style.display = 'none';
+                    pagination.style.display = 'none';
+                    return;
+                }
+
+                noResults.style.display = 'none';
+                resultCount.textContent = `${total.toLocaleString()} skipped path${total === 1 ? '' : 's'}`;
+                resultsInfo.style.display = 'block';
+                if (resultsWrap) resultsWrap.style.display = '';
+                resultsTable.style.display = '';
+
+                resultsBody.innerHTML = results.map(row => `
+                    <tr>
+                        <td class="path" title="${escapeHtml(row.path)}">${escapeHtml(row.path)}</td>
+                        <td class="text-danger">${escapeHtml(row.error || row.reason || '—')}</td>
+                    </tr>
+                `).join('');
+
+                const totalPages = Math.max(1, Math.ceil(total / (data.per_page || PER_PAGE)));
+                if (totalPages > 1) {
+                    pagination.style.display = 'flex';
+                    pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                    prevBtn.disabled = currentPage <= 1;
+                    nextBtn.disabled = currentPage >= totalPages;
+                } else {
+                    pagination.style.display = 'none';
+                }
+            } catch (err) {
+                noResults.style.display = 'block';
+                noResults.querySelector('.empty-state__title').textContent = 'Failed to load';
+                noResults.querySelector('.empty-state__desc').textContent = err.message;
+                pagination.style.display = 'none';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('prev-page').addEventListener('click', () => {
+                if (currentPage > 1) loadPage(currentPage - 1);
+            });
+            document.getElementById('next-page').addEventListener('click', () => {
+                loadPage(currentPage + 1);
+            });
+            loadPage(1);
+        });
+
+        function escapeHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+    </script>
+    <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
+    <script src="/assets/js/core/drawer.js"></script>
+    <script src="/assets/js/core/sidebar.js"></script>
+    <script src="/assets/js/core/status.js"></script>
+</body>
+</html>

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
+      })();
+    </script>
+    <title>Search - File Indexer</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+    <nav id="sidebar-container"></nav>
+
+    <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Search</h1>
+                <p class="page-header__subtitle">Find files and folders in the index</p>
+            </div>
+        </header>
+
+        <section class="search-controls">
+            <form id="search-form">
+                <div class="form-row">
+                    <input type="search" id="search-name" class="input flex-1" placeholder="Search by name…" autofocus style="flex:1;min-width:180px">
+                    <select id="search-type" class="select">
+                        <option value="both">Files &amp; Folders</option>
+                        <option value="files">Files only</option>
+                        <option value="folders">Folders only</option>
+                    </select>
+                    <select id="search-pattern" class="select">
+                        <option value="contains">Contains</option>
+                        <option value="exact">Exact</option>
+                        <option value="starts_with">Starts with</option>
+                        <option value="ends_with">Ends with</option>
+                    </select>
+                    <button type="submit" class="btn">Search</button>
+                </div>
+                <div class="form-row">
+                    <label for="search-sort">Sort</label>
+                    <select id="search-sort" class="select">
+                        <option value="name">Name</option>
+                        <option value="size">Size</option>
+                        <option value="modified">Modified</option>
+                        <option value="path">Path</option>
+                    </select>
+                    <select id="search-order" class="select">
+                        <option value="asc">Ascending</option>
+                        <option value="desc">Descending</option>
+                    </select>
+                </div>
+            </form>
+        </section>
+
+        <section class="results-info" id="results-info" style="display:none;">
+            <span id="result-count"></span>
+        </section>
+
+        <section class="results">
+            <div class="table-wrap" id="results-wrap" style="display:none;">
+                <table id="results-table" class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Path</th>
+                            <th>Size</th>
+                            <th>Modified</th>
+                            <th>Type</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body"></tbody>
+                </table>
+            </div>
+            <div id="no-results" class="empty-state" style="display:none;">
+                <div class="empty-state__title">No results found</div>
+                <p class="empty-state__desc">Try a different name or pattern</p>
+            </div>
+        </section>
+
+        <section class="pagination" id="pagination" style="display:none;">
+            <button type="button" id="prev-page" class="btn btn--secondary btn--sm" disabled>Previous</button>
+            <span id="page-info"></span>
+            <button type="button" id="next-page" class="btn btn--secondary btn--sm" disabled>Next</button>
+        </section>
+    </main>
+
+    <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
+    <script src="/assets/js/core/drawer.js"></script>
+    <script src="/assets/js/core/sidebar.js"></script>
+    <script src="/assets/js/core/status.js"></script>
+    <script src="/assets/js/core/app.js"></script>
+    <script src="/assets/js/core/file-viewer.js"></script>
+    <script src="/assets/js/pages/search.js"></script>
+    <script>
+      // Keep results table visibility in sync with the wrap
+      (function () {
+        const table = document.getElementById('results-table');
+        const wrap = document.getElementById('results-wrap');
+        if (!table || !wrap) return;
+        const obs = new MutationObserver(() => {
+          const shown = table.style.display !== 'none';
+          wrap.style.display = shown ? '' : 'none';
+          if (shown) table.style.display = '';
+        });
+        obs.observe(table, { attributes: true, attributeFilter: ['style'] });
+      })();
+    </script>
+</body>
+</html>

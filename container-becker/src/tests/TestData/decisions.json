@@ -1,0 +1,54 @@
+[
+  {
+    "debtorNumber": 1014,
+    "debtorName": "Debitor Company GmbH",
+    "postalCode": "10115",
+    "city": "Berlin",
+    "requestedLimit": 110000,
+    "requestedLimitDate": "2024-09-15",
+    "currentLimit": 100000,
+    "limitCode": "A",
+    "limitDescription": "Freie Kreditlinie",
+    "limitValidFrom": "2024-01-01",
+    "limitValidUntil": "2024-12-31"
+  },
+  {
+    "debtorNumber": 2044,
+    "debtorName": "New GmbH",
+    "postalCode": "98765",
+    "city": "Teststadt",
+    "requestedLimit": 40000,
+    "requestedLimitDate": "2024-10-01",
+    "currentLimit": 20000,
+    "limitCode": "B",
+    "limitDescription": "Exklusivkredit",
+    "limitValidFrom": "2024-02-01",
+    "limitValidUntil": "2025-01-31"
+  },
+  {
+    "debtorNumber": 3050,
+    "debtorName": "Muster AG",
+    "postalCode": "50667",
+    "city": "Köln",
+    "requestedLimit": 150000,
+    "requestedLimitDate": "2024-11-01",
+    "currentLimit": 150000,
+    "limitCode": "A",
+    "limitDescription": "Freie Kreditlinie",
+    "limitValidFrom": "2024-03-01",
+    "limitValidUntil": null
+  },
+  {
+    "debtorNumber": 4102,
+    "debtorName": "Handel e.K.",
+    "postalCode": "80331",
+    "city": "München",
+    "requestedLimit": 0,
+    "requestedLimitDate": null,
+    "currentLimit": 0,
+    "limitCode": "N",
+    "limitDescription": "Kein Limit",
+    "limitValidFrom": null,
+    "limitValidUntil": null
+  }
+]

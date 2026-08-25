@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('fi-theme') || 'system';
+          var d = t === 'system'
+            ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+            : t;
+          document.documentElement.setAttribute('data-theme', d);
+          document.documentElement.setAttribute('data-theme-pref', t);
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+        }
+        try {
+          var n = localStorage.getItem('fi-nav-layout');
+          if (n !== 'sidebar' && n !== 'topbar') n = 'sidebar';
+          document.documentElement.setAttribute('data-nav-layout', n);
+        } catch (e) {
+          document.documentElement.setAttribute('data-nav-layout', 'sidebar');
+        }
+      })();
+    </script>
+
+    <title>Settings - File Indexer</title>
+    <link rel="stylesheet" href="/assets/css/tokens.css">
+    <link rel="stylesheet" href="/assets/css/components.css">
+    <link rel="stylesheet" href="/assets/css/style.css">
+    <style>
+        .settings-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xs);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .settings-card h2 {
+            margin: 0 0 0.25rem 0;
+            font-size: 1.05rem;
+            color: var(--text-primary);
+        }
+        .settings-card .desc {
+            color: var(--text-muted);
+            font-size: 0.82rem;
+            margin-bottom: 1rem;
+        }
+        .ignore-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .ignore-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-muted);
+            border-radius: var(--radius-sm);
+        }
+        .ignore-item input {
+            flex: 1;
+            padding: 0.4rem 0.6rem;
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-sm);
+            font-family: var(--font-mono);
+            font-size: 0.85rem;
+        }
+        .ignore-item input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        .ignore-item input.condition-input {
+            flex: 0.8;
+            background: var(--bg-elevated);
+            border-style: dashed;
+        }
+        .ignore-item .condition-input::placeholder {
+            color: var(--text-muted);
+            font-style: italic;
+        }
+        .ignore-item .remove-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            cursor: pointer;
+            padding: 0.2rem 0.4rem;
+            border-radius: var(--radius-sm);
+        }
+        .ignore-item .remove-btn:hover {
+            color: var(--danger);
+            background: var(--danger-muted);
+        }
+        .add-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            margin-top: 0.5rem;
+            padding: 0.4rem 0.75rem;
+            background: var(--bg-subtle);
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 0.82rem;
+            cursor: pointer;
+        }
+        .add-btn:hover {
+            background: var(--bg-hover);
+            border-color: var(--border-strong);
+        }
+        .save-bar {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+        .save-btn {
+            padding: 0.5rem 1.25rem;
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        .save-btn:hover { background: var(--success); }
+        .save-btn:disabled { background: var(--text-muted); cursor: not-allowed; }
+        .save-msg {
+            font-size: 0.82rem;
+            color: var(--success-text);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .save-msg.show { opacity: 1; }
+        .preset-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-top: 0.5rem;
+        }
+        .preset-tag {
+            padding: 0.2rem 0.55rem;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-full);
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+        .preset-tag:hover {
+            background: var(--bg-hover);
+            border-color: var(--accent);
+            color: var(--accent-hover);
+        }
+        .condition-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.75rem;
+            padding: 0.5rem;
+            background: var(--accent-muted);
+            border-radius: var(--radius-sm);
+            border-left: 3px solid var(--accent);
+            color: var(--text-secondary);
+        }
+        .toggle {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            cursor: pointer;
+            user-select: none;
+        }
+        .toggle input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: relative;
+            width: 34px;
+            height: 20px;
+            background: var(--border-default);
+            border-radius: 20px;
+            transition: background 0.2s;
+            flex-shrink: 0;
+        }
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            height: 16px;
+            width: 16px;
+            left: 2px;
+            top: 2px;
+            background: var(--bg-elevated);
+            border-radius: 50%;
+            transition: transform 0.2s;
+            box-shadow: var(--shadow-xs);
+        }
+        .toggle input:checked + .toggle-slider {
+            background: var(--success);
+        }
+        .toggle input:checked + .toggle-slider::before {
+            transform: translateX(14px);
+        }
+    </style>
+</head>
+<body>
+    <nav id="sidebar-container"></nav>
+
+    <main>
+        <header class="page-header">
+            <div class="page-header__titles">
+                <h1 class="page-header__title">Settings</h1>
+                <p class="page-header__subtitle">Configure indexing and background processes</p>
+            </div>
+        </header>
+
+        <div class="settings-card">
+            <h2>Appearance</h2>
+            <p class="desc">Display preferences for this device. Changes apply immediately.</p>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.6rem 0.75rem;background:var(--bg-muted);border-radius:var(--radius-sm);border:1px solid var(--border-subtle);flex-wrap:wrap;">
+                    <div>
+                        <strong style="font-size:0.9rem;color:var(--text-primary);">Navigation layout</strong>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">Sidebar on the left, or a horizontal top bar.</div>
+                    </div>
+                    <div class="segmented" role="group" aria-label="Navigation layout">
+                        <button type="button" class="segmented__btn" data-nav-layout-option="sidebar">Sidebar</button>
+                        <button type="button" class="segmented__btn" data-nav-layout-option="topbar">Top bar</button>
+                    </div>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.6rem 0.75rem;background:var(--bg-muted);border-radius:var(--radius-sm);border:1px solid var(--border-subtle);flex-wrap:wrap;">
+                    <div>
+                        <strong style="font-size:0.9rem;color:var(--text-primary);">File size unit</strong>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">
+                            Default <em>Auto</em> uses the largest unit that fits (e.g. 1.12 GB). Pick a fixed unit to force B, KB, MB, GB, or TB everywhere.
+                        </div>
+                        <div id="size-unit-preview" style="font-size:0.78rem;color:var(--text-secondary);margin-top:0.35rem;font-family:var(--font-mono);">
+                            Preview: —
+                        </div>
+                    </div>
+                    <label class="toolbar-field toolbar-field--select" title="Size unit" style="min-width:9rem;">
+                        <span class="toolbar-field__icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16M7 16V8M12 16V4M17 16v-5"/></svg>
+                        </span>
+                        <select data-size-unit-select aria-label="File size unit">
+                            <option value="auto">Auto</option>
+                            <option value="B">Bytes (B)</option>
+                            <option value="KB">Kilobytes (KB)</option>
+                            <option value="MB">Megabytes (MB)</option>
+                            <option value="GB">Gigabytes (GB)</option>
+                            <option value="TB">Terabytes (TB)</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Background Processes</h2>
+            <p class="desc">Control which background processes are active. Changes require a server restart for startup-only processes.</p>
+            <div style="display:flex;flex-direction:column;gap:0.75rem;margin-top:0.5rem;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg-muted);border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                    <div>
+                        <strong style="font-size:0.9rem;color:var(--text-primary);">Startup Indexing</strong>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">Index the working directory automatically when the server starts.</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="enable-startup-indexing" onchange="saveProcessSetting('enable_startup_indexing', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg-muted);border-radius:var(--radius-sm);border:1px solid var(--border-subtle);">
+                    <div>
+                        <strong style="font-size:0.9rem;color:var(--text-primary);">Dashboard Refresh</strong>
+                        <div style="font-size:0.78rem;color:var(--text-muted);margin-top:0.15rem;">Periodically recompute dashboard stats in the background.</div>
+                    </div>
+                    <label class="toggle">
+                        <input type="checkbox" id="enable-dashboard-refresh" onchange="saveProcessSetting('enable_dashboard_refresh', this.checked)">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="save-bar">
+                <span class="save-msg" id="process-save-msg">Saved</span>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Dashboard Refresh Interval</h2>
+            <p class="desc">How often the dashboard stats are automatically refreshed (in seconds). Set to 0 to disable auto-refresh.</p>
+            <div style="display:flex;align-items:center;gap:0.75rem;margin-top:0.5rem;">
+                <input type="number" id="refresh-interval" min="0" max="3600" value="60"
+                       style="width:100px;padding:0.4rem 0.6rem;border:1px solid var(--border-default);border-radius:var(--radius-sm);font-size:0.9rem;background:var(--bg-elevated);color:var(--text-primary);">
+                <span style="color:var(--text-muted);font-size:0.85rem;">seconds</span>
+                <button class="btn btn--success btn--sm" id="save-interval-btn" onclick="saveRefreshInterval()">Save</button>
+                <span class="save-msg" id="save-interval-msg">Saved</span>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Ignored Folders</h2>
+            <p class="desc">Folders are skipped during indexing. Add a condition to only skip when a specific file exists in the parent directory.</p>
+            <div class="ignore-list" id="ignore-list"></div>
+            <button class="btn btn--secondary btn--sm" onclick="addIgnoreItem()">+ Add folder</button>
+            <div class="condition-hint">
+                <strong>Conditional skip:</strong> Leave the condition empty to always skip, or enter a filename (e.g. <code>package.json</code>) to only skip when that file exists in the parent directory.
+            </div>
+            <div class="save-bar">
+                <button class="btn btn--success btn--sm" id="save-btn" onclick="saveSettings()">Save</button>
+                <span class="save-msg" id="save-msg">Saved</span>
+            </div>
+        </div>
+
+        <div class="settings-card">
+            <h2>Common Presets</h2>
+            <p class="desc">Click to add common folders to ignore.</p>
+            <div class="preset-tags" id="preset-tags"></div>
+        </div>
+    </main>
+
+    <script>
+        const PRESETS = [
+            'node_modules', '.next', 'dist', 'build', '.cache',
+            'target', '__pycache__', '.venv', 'venv', '.git',
+            '.svn', '.hg', 'vendor', '.gradle', '.m2',
+            '.npm', '.yarn', '.pnpm', '.turbo', '.pytest_cache',
+            '.mypy_cache', '.tox', 'coverage', '.nyc_output',
+            '.DS_Store', 'Thumbs.db', '.idea', '.vscode',
+            'bin', 'obj', '__history', '__recovery'
+        ];
+
+        let currentRules = [];
+
+        async function loadSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                currentRules = (data.ignore_folders || []).map(r => ({
+                    name: r.name || r,
+                    condition: r.condition || null
+                }));
+                renderList();
+                renderPresets();
+            } catch (e) {
+                console.error('Failed to load settings', e);
+            }
+        }
+
+        function renderList() {
+            const container = document.getElementById('ignore-list');
+            if (currentRules.length === 0) {
+                container.innerHTML = '<div style="color:var(--text-muted);font-size:0.85rem;padding:0.5rem 0;">No folders ignored</div>';
+                return;
+            }
+            container.innerHTML = currentRules.map((rule, i) => `
+                <div class="ignore-item">
+                    <input type="text" value="${escapeAttr(rule.name)}" placeholder="Folder name"
+                           onchange="updateItemName(${i}, this.value)"
+                           onkeydown="if(event.key==='Enter')saveSettings()">
+                    <span style="color:var(--text-muted);font-size:0.8rem;">if</span>
+                    <input type="text" class="condition-input" value="${escapeAttr(rule.condition || '')}"
+                           placeholder="No condition (always skip)"
+                           onchange="updateItemCondition(${i}, this.value)"
+                           onkeydown="if(event.key==='Enter')saveSettings()">
+                    <button class="remove-btn" onclick="removeItem(${i})" title="Remove">&times;</button>
+                </div>
+            `).join('');
+        }
+
+        function renderPresets() {
+            const container = document.getElementById('preset-tags');
+            const existingNames = currentRules.map(r => r.name);
+            container.innerHTML = PRESETS
+                .filter(p => !existingNames.includes(p))
+                .map(p => `<span class="preset-tag" onclick="addPreset('${p}')">${p}</span>`)
+                .join('');
+        }
+
+        function addIgnoreItem() {
+            currentRules.push({ name: '', condition: null });
+            renderList();
+            const inputs = document.querySelectorAll('.ignore-item input');
+            inputs[inputs.length - 2].focus();
+        }
+
+        function updateItemName(idx, value) {
+            currentRules[idx].name = value.trim();
+        }
+
+        function updateItemCondition(idx, value) {
+            const v = value.trim();
+            currentRules[idx].condition = v === '' ? null : v;
+        }
+
+        function removeItem(idx) {
+            currentRules.splice(idx, 1);
+            renderList();
+            renderPresets();
+        }
+
+        function addPreset(name) {
+            if (!currentRules.some(r => r.name === name)) {
+                currentRules.push({ name, condition: null });
+                renderList();
+                renderPresets();
+            }
+        }
+
+        async function saveSettings() {
+            const cleaned = currentRules.filter(r => r.name.trim() !== '');
+            const btn = document.getElementById('save-btn');
+            const msg = document.getElementById('save-msg');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ignore_folders: cleaned })
+                });
+                if (res.ok) {
+                    currentRules = cleaned;
+                    renderList();
+                    renderPresets();
+                    msg.classList.add('show');
+                    setTimeout(() => msg.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                alert('Failed to save settings');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        function escapeAttr(s) {
+            return (s || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+        }
+
+        loadSettings();
+        loadRefreshInterval();
+
+        async function loadRefreshInterval() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                const val = data.dashboard_refresh_interval;
+                if (val !== undefined && val !== null) {
+                    document.getElementById('refresh-interval').value = val;
+                }
+            } catch (e) {
+                console.error('Failed to load refresh interval', e);
+            }
+        }
+
+        async function saveRefreshInterval() {
+            const val = document.getElementById('refresh-interval').value;
+            const btn = document.getElementById('save-interval-btn');
+            const msg = document.getElementById('save-interval-msg');
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dashboard_refresh_interval: parseInt(val) || 0 })
+                });
+                if (res.ok) {
+                    msg.classList.add('show');
+                    setTimeout(() => msg.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                alert('Failed to save refresh interval');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function saveProcessSetting(key, value) {
+            const msg = document.getElementById('process-save-msg');
+            try {
+                const body = {};
+                body[key] = value;
+                const res = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body)
+                });
+                if (res.ok) {
+                    msg.classList.add('show');
+                    setTimeout(() => msg.classList.remove('show'), 2000);
+                }
+            } catch (e) {
+                alert('Failed to save process setting');
+            }
+        }
+
+        async function loadProcessSettings() {
+            try {
+                const res = await fetch('/api/settings');
+                const data = await res.json();
+                if (data.enable_startup_indexing !== undefined) {
+                    document.getElementById('enable-startup-indexing').checked = data.enable_startup_indexing;
+                }
+                if (data.enable_dashboard_refresh !== undefined) {
+                    document.getElementById('enable-dashboard-refresh').checked = data.enable_dashboard_refresh;
+                }
+            } catch (e) {
+                console.error('Failed to load process settings', e);
+            }
+        }
+
+        loadSettings();
+        loadRefreshInterval();
+        loadProcessSettings();
+
+        function updateSizeUnitPreview() {
+            const el = document.getElementById('size-unit-preview');
+            if (!el || !window.SizeFormat) return;
+            const samples = [850, 12_500, 3_200_000, 1_500_000_000, 2_400_000_000_000];
+            el.textContent = 'Preview: ' + samples.map((b) => SizeFormat.format(b)).join(' · ');
+        }
+
+        document.addEventListener('sizeunitchange', updateSizeUnitPreview);
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.SizeFormat) SizeFormat.updateUI(SizeFormat.get());
+            updateSizeUnitPreview();
+        });
+    </script>
+        <script src="/assets/js/core/theme.js"></script>
+    <script src="/assets/js/core/format.js"></script>
+    <script src="/assets/js/core/drawer.js"></script>
+    <script src="/assets/js/core/sidebar.js"></script>
+    <script src="/assets/js/core/status.js"></script>
+</body>
+</html>

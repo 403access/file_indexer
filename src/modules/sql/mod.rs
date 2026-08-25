@@ -1,0 +1,11 @@
+pub mod connection;
+pub mod dashboard;
+pub mod database;
+pub mod duplicate_folders_materialized;
+pub mod duplicates;
+pub mod files;
+pub mod logs;
+pub mod schema;
+pub mod search;
+pub mod settings;
+pub mod skipped;

@@ -1,0 +1,7 @@
+/* Duplicate folders page — split modules (import order matters little). */
+@import url("./duplicate-folders/groups.css");
+@import url("./duplicate-folders/aligned-table.css");
+@import url("./duplicate-folders/filters.css");
+@import url("./duplicate-folders/merge.css");
+@import url("./duplicate-folders/custom-folders.css");
+@import url("./duplicate-folders/filetypes.css");

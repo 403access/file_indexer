@@ -1,2 +1,13 @@
 /target
 .DS_Store
+.env
+*.db
+*.db-shm
+*.db-wal
+
+# Crefo export secrets + generated data
+/container-becker/config.psd1
+/container-becker/output/
+/container-becker/state/
+/container-becker/logs/
+/container-becker/archive/
