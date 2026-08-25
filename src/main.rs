@@ -63,6 +63,10 @@ async fn main() {
         cwd: app_state::get_cwd(),
         db: database_url.clone(),
         pause_indexer: std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        enable_startup_indexing: file_indexer::modules::environment::env_vars::get_enable_startup_indexing(),
+        enable_initial_dashboard_refresh: file_indexer::modules::environment::env_vars::get_enable_initial_dashboard_refresh(),
+        enable_dashboard_refresh: file_indexer::modules::environment::env_vars::get_enable_dashboard_refresh(),
+        enable_duplicate_folder_groups_refresh: file_indexer::modules::environment::env_vars::get_enable_duplicate_folder_groups_refresh(),
     };
 
     // Bind and start the HTTP server first so the UI is always reachable.

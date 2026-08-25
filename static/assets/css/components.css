@@ -367,6 +367,12 @@
 }
 .status-badge.pending::before { background: var(--accent); }
 
+.status-badge.disabled {
+  background: var(--bg-muted);
+  color: var(--text-muted);
+}
+.status-badge.disabled::before { background: var(--text-muted); }
+
 .category-badge {
   display: inline-block;
   padding: 0.12rem 0.45rem;

@@ -4,18 +4,151 @@ use serde::{Deserialize, Serialize};
 
 use crate::api::offload;
 use crate::modules::processes::{self, Process};
-use crate::modules::sql::database::{get_connection, refresh_dashboard_stats};
+use crate::modules::sql::database::{
+    get_connection, is_process_stopped, refresh_dashboard_stats,
+};
 
 use crate::states::app_state::{AppState, IndexerPauseGuard};
 
 #[derive(Serialize)]
 pub struct ProcessesResponse {
     pub processes: Vec<Process>,
+    /// Scheduled process types currently disabled (persisted "stopped by user").
+    pub disabled_types: Vec<DisabledProcessType>,
 }
 
-pub async fn processes_handler() -> Json<ProcessesResponse> {
+#[derive(Serialize)]
+pub struct DisabledProcessType {
+    pub key: String,
+    pub name: String,
+    pub category: String,
+    /// Persisted "stopped by user" flag (survives restarts until re-enabled).
+    pub stopped: bool,
+    /// Whether the corresponding ENABLE_* env var(s) are on.
+    pub env_enabled: bool,
+}
+
+type EnvFlags = (
+    bool, // enable_startup_indexing
+    bool, // enable_initial_dashboard_refresh
+    bool, // enable_dashboard_refresh
+    bool, // enable_duplicate_folder_groups_refresh
+);
+
+fn scheduled_type_env_enabled(flags: &EnvFlags, key: &str) -> bool {
+    match key {
+        "startup_indexing" => flags.0,
+        // The shared key covers both the one-time initial refresh and the
+        // periodic refresh; disabled only when both env vars are off.
+        "dashboard_refresh" => flags.1 || flags.2,
+        "duplicate_folder_groups_refresh" => flags.3,
+        _ => false,
+    }
+}
+
+pub async fn processes_handler(State(state): State<AppState>) -> Json<ProcessesResponse> {
     let processes = processes::get_all();
-    Json(ProcessesResponse { processes })
+
+    // Types that are currently running/pending have a live process; don't list
+    // them as disabled even if a stale flag or env state says otherwise.
+    let active_keys: std::collections::HashSet<&str> = processes
+        .iter()
+        .filter(|p| {
+            matches!(
+                p.status,
+                crate::modules::processes::ProcessStatus::Running
+                    | crate::modules::processes::ProcessStatus::Pending
+            )
+        })
+        .filter_map(|p| processes::stopped_state_key(&p.name))
+        .collect();
+
+    let db = state.db.clone();
+    let env_flags = (
+        state.enable_startup_indexing,
+        state.enable_initial_dashboard_refresh,
+        state.enable_dashboard_refresh,
+        state.enable_duplicate_folder_groups_refresh,
+    );
+    let disabled_types = offload(move || {
+        let conn = get_connection(&db)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let mut types = Vec::new();
+        for t in processes::scheduled_process_types() {
+            if active_keys.contains(t.key) {
+                continue;
+            }
+            let stopped = is_process_stopped(&conn, t.key);
+            let env_enabled = scheduled_type_env_enabled(&env_flags, t.key);
+            if stopped || !env_enabled {
+                types.push(DisabledProcessType {
+                    key: t.key.to_string(),
+                    name: t.name.to_string(),
+                    category: t.category.to_string(),
+                    stopped,
+                    env_enabled,
+                });
+            }
+        }
+        Ok::<_, (axum::http::StatusCode, String)>(types)
+    })
+    .await
+    .unwrap_or_default();
+
+    Json(ProcessesResponse {
+        processes,
+        disabled_types,
+    })
+}
+
+/// Re-enable a previously stopped scheduled process type by clearing its
+/// persisted flag. The process auto-starts again on the next boot.
+pub async fn enable_process_type_handler(
+    State(state): State<AppState>,
+    Path(key): Path<String>,
+) -> Result<Json<ProcessActionResponse>, (axum::http::StatusCode, String)> {
+    let known = processes::scheduled_process_types()
+        .into_iter()
+        .find(|t| t.key == key)
+        .ok_or((
+            axum::http::StatusCode::NOT_FOUND,
+            format!("Unknown process type: {}", key),
+        ))?;
+
+    let db = state.db.clone();
+    let name = known.name.to_string();
+    let key_for_job = key.clone();
+    let res = offload(move || {
+        let conn = get_connection(&db)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        crate::modules::sql::database::set_process_stopped(&conn, &key_for_job, false)
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        Ok::<(), (axum::http::StatusCode, String)>(())
+    })
+    .await;
+    if let Err(e) = res {
+        return Err(e);
+    }
+
+    let env_on = scheduled_type_env_enabled(
+        &(
+            state.enable_startup_indexing,
+            state.enable_initial_dashboard_refresh,
+            state.enable_dashboard_refresh,
+            state.enable_duplicate_folder_groups_refresh,
+        ),
+        &key,
+    );
+    let message = if env_on {
+        format!("{} enabled; it will auto-start on the next boot", name)
+    } else {
+        format!(
+            "{} stopped flag cleared, but it remains disabled via ENV; set ENABLE_* to true to start it",
+            name
+        )
+    };
+
+    Ok(Json(ProcessActionResponse { ok: true, message }))
 }
 
 pub async fn clear_processes_handler() -> Json<serde_json::Value> {

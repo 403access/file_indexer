@@ -10,6 +10,14 @@ pub struct AppState {
     /// Number of active web requests that need the indexer to yield.
     /// Use refcount so concurrent requests don't resume early.
     pub pause_indexer: Arc<AtomicUsize>,
+    /// Whether startup indexing is enabled (ENABLE_STARTUP_INDEXING).
+    pub enable_startup_indexing: bool,
+    /// Whether the initial dashboard refresh is enabled (ENABLE_INITIAL_DASHBOARD_REFRESH).
+    pub enable_initial_dashboard_refresh: bool,
+    /// Whether periodic dashboard refresh is enabled (ENABLE_DASHBOARD_REFRESH).
+    pub enable_dashboard_refresh: bool,
+    /// Whether duplicate folder groups refresh is enabled (ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH).
+    pub enable_duplicate_folder_groups_refresh: bool,
 }
 
 impl Default for AppState {
@@ -18,6 +26,10 @@ impl Default for AppState {
             cwd: String::new(),
             db: String::new(),
             pause_indexer: Arc::new(AtomicUsize::new(0)),
+            enable_startup_indexing: true,
+            enable_initial_dashboard_refresh: true,
+            enable_dashboard_refresh: true,
+            enable_duplicate_folder_groups_refresh: true,
         }
     }
 }
@@ -34,6 +46,10 @@ pub fn init(cwd: String, db: String) {
             cwd,
             db,
             pause_indexer: Arc::new(AtomicUsize::new(0)),
+            enable_startup_indexing: true,
+            enable_initial_dashboard_refresh: true,
+            enable_dashboard_refresh: true,
+            enable_duplicate_folder_groups_refresh: true,
         };
     });
 }

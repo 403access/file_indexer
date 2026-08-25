@@ -192,6 +192,35 @@ pub fn stopped_state_key(name: &str) -> Option<&'static str> {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ScheduledProcessType {
+    pub key: &'static str,
+    pub name: &'static str,
+    pub category: &'static str,
+}
+
+/// The fixed set of scheduled process types that can be persisted as
+/// "stopped by user". Used to surface disabled jobs in the UI.
+pub fn scheduled_process_types() -> Vec<ScheduledProcessType> {
+    vec![
+        ScheduledProcessType {
+            key: "startup_indexing",
+            name: "Startup indexing",
+            category: "indexing",
+        },
+        ScheduledProcessType {
+            key: "dashboard_refresh",
+            name: "Dashboard refresh",
+            category: "dashboard",
+        },
+        ScheduledProcessType {
+            key: "duplicate_folder_groups_refresh",
+            name: "Duplicate folder groups refresh",
+            category: "duplicate-folders",
+        },
+    ]
+}
+
 pub fn clear_completed() {
     PROCESSES
         .lock()

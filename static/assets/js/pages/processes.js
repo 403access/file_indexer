@@ -1,4 +1,5 @@
 let allProcesses = [];
+let allDisabledTypes = [];
 
 async function loadProcesses() {
     try {
@@ -6,7 +7,9 @@ async function loadProcesses() {
         if (!res.ok) throw new Error('Failed to load processes');
         const data = await res.json();
         allProcesses = data.processes || [];
+        allDisabledTypes = data.disabled_types || [];
         updateCategoryOptions(allProcesses);
+        renderDisabledTypes();
         applyProcessFilters();
     } catch (e) {
         document.getElementById('processes-tbody').innerHTML =
@@ -198,6 +201,73 @@ function formatDate(ts) {
     } catch (e) {
         return ts;
     }
+}
+
+function renderDisabledTypes() {
+    const container = document.getElementById('disabled-process-types');
+    if (!container) return;
+
+    if (!allDisabledTypes.length) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const stopReasons = {
+        startup_indexing: 'ENABLE_STARTUP_INDEXING',
+        dashboard_refresh: 'ENABLE_DASHBOARD_REFRESH / ENABLE_INITIAL_DASHBOARD_REFRESH',
+        duplicate_folder_groups_refresh: 'ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH',
+    };
+
+    container.innerHTML = `
+        <div class="disabled-types-heading">Disabled process types</div>
+        <div class="disabled-types-list">
+            ${allDisabledTypes.map((t) => {
+                const stoppedOnly = t.stopped && !t.env_enabled;
+                const envOnly = !t.stopped && !t.env_enabled;
+                const stoppedAndEnv = t.stopped && t.env_enabled;
+                const badge = stoppedOnly
+                    ? '<span class="status-badge disabled">stopped</span>'
+                    : '<span class="status-badge disabled">disabled</span>';
+                const reason = stoppedOnly
+                    ? 'Stopped previously via the UI; will not auto-start until re-enabled.'
+                    : `Disabled in configuration (${stopReasons[t.key] || 'ENABLE_*'}); set the env var to true to enable.`;
+                const action = (stoppedAndEnv || stoppedOnly)
+                    ? `<button type="button" class="process-action-btn enable-btn" onclick="enableProcessType('${escapeAttr(t.key)}')" title="Clear the stopped flag; this type auto-starts on the next boot">Re-enable</button>`
+                    : '';
+                return `<div class="process-card disabled">
+                    <div class="process-card-header">
+                        <div class="process-card-header__main">
+                            <div class="process-card-name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</div>
+                            <div class="process-card-meta">
+                                <span class="category-badge">${escapeHtml(t.category)}</span>
+                                ${badge}
+                            </div>
+                        </div>
+                        ${action ? `<div class="process-card-actions">${action}</div>` : ''}
+                    </div>
+                    <div class="process-card-body">
+                        <div class="process-card-message" title="${escapeHtml(reason)}">${escapeHtml(reason)}</div>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>`;
+}
+
+async function enableProcessType(key) {
+    if (!confirm('Re-enable this process type? It will auto-start again on the next server boot.')) return;
+    try {
+        const res = await fetch(`/api/processes/types/${encodeURIComponent(key)}/enable`, { method: 'POST' });
+        if (res.ok) {
+            const data = await res.json();
+            alert(data.message || 'Process type enabled');
+        } else {
+            const err = await res.text();
+            alert('Failed to enable: ' + err);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+    loadProcesses();
 }
 
 function escapeHtml(str) {

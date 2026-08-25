@@ -264,7 +264,9 @@ pub fn delete_directory_tree(tx: &Transaction, path: &str) -> rusqlite::Result<u
         "WITH RECURSIVE subtree(p) AS (
             SELECT ?1
             UNION ALL
-            SELECT f.path FROM files f JOIN subtree s ON f.parent_path = s.p
+            SELECT f.path
+            FROM files f INDEXED BY idx_files_parent_path
+            JOIN subtree s ON f.parent_path = s.p
          )
          SELECT p FROM subtree",
     )?;
