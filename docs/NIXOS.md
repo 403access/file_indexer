@@ -21,6 +21,7 @@ ENABLE_STARTUP_INDEXING=true
 ENABLE_INITIAL_DASHBOARD_REFRESH=false
 ENABLE_DASHBOARD_REFRESH=false
 ENABLE_DUPLICATE_FOLDER_GROUPS_REFRESH=false
+ENABLE_NEAR_DUPLICATE_FOLDERS_REFRESH=false
 
 # Ignore any "stopped by user" flags persisted in the database,
 # so indexing is never skipped on startup

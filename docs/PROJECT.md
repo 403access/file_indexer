@@ -44,7 +44,7 @@ main.rs                          Entry point (Axum server)
 
 ## Web UI
 
-The HTTP server serves a full browser UI from `static/`: dashboard, search, explorer, duplicates, processes, logs, and settings. The UI uses a shared **design system** with light/dark/system themes and reusable components (sidebar, buttons, cards, drawers, tables).
+The HTTP server serves a full browser UI from `static/`: dashboard, search, explorer, duplicates (files / folders / near-duplicates), processes with targeted re-sync, logs, and settings. The UI uses a shared **design system** with light/dark/system themes and reusable components (sidebar, buttons, cards, drawers, tables).
 
 See **[UI.md](./UI.md)** for tokens, components, theme API, page checklist, and conventions.
 
@@ -65,11 +65,11 @@ The project is in a **transitional phase**. A fully functional CLI REPL (interac
 | File metadata (path, name, size, modified) | Done | Stored per file entry |
 | Symlink detection | Done | `is_symlink` field in schema |
 | Transaction-based inserts | Done | Bulk insert within DB transactions |
-| Skip special directories (.git, node_modules) | Not started | Mentioned in README, not implemented |
-| Index file creation date | Not started | `created` field exists in FileEntry but not populated during indexing |
-| Parent directory foreign key | Not started | Planned as separate table |
-| Child count for folders | Not started | Mentioned in README |
-| Incremental scan (skip unchanged) | Not started | README claims this, not implemented |
+| Skip special directories (.git, node_modules) | Done | Ignore rules (`ignore_rules` table), configurable via settings UI |
+| Index file creation date | Partial | Field exists; not populated during indexing |
+| Incremental scan (skip unchanged) | Done | Directory mtime caching — unchanged folders skipped on re-index |
+| Targeted re-sync of specific folders | Done | `POST /api/index` with `paths` list + `remove` for moved/renamed old paths |
+| Duplicate-hash incremental updates | Done | `update_duplicate_hashes_incremental` after each folder commit |
 
 ### Search
 
@@ -80,38 +80,49 @@ The project is in a **transitional phase**. A fully functional CLI REPL (interac
 | Filter by kind (Files/Folders/Both) | Done | `TargetKind` enum |
 | Sort results (ASC/DESC, case-sensitive/insensitive) | Done | `SortOrder` enum |
 | Service layer for search | Done | `search_service.rs` wraps DB calls |
-| API endpoint for search | Not started | No HTTP route exists yet |
+| API endpoint for search | Done | `GET /api/search` |
 
 ### Duplicate Detection
 
 | Feature | Status | Notes |
 |---|---|---|
 | SQL query for duplicate hashes | Done | Groups files by hash, returns duplicates |
-| Duplicate hash table management | Done | Create/reset `duplicate_hashes` table |
-| Duplicate service layer | Not started | `duplicate_service.rs` returns "Not implemented yet" |
-| CLI command for indexing duplicates | Not started | Stub only (sleep + fake logs) |
-| CLI command for listing duplicates | Not started | Stub only (sleep + fake logs) |
-| API endpoint for duplicates | Not started | No HTTP route exists yet |
-| Filter duplicates by name/extension/size | Not started | Mentioned in README |
-| Sort by occurrence count | Not started | Mentioned in README |
+| Duplicate hash table management | Done | Create/reset/incremental `duplicate_hashes` table |
+| API endpoint for duplicates | Done | `GET /api/duplicates` with name/extension/size filters and occurrence sorting |
+| Filter duplicates by name/extension/size | Done | Query params on the duplicates endpoint |
+| Sort by occurrence count | Done | Default ordering |
+
+### Near-Duplicate Folder Detection
+
+| Feature | Status | Notes |
+|---|---|---|
+| Inverted-index candidate retrieval | Done | Exact posting-list walks for ≤5k folders |
+| MinHash signatures + banded LSH | Done | 64 perms, 8 bands; auto-selected above 5k folders |
+| Exact Jaccard verification | Done | Candidates filtered against threshold (default 0.8) |
+| Ancestor collapse | Done | Pairs roll up to the top of the copied tree |
+| Pair delta report (added/removed/changed files) | Done | `GET /api/near-duplicate-folders/delta?a=&b=` |
+| Noise filtering (.DS_Store, package-lock.json, …) | Done | Excluded from folder signatures |
+| Periodic background refresh + manual trigger | Done | Env-configurable interval; stoppable in Processes UI |
+| Web UI page | Done | `/pages/near-duplicates.html` |
 
 ### Directory Comparison / Consolidation
 
 | Feature | Status | Notes |
 |---|---|---|
-| Design for directory similarity detection | Partial | Extensive design comments in `duplicates.rs` |
-| Folder hash/comparison table | Not started | Mentioned in design notes |
-| Diffing view (web UI) | Not started | Planned HTML tree view with side-by-side comparison |
-| Detect renamed folders | Not started | Mentioned in README diffing view |
-| Detect modified files across copies | Not started | Core goal, not started |
+| Exact duplicate folder groups | Done | Union-find materialization + periodic refresh |
+| Near-duplicate folder detection (80–99% shared content) | Done | MinHash + LSH, see section above |
+| Pair delta view (added/removed/changed) | Done | Delta modal on the near-duplicates page |
+| Merge duplicate folders | Done | `/api/merge` + merge overlay UI |
+| Detect renamed/moved folders | Partial | Manual: `POST /api/index` with `paths` + `remove` lists; no auto-detection |
+| Full side-by-side diffing tree view | Not started | Planned HTML tree view |
 
 ### Cleanup
 
 | Feature | Status | Notes |
 |---|---|---|
-| Delete duplicate files | Not started | Core goal, not started |
-| Skip directories (node_modules) | Not started | Listed in features.md |
-| Preserve organized files | Not started | Mentioned in README goals |
+| Delete duplicate files | Partial | Deletion via merge flows and explorer actions |
+| Skip directories (node_modules) | Done | Ignore rules |
+| Preserve organized files | Done | Incremental indexing only touches changed paths |
 
 ### Web UI / Design System
 
@@ -122,8 +133,8 @@ The project is in a **transitional phase**. A fully functional CLI REPL (interac
 | Design tokens | Done | Surfaces, text, accents, semantic colors, spacing, radii |
 | Reusable components | Done | Buttons, cards, tables, badges, drawers, forms, … |
 | Drawer detail panels | Done | `drawer.js`; folders, ignore rules, processes |
-| Dashboard / Search / Explorer | Done | Chart.js dashboard; search + folder drawer; tree explorer |
-| Duplicates & processes UI | Done | File/folder dupes, merge flows, process monitor |
+| Dashboard / Search / Explorer | Done | Chart.js dashboard; search + folder drawer; tree explorer with per-folder re-sync |
+| Duplicates & processes UI | Done | File/folder dupes, near-duplicate pairs + delta, merge flows, process monitor, re-sync panel |
 | Settings / logs / status | Done | Tokenized layouts |
 
 Full component and authoring guide: **[UI.md](./UI.md)**.
@@ -146,7 +157,6 @@ Full component and authoring guide: **[UI.md](./UI.md)**.
 
 1. **`command_init_db.rs`** — `_init_db()` always returns an error even after successful initialization. The error is silently swallowed.
 2. **Hardcoded DB path** — `command_index_files.rs` and `search_service.rs` hardcode `"file_index.db"` instead of using `app_state::get_db()`.
-3. **README claims Blake3** — The README mentions Blake3 hashing, but the code uses SHA-256 via the `sha2` crate.
-4. **Unused duplicate `FileEntry`** — `index_files/_types.rs` defines a redundant struct not used anywhere.
-5. **Empty files** — `arguments_check.rs`, `_config.rs`, and `index_service.rs` are empty placeholders.
-6. **`ai-main.rs`** — A standalone prototype file with its own `main()` that is not part of the crate compilation.
+3. **Unused duplicate `FileEntry`** — `index_files/_types.rs` defines a redundant struct not used anywhere.
+4. **Empty files** — `arguments_check.rs`, `_config.rs`, and `index_service.rs` are empty placeholders.
+5. **`ai-main.rs`** — A standalone prototype file with its own `main()` that is not part of the crate compilation.

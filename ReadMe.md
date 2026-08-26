@@ -122,7 +122,31 @@ GET  /api/skipped                        GET  /api/near-duplicate-folders/delta?
 GET  /api/processes                      POST /api/processes/{id}/trigger
 GET  /api/logs                           POST /api/processes/types/{key}/enable
 GET  /api/settings                       GET  /api/status
+
+POST /api/index                          Re-index; optional JSON body:
+                                         {"paths": [...]}   re-sync only these folders
+                                         {"remove": [...]}  purge moved/renamed old paths
+                                                            from the index without disk access
 ```
+
+### Manual edits + targeted re-sync workflow
+
+After moving, renaming or editing folders directly on the filesystem, you do
+**not** need to re-index everything:
+
+```bash
+curl -X POST localhost:3000/api/index \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "paths":  ["/mnt/tank/Archive/Projekte"],   # new/changed locations to re-scan
+        "remove": ["/mnt/tank/Projekte"]            # old location of a move/rename
+      }'
+```
+
+- Only the given subtrees are walked; unchanged subfolders are skipped via mtime caching
+- `remove` purges stale old-path rows with a single recursive DB delete — no parent scan
+- The same flow is available in the UI: **Processes → Re-sync folders**, and an
+  **Explorer → Re-sync** button for the folder you are currently viewing
 
 ## 🎨 Web UI & design system
 

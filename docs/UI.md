@@ -359,7 +359,7 @@ Defined once in `SIDEBAR_ITEMS` inside `static/assets/js/core/sidebar.js`:
 | Section | Links |
 |---|---|
 | Browse | Dashboard, Search, Explorer |
-| Duplicates | Files, Folders |
+| Duplicates | Files, Folders, Near-Dupes |
 | Data | Skipped, Ignored |
 | System | Status, Processes, Logs, Settings |
 
@@ -500,12 +500,13 @@ Prefer **`Drawer.create`** for new detail panels so behavior (Escape, scroll loc
 |---|---|
 | `/` (`index.html`) | Dashboard — stats + timeline chart |
 | `/pages/search.html` | Search index |
-| `/pages/explorer.html` | Tree browser |
+| `/pages/explorer.html` | Tree browser (per-folder "Re-sync" button for targeted re-indexing) |
 | `/pages/duplicates.html` | Duplicate file groups |
 | `/pages/duplicate-folders.html` | Duplicate folder groups / merge |
+| `/pages/near-duplicates.html` | Near-duplicate folder pairs (MinHash/LSH) + per-pair delta view |
 | `/pages/skipped.html` | Paths skipped during indexing |
 | `/pages/ignored.html` | Ignore rules + skipped-by-rule stats |
-| `/pages/processes.html` | Background process monitor |
+| `/pages/processes.html` | Background process monitor + "Re-sync folders" panel (paste a list of changed/moved paths) |
 | `/pages/logs.html` | Log stream |
 | `/pages/settings.html` | Process toggles, refresh interval, ignore rules |
 

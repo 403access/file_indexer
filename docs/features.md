@@ -33,6 +33,8 @@ Browser UI served from `static/` (no frontend build). See **[UI.md](./UI.md)** f
 | Search | Done | Results table + folder drawer |
 | Explorer | Done | Indexed tree browser |
 | Duplicate files / folders | Done | Groups, filters, merge flows |
+| Near-duplicate folders | Done | MinHash/LSH pairs, similarity bars, per-pair delta view |
+| Targeted re-sync | Done | Processes panel (paste list of paths) + Explorer per-folder button |
 | Processes | Done | Cards + history table + detail sidebar |
 | Logs / Status / Settings / Ignored / Skipped | Done | Tokenized layouts |
 
