@@ -318,6 +318,7 @@
             <div class="folders-toolbar">
                 <button type="button" class="btn btn--secondary btn--sm" id="folders-up" onclick="folderGoUp()" disabled>&#8593; Up</button>
                 <button type="button" class="btn btn--secondary btn--sm" onclick="folderOpen(folderPath)">&#8635; Refresh</button>
+                <button type="button" class="btn btn--secondary btn--sm" id="folders-resync" onclick="resyncCurrentFolder()" title="Re-index this folder from disk after manual changes">&#8647; Re-sync</button>
                 <button type="button" class="btn btn--secondary btn--sm" id="folders-edit" onclick="folderBreadcrumbEdit()" title="Edit path">&#9998; Edit</button>
                 <div class="breadcrumb" id="folders-breadcrumb"></div>
                 <span class="summary" id="folders-summary"></span>
@@ -840,6 +841,31 @@
             document.getElementById('folders-error').style.display = 'none';
             folderPath = data.path;
             folderRender(data);
+        }
+
+        // Re-index the currently viewed folder from disk (targeted incremental
+        // re-sync after manual changes), then reload the view.
+        async function resyncCurrentFolder() {
+            if (!folderPath) return;
+            const btn = document.getElementById('folders-resync');
+            btn.disabled = true;
+            try {
+                const res = await fetch('/api/index', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: folderPath }),
+                });
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    folderShowError('Re-sync failed: ' + (data.message || ('HTTP ' + res.status)));
+                    return;
+                }
+                await folderOpen(folderPath);
+            } catch (e) {
+                folderShowError('Re-sync failed: ' + e.message);
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         function folderShowError(message) {

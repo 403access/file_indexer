@@ -47,6 +47,18 @@
 
         <div class="results-info" id="processes-summary"></div>
 
+        <div class="resync-panel">
+            <div class="resync-head">
+                <strong>Re-sync folders</strong>
+                <span>Manually changed folders on disk? Paste their paths to re-index only those subtrees.</span>
+            </div>
+            <textarea id="resync-input" rows="4" placeholder="/mnt/tank/changed-folder-one&#10;/mnt/tank/another/changed-folder"></textarea>
+            <div class="resync-actions">
+                <button type="button" class="btn btn--sm" onclick="resyncFolders()">Re-sync folders</button>
+                <span id="resync-status" class="resync-status"></span>
+            </div>
+        </div>
+
         <div class="processes-toolbar" role="search" aria-label="Filter processes">
             <label class="toolbar-field toolbar-field--grow" title="Search">
                 <span class="toolbar-field__icon" aria-hidden="true">

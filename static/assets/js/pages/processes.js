@@ -441,3 +441,34 @@ function closeProcessSidebar() {
     document.getElementById('process-sidebar').classList.remove('open');
     currentSidebarProcessId = null;
 }
+
+async function resyncFolders() {
+    const statusEl = document.getElementById('resync-status');
+    const input = document.getElementById('resync-input');
+    const paths = (input.value || '')
+        .split('\n')
+        .map((p) => p.trim())
+        .filter(Boolean);
+    if (!paths.length) {
+        statusEl.textContent = 'Enter at least one folder path.';
+        statusEl.className = 'resync-status err';
+        return;
+    }
+    statusEl.textContent = 'Starting re-sync…';
+    statusEl.className = 'resync-status';
+    try {
+        const res = await fetch('/api/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paths }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+        statusEl.textContent = data.message || 'Re-sync started';
+        statusEl.className = 'resync-status ok';
+        loadProcesses();
+    } catch (e) {
+        statusEl.textContent = e.message;
+        statusEl.className = 'resync-status err';
+    }
+}

@@ -437,3 +437,30 @@
   word-break: break-word;
   color: var(--text-primary);
 }
+
+/* Re-sync folders panel */
+.resync-panel {
+  margin-bottom: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-surface);
+}
+.resync-head { display: flex; flex-direction: column; gap: 0.15rem; margin-bottom: 0.6rem; }
+.resync-head span { color: var(--text-muted); font-size: var(--font-size-sm); }
+.resync-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 0.5rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-body, transparent);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+}
+.resync-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.6rem; }
+.resync-status { font-size: var(--font-size-sm); color: var(--text-muted); }
+.resync-status.ok { color: var(--success, #34c77b); }
+.resync-status.err { color: var(--danger); }

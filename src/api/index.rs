@@ -1,6 +1,6 @@
 use axum::extract::State;
 use axum::Json;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 
@@ -17,27 +17,96 @@ pub struct IndexResponse {
     pub message: String,
 }
 
+#[derive(Deserialize)]
+pub struct IndexRequest {
+    /// Optional list of subfolders of CWD to re-sync instead of the whole
+    /// tree. Use this after manually editing/moving files in known places.
+    #[serde(default)]
+    pub paths: Vec<String>,
+    /// Convenience alias for a single folder.
+    #[serde(default)]
+    pub path: Option<String>,
+}
+
+/// Validate one requested target folder and normalize it.
+///
+/// Returns the trimmed absolute path, or a message explaining why it was
+/// rejected.
+fn validate_target(raw: &str, cwd_trimmed: &str) -> Result<String, String> {
+    let trimmed = raw.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("Empty path".to_string());
+    }
+    if !trimmed.starts_with(cwd_trimmed) {
+        return Err(format!(
+            "Path '{trimmed}' is outside the indexed working directory '{cwd_trimmed}'"
+        ));
+    }
+    if !std::path::Path::new(trimmed).is_dir() {
+        return Err(format!(
+            "Path '{trimmed}' does not exist or is not a directory"
+        ));
+    }
+    Ok(trimmed.to_string())
+}
+
 pub async fn index_handler(
     State(state): State<AppState>,
+    body: Option<Json<IndexRequest>>,
 ) -> Result<Json<IndexResponse>, (axum::http::StatusCode, String)> {
-    let cwd = state.cwd.clone();
+    let cwd_trimmed = state.cwd.trim_end_matches('/').to_string();
+    let mut targets: Vec<String> = Vec::new();
+
+    let mut requested: Vec<String> = Vec::new();
+    if let Some(Json(req)) = body {
+        requested.extend(req.paths);
+        if let Some(p) = req.path {
+            requested.push(p);
+        }
+    }
+
+    if requested.is_empty() {
+        targets.push(cwd_trimmed.clone());
+    } else {
+        // Validate everything up front; reject the whole request on any bad
+        // path so typos don't cause a half-done partial resync.
+        for raw in &requested {
+            match validate_target(raw, &cwd_trimmed) {
+                Ok(t) => {
+                    if !targets.contains(&t) {
+                        targets.push(t);
+                    }
+                }
+                Err(msg) => {
+                    return Err((axum::http::StatusCode::BAD_REQUEST, msg));
+                }
+            }
+        }
+    }
+
     let db = state.db.clone();
     let pause = state.pause_indexer.clone();
 
+    let summary = targets.join(", ");
     let process_id =
-        processes::register_controllable("Manual re-index", "indexing", Some(&cwd));
+        processes::register_controllable("Manual re-index", "indexing", Some(&summary));
     progress::start(0);
 
     let result = tokio::task::spawn_blocking(move || {
-        let result = index_directory(&db, &cwd, Some(pause), Some(process_id));
-        progress::finish();
-        match result {
-            Ok(()) => {
-                let count = count_entries(&db);
-                Ok((count, cwd))
+        for target in &targets {
+            if processes::is_stopped(process_id) {
+                progress::finish();
+                return Err("stopped by user".to_string());
             }
-            Err(e) => Err(e.to_string()),
+            processes::update(process_id, None, Some(&format!("Re-syncing {target}")));
+            if let Err(e) = index_directory(&db, target, Some(pause.clone()), Some(process_id)) {
+                progress::finish();
+                return Err(e.to_string());
+            }
         }
+        progress::finish();
+        let count = count_entries(&db);
+        Ok((count, summary))
     })
     .await
     .map_err(|e| {
