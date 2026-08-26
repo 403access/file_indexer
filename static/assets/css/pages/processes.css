@@ -464,3 +464,5 @@
 .resync-status { font-size: var(--font-size-sm); color: var(--text-muted); }
 .resync-status.ok { color: var(--success, #34c77b); }
 .resync-status.err { color: var(--danger); }
+.resync-hint { color: var(--text-muted); font-size: var(--font-size-xs); margin-top: 0.25rem; }
+.resync-panel textarea + .resync-hint { margin-bottom: 0.5rem; }

@@ -445,22 +445,30 @@ function closeProcessSidebar() {
 async function resyncFolders() {
     const statusEl = document.getElementById('resync-status');
     const input = document.getElementById('resync-input');
+    const removeInput = document.getElementById('resync-remove-input');
     const paths = (input.value || '')
         .split('\n')
         .map((p) => p.trim())
         .filter(Boolean);
-    if (!paths.length) {
+    const remove = (removeInput.value || '')
+        .split('\n')
+        .map((p) => p.trim())
+        .filter(Boolean);
+    if (!paths.length && !remove.length) {
         statusEl.textContent = 'Enter at least one folder path.';
         statusEl.className = 'resync-status err';
         return;
     }
+    const body = {};
+    if (paths.length) body.paths = paths;
+    if (remove.length) body.remove = remove;
     statusEl.textContent = 'Starting re-sync…';
     statusEl.className = 'resync-status';
     try {
         const res = await fetch('/api/index', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ paths }),
+            body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);

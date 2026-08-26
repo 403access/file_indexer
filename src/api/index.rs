@@ -26,6 +26,12 @@ pub struct IndexRequest {
     /// Convenience alias for a single folder.
     #[serde(default)]
     pub path: Option<String>,
+    /// Old paths to purge from the index WITHOUT walking them on disk
+    /// (they typically no longer exist there). Use for moves/renames:
+    /// resync the new location and remove the stale old one in one call,
+    /// instead of re-scanning the whole parent that contained the move.
+    #[serde(default)]
+    pub remove: Vec<String>,
 }
 
 /// Validate one requested target folder and normalize it.
@@ -50,12 +56,28 @@ fn validate_target(raw: &str, cwd_trimmed: &str) -> Result<String, String> {
     Ok(trimmed.to_string())
 }
 
+/// Validate a removal path: must be inside CWD but is allowed to no longer
+/// exist on disk (that's the whole point — purge stale index rows).
+fn validate_removal(raw: &str, cwd_trimmed: &str) -> Result<String, String> {
+    let trimmed = raw.trim().trim_end_matches('/');
+    if trimmed.is_empty() {
+        return Err("Empty path".to_string());
+    }
+    if !trimmed.starts_with(cwd_trimmed) {
+        return Err(format!(
+            "Path '{trimmed}' is outside the indexed working directory '{cwd_trimmed}'"
+        ));
+    }
+    Ok(trimmed.to_string())
+}
+
 pub async fn index_handler(
     State(state): State<AppState>,
     body: Option<Json<IndexRequest>>,
 ) -> Result<Json<IndexResponse>, (axum::http::StatusCode, String)> {
     let cwd_trimmed = state.cwd.trim_end_matches('/').to_string();
     let mut targets: Vec<String> = Vec::new();
+    let mut removals: Vec<String> = Vec::new();
 
     let mut requested: Vec<String> = Vec::new();
     if let Some(Json(req)) = body {
@@ -63,9 +85,33 @@ pub async fn index_handler(
         if let Some(p) = req.path {
             requested.push(p);
         }
+        for raw in &req.remove {
+            match validate_removal(raw, &cwd_trimmed) {
+                Ok(r) => {
+                    if !removals.contains(&r) {
+                        removals.push(r);
+                    }
+                }
+                Err(msg) => {
+                    return Err((axum::http::StatusCode::BAD_REQUEST, msg));
+                }
+            }
+        }
+        // Never re-index a folder that is also being removed (contradiction).
+        for r in &removals {
+            if requested.iter().any(|p| {
+                let t = p.trim().trim_end_matches('/');
+                t == r || t.starts_with(&format!("{r}/"))
+            }) {
+                return Err((
+                    axum::http::StatusCode::BAD_REQUEST,
+                    format!("Path '{r}' cannot be both removed and re-synced"),
+                ));
+            }
+        }
     }
 
-    if requested.is_empty() {
+    if requested.is_empty() && removals.is_empty() {
         targets.push(cwd_trimmed.clone());
     } else {
         // Validate everything up front; reject the whole request on any bad
@@ -92,7 +138,49 @@ pub async fn index_handler(
         processes::register_controllable("Manual re-index", "indexing", Some(&summary));
     progress::start(0);
 
+    let db = db.clone();
+    let removal_count = removals.len();
     let result = tokio::task::spawn_blocking(move || {
+        // Purge stale old-path subtrees first (moves/renames), without any
+        // disk access — this is what avoids re-scanning a huge parent.
+        if removal_count > 0 {
+            processes::update(
+                process_id,
+                None,
+                Some(&format!("Removing {removal_count} stale path(s) from index")),
+            );
+            let mut conn = match get_connection(&db) {
+                Ok(c) => c,
+                Err(e) => {
+                    progress::finish();
+                    return Err(e.to_string());
+                }
+            };
+            let tx = match conn.transaction() {
+                Ok(t) => t,
+                Err(e) => {
+                    progress::finish();
+                    return Err(e.to_string());
+                }
+            };
+            for r in &removals {
+                if processes::is_stopped(process_id) {
+                    let _ = tx.rollback();
+                    progress::finish();
+                    return Err("stopped by user".to_string());
+                }
+                if let Err(e) = crate::modules::sql::database::delete_directory_tree(&tx, r) {
+                    let _ = tx.rollback();
+                    progress::finish();
+                    return Err(e.to_string());
+                }
+            }
+            if let Err(e) = tx.commit() {
+                progress::finish();
+                return Err(e.to_string());
+            }
+        }
+
         for target in &targets {
             if processes::is_stopped(process_id) {
                 progress::finish();

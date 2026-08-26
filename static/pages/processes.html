@@ -53,6 +53,9 @@
                 <span>Manually changed folders on disk? Paste their paths to re-index only those subtrees.</span>
             </div>
             <textarea id="resync-input" rows="4" placeholder="/mnt/tank/changed-folder-one&#10;/mnt/tank/another/changed-folder"></textarea>
+            <div class="resync-hint">Folders to re-index (one per line). Must exist on disk.</div>
+            <textarea id="resync-remove-input" rows="2" placeholder="/mnt/tank/old-location-of-a-moved-folder"></textarea>
+            <div class="resync-hint">Old paths to purge from the index without touching disk — use for moves/renames so you don't have to re-scan the whole parent. Optional.</div>
             <div class="resync-actions">
                 <button type="button" class="btn btn--sm" onclick="resyncFolders()">Re-sync folders</button>
                 <span id="resync-status" class="resync-status"></span>
